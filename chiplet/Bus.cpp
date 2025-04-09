@@ -2,6 +2,8 @@
 
 #include <iostream>
 
+#include "include/logging.h"
+
 using namespace sc_core;
 using namespace tlm;
 
@@ -9,7 +11,7 @@ Bus::Bus(sc_module_name name)
     : sc_module(name), target_socket_core1("target_socket_core1"),
       target_socket_core2("target_socket_core2"),
       initiator_socket("initiator_socket"), peq1("peq_core1"),
-      peq2("peq_core2"), cycle(sc_time(10, SC_NS)), current_owner(CORE1),
+      peq2("peq_core2"), cycle(sc_time(10, SC_NS)), current_owner(NONE),
       arbitration_delay(sc_time(5, SC_NS)) {
 
   target_socket_core1.register_nb_transport_fw(this,
@@ -24,7 +26,7 @@ Bus::Bus(sc_module_name name)
   sensitive << peq2.get_event();
 }
 
-void Bus::set_address_range(uint64_t base, uint64_t size) {
+void Bus::set_address_range(uint32_t base, uint32_t size) {
   base_addr = base;
   addr_size = size;
 }
@@ -34,15 +36,12 @@ void Bus::set_bus_frequency(double mhz) { cycle = sc_time(1.0 / mhz, SC_US); }
 tlm_sync_enum Bus::nb_transport_fw_core1(tlm_generic_payload &payload,
                                          tlm_phase &phase, sc_time &delay) {
   if (phase != BEGIN_REQ) {
-    std::cout << sc_time_stamp() << ": '" << name()
-              << "\tProtocol Error Bus Core1" << std::endl;
+    SC_LOG_ERROR(this,
+                 "Protocol Error: Request from Core1 with Phase != BEGIN_REQ");
     exit(1);
   }
 
   // Wait for arbitration if bus is busy
-  std::cout << "[" << sc_time_stamp() << "] - " << name()
-            << ": Current Bus Owner - Core" << current_owner << "\n";
-
   if (current_owner != NONE && current_owner != CORE1) {
     wait(arbitration_completed);
   }
@@ -66,15 +65,12 @@ tlm_sync_enum Bus::nb_transport_fw_core1(tlm_generic_payload &payload,
 tlm_sync_enum Bus::nb_transport_fw_core2(tlm_generic_payload &payload,
                                          tlm_phase &phase, sc_time &delay) {
   if (phase != BEGIN_REQ) {
-    std::cout << sc_time_stamp() << ": '" << name()
-              << "\tProtocol Error Bus Core2" << std::endl;
+    SC_LOG_ERROR(this,
+                 "Protocol Error: Request from Core2 with Phase != BEGIN_REQ");
     exit(1);
   }
 
   // Wait for arbitration if bus is busy
-  std::cout << "[" << sc_time_stamp() << "] - " << name()
-            << ": Current Bus Owner - Core" << current_owner << "\n";
-
   if (current_owner != NONE && current_owner != CORE2) {
     wait(arbitration_completed);
   }
@@ -98,8 +94,8 @@ tlm_sync_enum Bus::nb_transport_fw_core2(tlm_generic_payload &payload,
 tlm_sync_enum Bus::nb_transport_bw(tlm_generic_payload &payload,
                                    tlm_phase &phase, sc_time &delay) {
   if (phase != BEGIN_RESP) {
-    std::cout << sc_time_stamp() << ": '" << name()
-              << "\tProtocol Error Bus RAM" << std::endl;
+    SC_LOG_ERROR(this,
+                 "Protocol Error: Request from RAM with Phase != BEGIN_REQ");
     exit(1);
   }
 

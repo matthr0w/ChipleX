@@ -13,6 +13,8 @@ public:
 
 private:
   void thread();
+  void send_request(tlm::tlm_command command, uint32_t address,
+                    unsigned char *data, unsigned int data_size);
 
   sc_core::sc_event transactionFinished_event;
 

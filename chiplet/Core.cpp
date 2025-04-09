@@ -6,6 +6,9 @@
 
 #include <cstdint>
 #include <iostream>
+#include <ostream>
+
+#include "include/logging.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -17,65 +20,73 @@ Core::Core(sc_module_name name) : sc_module(name), socket("socket") {
 
 void Core::thread(void) {
   while (true) {
-    auto *payload = new tlm_generic_payload();
-
     // RAM address space:
     // 0x0000 - 0xFFFF
-    uint64_t addr = rand() % 0x10000;
+    uint32_t address = rand() % 0x10000;
     // Random 4 bytes
     uint32_t *data = new uint32_t(rand());
+    unsigned int data_size = 4;
 
-    payload->set_address(addr);
-    payload->set_data_ptr(reinterpret_cast<unsigned char *>(data));
-    payload->set_data_length(4);
-
+    // Read or write
     bool do_write = rand() % 2;
-    if (do_write) {
-      payload->set_command(TLM_WRITE_COMMAND);
-      std::cout << "[" << sc_time_stamp() << "] - " << name() << ":"
-                << " Sending WRITE to 0x" << std::hex << addr << " with data 0x"
-                << *data << "\n";
-    } else {
-      payload->set_command(TLM_READ_COMMAND);
-      std::cout << "[" << sc_time_stamp() << "] - " << name() << ":"
-                << " Sending READ from 0x" << std::hex << addr << "\n";
-    }
 
+    if (do_write) {
+      SC_LOG_INFO(this, "Sending Request: WRITE to 0x"
+                            << std::hex << address << " with data 0x" << *data);
+
+      send_request(TLM_WRITE_COMMAND, address,
+                   reinterpret_cast<unsigned char *>(data), data_size);
+    } else {
+      SC_LOG_INFO(this, "Sending Request: READ from 0x"
+                            << std::hex << address << " with data 0x" << *data);
+
+      send_request(TLM_READ_COMMAND, address,
+                   reinterpret_cast<unsigned char *>(data), data_size);
+    }
+  }
+}
+
+void Core::send_request(tlm_command command, uint32_t address,
+                        unsigned char *data, unsigned int data_size) {
+  auto *payload = new tlm_generic_payload();
+  sc_time delay = SC_ZERO_TIME;
+  tlm_phase phase = BEGIN_REQ;
+  tlm_sync_enum tlm_resp;
+
+  while (true) {
+    payload->set_command(TLM_WRITE_COMMAND);
+    payload->set_address(address);
+    payload->set_data_ptr(data);
+    payload->set_data_length(data_size);
     payload->set_response_status(TLM_INCOMPLETE_RESPONSE);
 
-    sc_time delay = SC_ZERO_TIME;
-    tlm_phase phase = BEGIN_REQ;
+    tlm_resp = socket->nb_transport_fw(*payload, phase, delay);
 
-    while (true) {
-      tlm_sync_enum tlm_resp;
-
-      socket->nb_transport_fw(*payload, phase, delay);
-
-      if (tlm_resp == TLM_UPDATED) {
-        wait(delay);
-      }
-
-      wait(transactionFinished_event);
-
-      std::cout << "[" << sc_time_stamp() << "] - " << name() << ":"
-                << " Finished transaction\n";
-
-      if (payload->get_response_status() != TLM_OK_RESPONSE) {
-        continue;
-      }
-
-      break;
+    if (tlm_resp == TLM_UPDATED) {
+      wait(delay);
     }
 
-    delete payload;
+    SC_LOG_INFO(this, "Request granted");
+
+    wait(transactionFinished_event);
+
+    SC_LOG_INFO(this, "Transaction finished");
+
+    if (payload->get_response_status() != TLM_OK_RESPONSE) {
+      continue;
+    }
+
+    break;
   }
+
+  delete payload;
 }
 
 tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &payload,
                                     tlm_phase &phase, sc_time &delay) {
   if (phase != BEGIN_RESP) {
-    std::cout << sc_time_stamp() << ": '" << name() << "\tProtocol Error Core"
-              << std::endl;
+    SC_LOG_ERROR(this,
+                 "Protocol Error: Response from Bus with Phase != BEGIN_RESP");
     exit(1);
   }
 

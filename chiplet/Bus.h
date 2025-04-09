@@ -14,7 +14,7 @@ public:
 
   SC_CTOR(Bus);
 
-  void set_address_range(uint64_t base, uint64_t size);
+  void set_address_range(uint32_t base, uint32_t size);
   void set_bus_frequency(double mhz);
 
 private:
@@ -24,8 +24,8 @@ private:
   sc_core::sc_time arbitration_delay;
   sc_core::sc_event arbitration_completed;
 
-  uint64_t base_addr;
-  uint64_t addr_size;
+  uint32_t base_addr;
+  uint32_t addr_size;
   sc_core::sc_time cycle;
 
   tlm_utils::peq_with_get<tlm::tlm_generic_payload> peq1;

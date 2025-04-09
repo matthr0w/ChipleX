@@ -1,5 +1,7 @@
 #include "RAM.h"
 
+#include "include/logging.h"
+
 using namespace sc_core;
 using namespace tlm;
 
@@ -15,8 +17,8 @@ RAM::RAM(sc_module_name name)
 tlm_sync_enum RAM::nb_transport_fw(tlm_generic_payload &payload,
                                    tlm_phase &phase, sc_time &delay) {
   if (phase != BEGIN_REQ) {
-    std::cout << sc_time_stamp() << ": '" << name() << "\tProtocol Error RAM"
-              << std::endl;
+    SC_LOG_ERROR(this,
+                 "Protocol Error: Request from Bus with Phase != BEGIN_REQ");
     exit(1);
   }
 
