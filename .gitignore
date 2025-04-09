@@ -1,0 +1,11 @@
+# VSCode directory
+.vscode/
+
+# Cache directory
+.cache/
+
+# Build directory
+build/
+
+# Compiled binary
+sim
