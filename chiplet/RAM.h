@@ -15,13 +15,17 @@ public:
 
 private:
   std::vector<uint32_t> mem;
-  sc_core::sc_time access_time;
 
+  // -------------------------------------------------------
+  // peqs
+  // -------------------------------------------------------
   tlm_utils::peq_with_get<tlm::tlm_generic_payload> peq;
+  void process_transaction();
 
-  tlm::tlm_sync_enum nb_transport_fw(tlm::tlm_generic_payload & trans,
+  // -------------------------------------------------------
+  // transport functions
+  // -------------------------------------------------------
+  tlm::tlm_sync_enum nb_transport_fw(tlm::tlm_generic_payload & transaction,
                                      tlm::tlm_phase & phase,
                                      sc_core::sc_time & delay);
-
-  void serve_bus();
 };

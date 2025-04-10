@@ -8,7 +8,8 @@
 
 SC_MODULE(Chiplet) {
 public:
-  sc_core::sc_in<bool> clk;
+  // public for interconnect
+  Bus bus;
 
   SC_CTOR(Chiplet);
 
@@ -16,7 +17,6 @@ private:
   Core core1;
   Core core2;
   RAM ram;
-  Bus bus;
 
   void initialize();
 };
