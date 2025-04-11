@@ -24,9 +24,9 @@ void Core::run_core() {
     // random delay between requests (0-200ns)
     wait(delay_dist(gen), SC_NS);
 
-    // RAM address space: 0x0000 - 0xFFFF
+    // RAM address space: 0x0000 - 0xFFFF -> testing: 0x010000 - 0x01ffff to other chiplet
     // random address
-    uint32_t address = address_dist(gen);
+    uint32_t address = 0x010000 + address_dist(gen);
 
     // random 4 bytes
     uint32_t *data = new uint32_t(data_dist(gen));
@@ -69,12 +69,10 @@ void Core::send_request(tlm_command command, uint32_t address,
     tlm_resp = socket->nb_transport_fw(*transaction, phase, delay);
 
     if (tlm_resp == TLM_UPDATED) {
-      // bus processes the request.
-      SC_LOG_INFO(this, "Waiting for transaction...");
+      // bus processes the request
       wait(delay);
     } else if (tlm_resp == TLM_ACCEPTED) {
-      // bus accepted the request but is busy (queued).
-      SC_LOG_INFO(this, "Waiting for transaction...");
+      // bus accepted the request but is busy (queued)
     }
 
     wait(transaction_done);
@@ -99,7 +97,10 @@ tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
 
     phase = END_RESP;
     return TLM_COMPLETED;
-  } else {
+  } else if (phase == END_REQ) {
+    transaction_done.notify(delay);
+
     return TLM_ACCEPTED;
   }
+  return TLM_ACCEPTED;
 }

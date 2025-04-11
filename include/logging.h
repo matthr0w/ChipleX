@@ -5,7 +5,7 @@
 #include <iomanip>
 #include <iostream>
 
-const bool debug_msgs = false;
+const bool debug_msgs = true;
 
 #define SC_LOG_DEBUG(module, ...)                                              \
   do {                                                                         \

@@ -14,9 +14,11 @@ find_library(SYSTEMC_LIB
 # Find source files
 # Chiplet sources
 file(GLOB CHIPLET_SOURCES ${PROJECT_SOURCE_DIR}/chiplet/*.cpp)
+# Interconnect sources
+file(GLOB INTERCONNECT_SOURCES ${PROJECT_SOURCE_DIR}/interconnect/*.cpp)
 
 # Add source files
-add_executable(sim main.cpp ${CHIPLET_SOURCES})
+add_executable(sim main.cpp ${CHIPLET_SOURCES} ${INTERCONNECT_SOURCES})
 
 # Include SystemC headers
 target_include_directories(sim PRIVATE $ENV{SYSTEMC_PATH}/include)

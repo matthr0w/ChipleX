@@ -6,10 +6,9 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
-#include <deque>
-
+// module: 1 (Core1), 2 (Core2), 3 (Interface)
 struct BusRequest {
-  int core_id;
+  int module;
   tlm::tlm_generic_payload *transaction;
 };
 
@@ -20,20 +19,24 @@ public:
   // -------------------------------------------------------
   tlm_utils::simple_target_socket_tagged<Bus> target_socket_core1;
   tlm_utils::simple_target_socket_tagged<Bus> target_socket_core2;
-  tlm_utils::simple_initiator_socket<Bus> initiator_socket;
+  tlm_utils::simple_target_socket_tagged<Bus> interconnect_target_socket;
+  tlm_utils::simple_initiator_socket<Bus> interconnect_initiator_socket;
+  tlm_utils::simple_initiator_socket_tagged<Bus> ram_initiator_socket;
 
   SC_CTOR(Bus);
 
 private:
-  std::deque<BusRequest> m_request_queue;
   int current_owner;
+
+  void process_transaction();
   void process_queue();
+
+  std::deque<BusRequest> m_request_queue;
 
   // -------------------------------------------------------
   // peqs
   // -------------------------------------------------------
   tlm_utils::peq_with_get<tlm::tlm_generic_payload> peq;
-  void process_transaction();
 
   // -------------------------------------------------------
   // transport functions
@@ -41,7 +44,7 @@ private:
   tlm::tlm_sync_enum nb_transport_fw(
       int id, tlm::tlm_generic_payload &transaction, tlm::tlm_phase &phase,
       sc_core::sc_time &delay);
-  tlm::tlm_sync_enum nb_transport_bw(tlm::tlm_generic_payload & transaction,
-                                     tlm::tlm_phase & phase,
-                                     sc_core::sc_time & delay);
+  tlm::tlm_sync_enum nb_transport_bw(
+      int id, tlm::tlm_generic_payload &transaction, tlm::tlm_phase &phase,
+      sc_core::sc_time &delay);
 };
