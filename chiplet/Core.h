@@ -12,10 +12,11 @@ public:
   // -------------------------------------------------------
   tlm_utils::simple_initiator_socket<Core> socket;
 
-  Core(sc_core::sc_module_name name, unsigned int chiplet_instances);
+  Core(sc_core::sc_module_name name, unsigned int chiplet_instances, unsigned int id);
 
 private:
   const unsigned int chiplet_instances;
+  const unsigned int id;
 
   void run_core();
   void send_request(tlm::tlm_command command, uint32_t address,

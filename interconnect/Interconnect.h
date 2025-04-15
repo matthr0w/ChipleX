@@ -46,7 +46,8 @@ private:
   // -------------------------------------------------------
   // events
   // -------------------------------------------------------
-  sc_core::sc_event transaction_done;
+  sc_core::sc_event transaction_A_done;
+  sc_core::sc_event transaction_B_done;
   sc_event tx_buffer_A_event;
   sc_event rx_buffer_A_event;
   sc_event tx_buffer_B_event;
@@ -61,18 +62,43 @@ private:
   // -------------------------------------------------------
   // transport functions
   // -------------------------------------------------------
-  tlm_sync_enum nb_transport_fw_A(tlm_generic_payload & trans,
+  tlm_sync_enum nb_transport_fw_A(tlm_generic_payload & transaction,
                                   tlm_phase & phase, sc_time & delay);
 
-  tlm_sync_enum nb_transport_fw_B(tlm_generic_payload & trans,
+  tlm_sync_enum nb_transport_fw_B(tlm_generic_payload & transaction,
                                   tlm_phase & phase, sc_time & delay);
 
-  tlm_sync_enum nb_transport_bw_A(tlm_generic_payload & trans,
+  tlm_sync_enum nb_transport_bw_A(tlm_generic_payload & transaction,
                                   tlm_phase & phase, sc_time & delay);
 
-  tlm_sync_enum nb_transport_bw_B(tlm_generic_payload & trans,
+  tlm_sync_enum nb_transport_bw_B(tlm_generic_payload & transaction,
                                   tlm_phase & phase, sc_time & delay);
 
-  // helper function
-  sc_time compute_delay(tlm_generic_payload * trans);
+  // helper functions
+  sc_time compute_delay(tlm_generic_payload * transaction);
+
+  tlm_generic_payload *copy_transaction(tlm_generic_payload & transaction) {
+    tlm_generic_payload *copy = new tlm_generic_payload;
+    copy->deep_copy_from(transaction);
+
+    if (transaction.get_data_ptr() && transaction.get_data_length() > 0) {
+      unsigned char *copy_data =
+          new unsigned char[transaction.get_data_length()];
+      std::memcpy(copy_data, transaction.get_data_ptr(),
+                  transaction.get_data_length());
+      copy->set_data_ptr(copy_data);
+    }
+
+    return copy;
+  }
+
+  void free_transaction(tlm_generic_payload * transaction) {
+    if (transaction) {
+      if (transaction->get_data_ptr()) {
+        delete[] transaction->get_data_ptr();
+      }
+
+      delete transaction;
+    }
+  }
 };

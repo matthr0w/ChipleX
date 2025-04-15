@@ -13,7 +13,8 @@ Bus::Bus(sc_module_name name, unsigned int id)
       target_socket_core2("target_socket_core2"),
       ram_initiator_socket("ram_initiator_socket"),
       interconnect_initiator_socket("interconnect_initiator_socket"),
-      peq("peq"), current_owner(0) // 0: free, 1: Core1, 2: Core2, 3: Interface
+      peq_fw("peq_fw"), peq_bw("peq_bw"),
+      current_owner(0) // 0: free, 1: Core1, 2: Core2, 3: Interconnect
 {
   target_socket_core1.register_nb_transport_fw(this, &Bus::nb_transport_fw, 1);
   target_socket_core2.register_nb_transport_fw(this, &Bus::nb_transport_fw, 2);
@@ -21,11 +22,13 @@ Bus::Bus(sc_module_name name, unsigned int id)
                                                       &Bus::nb_transport_fw, 3);
   ram_initiator_socket.register_nb_transport_bw(this, &Bus::nb_transport_bw, 4);
 
-  SC_THREAD(process_transaction);
-  sensitive << peq.get_event();
+  SC_THREAD(process_transaction_fw);
+  sensitive << peq_fw.get_event();
+  SC_THREAD(process_transaction_bw);
+  sensitive << peq_bw.get_event();
 }
 
-void Bus::process_transaction() {
+void Bus::process_transaction_fw() {
   tlm_generic_payload *transaction;
   tlm_phase phase;
   sc_time delay;
@@ -34,19 +37,19 @@ void Bus::process_transaction() {
   while (true) {
     wait();
 
-    transaction = peq.get_next_transaction();
+    transaction = peq_fw.get_next_transaction();
     uint32_t address = transaction->get_address();
-    int destination = address >> 16;
+    unsigned int destination = address >> 16;
 
-    SC_LOG_DEBUG(this, "Processing transaction for Module" << current_owner);
+    SC_LOG_DEBUG(this,
+                 "Processing forward transaction for Module" << current_owner);
 
+    phase = BEGIN_REQ;
     delay = SC_ZERO_TIME;
 
-    if (destination == 1) {
-      phase = BEGIN_REQ;
-
-      SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for Core" << current_owner
-                                                         << " to Interconnect");
+    if (destination != id) {
+      SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for Module"
+                             << current_owner << " to Interconnect");
 
       tlm_resp = interconnect_initiator_socket->nb_transport_fw(*transaction,
                                                                 phase, delay);
@@ -74,51 +77,55 @@ void Bus::process_transaction() {
         process_queue();
       }
     } else {
-      // path is differentiated via command
-      // forward path to RAM
-      if (transaction->is_read() || transaction->is_write()) {
-        phase = BEGIN_REQ;
-
-        SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for Core" << current_owner
+      SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for Module" << current_owner
                                                            << " to RAM");
 
-        tlm_resp =
-            ram_initiator_socket->nb_transport_fw(*transaction, phase, delay);
+      tlm_resp =
+          ram_initiator_socket->nb_transport_fw(*transaction, phase, delay);
 
-        if (tlm_resp == TLM_UPDATED) {
-          wait(delay);
-        }
+      if (tlm_resp == TLM_UPDATED) {
+        wait(delay);
       }
+    }
+  }
+}
 
-      // backward path
-      else {
-        phase = BEGIN_RESP;
+void Bus::process_transaction_bw() {
+  tlm_generic_payload *transaction;
+  tlm_phase phase;
+  sc_time delay;
+  tlm_sync_enum tlm_resp;
 
-        SC_LOG_DEBUG(this, "Forwarding BEGIN_RESP to Core" << current_owner);
+  while (true) {
+    wait();
 
-        if (current_owner == 1) {
-          tlm_resp =
-              target_socket_core1->nb_transport_bw(*transaction, phase, delay);
-        } else if (current_owner == 2) {
-          tlm_resp =
-              target_socket_core2->nb_transport_bw(*transaction, phase, delay);
-        } else if (current_owner == 3) {
-          // tlm_resp =
-          // interconnect_target_socket->nb_transport_bw(*transaction, phase,
-          // delay);
-        }
+    transaction = peq_bw.get_next_transaction();
 
-        if (tlm_resp == TLM_COMPLETED) {
-          wait(delay);
+    phase = BEGIN_RESP;
+    delay = SC_ZERO_TIME;
 
-          // release bus
-          current_owner = 0;
+    SC_LOG_DEBUG(this, "Backwarding BEGIN_RESP to Module" << current_owner);
 
-          // process queue
-          if (!m_request_queue.empty()) {
-            process_queue();
-          }
-        }
+    if (current_owner == 1) {
+      tlm_resp =
+          target_socket_core1->nb_transport_bw(*transaction, phase, delay);
+    } else if (current_owner == 2) {
+      tlm_resp =
+          target_socket_core2->nb_transport_bw(*transaction, phase, delay);
+    } else if (current_owner == 3) {
+      tlm_resp = interconnect_target_socket->nb_transport_bw(*transaction,
+                                                             phase, delay);
+    }
+
+    if (tlm_resp == TLM_COMPLETED) {
+      wait(delay);
+
+      // release bus
+      current_owner = 0;
+
+      // process queue
+      if (!m_request_queue.empty()) {
+        process_queue();
       }
     }
   }
@@ -137,24 +144,28 @@ void Bus::process_queue() {
   // grant access
   current_owner = next_req.module;
   next_transaction = next_req.transaction;
+  uint32_t address = next_transaction->get_address();
+  unsigned int destination = address >> 16;
 
   delay = get_bus_arbitration_delay();
 
   SC_LOG_INFO(this, "Granting bus access to Module" << current_owner
                                                     << " from queue");
 
-  peq.notify(*next_transaction, delay);
+  peq_fw.notify(*next_transaction, delay);
 
   phase = END_REQ;
   delay = SC_ZERO_TIME;
 
   // end request
-  if (current_owner == 1) {
-    tlm_resp =
-        target_socket_core1->nb_transport_bw(*next_transaction, phase, delay);
-  } else if (current_owner == 2) {
-    tlm_resp =
-        target_socket_core2->nb_transport_bw(*next_transaction, phase, delay);
+  if (destination == id) {
+    if (current_owner == 1) {
+      tlm_resp =
+          target_socket_core1->nb_transport_bw(*next_transaction, phase, delay);
+    } else if (current_owner == 2) {
+      tlm_resp =
+          target_socket_core2->nb_transport_bw(*next_transaction, phase, delay);
+    }
   }
 }
 
@@ -179,7 +190,7 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
 
     delay = get_bus_arbitration_delay();
 
-    peq.notify(transaction, delay);
+    peq_fw.notify(transaction, delay);
 
     phase = END_REQ;
     return TLM_UPDATED;
@@ -188,8 +199,6 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
     SC_LOG_INFO(this, "Bus is busy with Module"
                           << current_owner
                           << " -> enqueuing request from Module" << id);
-
-    uint32_t address = transaction.get_address();
     m_request_queue.push_back({id, &transaction});
 
     return TLM_ACCEPTED;
@@ -198,17 +207,17 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
 
 tlm_sync_enum Bus::nb_transport_bw(int id, tlm_generic_payload &transaction,
                                    tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Received response from Module" << id);
+  SC_LOG_DEBUG(this, "Received response from RAM");
 
   if (phase != BEGIN_RESP) {
-    SC_LOG_ERROR(this, "Protocol Error: Response from Module" << id << " with "
-                                                              << phase);
+    SC_LOG_ERROR(this,
+                 "Protocol Error: Response from RAM" << " with " << phase);
     exit(1);
   }
 
   delay += get_bus_arbitration_delay();
 
-  peq.notify(transaction, delay);
+  peq_bw.notify(transaction, delay);
 
   phase = END_RESP;
   return TLM_COMPLETED;

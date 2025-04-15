@@ -29,7 +29,8 @@ private:
   const unsigned int id;
   int current_owner;
 
-  void process_transaction();
+  void process_transaction_fw();
+  void process_transaction_bw();
   void process_queue();
 
   std::deque<BusRequest> m_request_queue;
@@ -37,7 +38,8 @@ private:
   // -------------------------------------------------------
   // peqs
   // -------------------------------------------------------
-  tlm_utils::peq_with_get<tlm::tlm_generic_payload> peq;
+  tlm_utils::peq_with_get<tlm::tlm_generic_payload> peq_fw;
+  tlm_utils::peq_with_get<tlm::tlm_generic_payload> peq_bw;
 
   // -------------------------------------------------------
   // transport functions

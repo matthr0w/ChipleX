@@ -7,7 +7,7 @@ using namespace sc_core;
 using namespace tlm;
 
 RAM::RAM(sc_module_name name)
-    : sc_module(name), socket("socket"), mem(0x10000, 0), // 0x0000 - 0xFFFF
+    : sc_module(name), socket("socket"), mem(0x20000, 0), // 0x10000 - 0x1FFFF
       peq("peq") {
   socket.register_nb_transport_fw(this, &RAM::nb_transport_fw);
 
@@ -26,7 +26,7 @@ void RAM::process_transaction() {
 
     transaction = peq.get_next_transaction();
 
-    sc_dt::uint64 address = transaction->get_address();
+    uint32_t address = transaction->get_address();
     unsigned char *data = transaction->get_data_ptr();
     unsigned int data_size = transaction->get_data_length();
 

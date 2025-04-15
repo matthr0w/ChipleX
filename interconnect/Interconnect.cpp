@@ -12,10 +12,8 @@ Interconnect::Interconnect(sc_module_name name)
       m_width_bits(8), m_clk_cycle(sc_time(4, SC_NS)) {
   socket_A_in.register_nb_transport_fw(this, &Interconnect::nb_transport_fw_A);
   socket_B_in.register_nb_transport_fw(this, &Interconnect::nb_transport_fw_B);
-  // socket_A_out.register_nb_transport_bw(this,
-  // &Interconnect::nb_transport_bw_A);
-  // socket_B_out.register_nb_transport_bw(this,
-  // &Interconnect::nb_transport_bw_B);
+  socket_A_out.register_nb_transport_bw(this, &Interconnect::nb_transport_bw_A);
+  socket_B_out.register_nb_transport_bw(this, &Interconnect::nb_transport_bw_B);
 
   ready_A.write(true);
   ready_B.write(true);
@@ -79,7 +77,7 @@ void Interconnect::process_rx_buffer_A() {
         // bus accepted the request but is busy (bufferd)
       }
 
-      wait(transaction_done);
+      wait(transaction_A_done);
 
       SC_LOG_DEBUG(this, "A->Bus: transmission finished");
 
@@ -87,6 +85,7 @@ void Interconnect::process_rx_buffer_A() {
       rx_buffer_A.pop_front();
       rx_buffer_A_event.notify();
       rx_buffer_A_full.write(rx_buffer_A.size() == m_buffer_depth);
+      free_transaction(transaction);
 
       SC_LOG_DEBUG(this, "rx buffer A full? " << rx_buffer_A_full.read());
     }
@@ -144,7 +143,7 @@ void Interconnect::process_rx_buffer_B() {
         // bus accepted the request but is busy (bufferd)
       }
 
-      wait(transaction_done);
+      wait(transaction_B_done);
 
       SC_LOG_DEBUG(this, "B->Bus: transmission finished");
 
@@ -152,6 +151,7 @@ void Interconnect::process_rx_buffer_B() {
       rx_buffer_B.pop_front();
       rx_buffer_B_event.notify();
       rx_buffer_B_full.write(rx_buffer_B.size() == m_buffer_depth);
+      free_transaction(transaction);
 
       SC_LOG_DEBUG(this, "rx buffer B full? " << rx_buffer_B_full.read());
     }
@@ -166,18 +166,20 @@ tlm_sync_enum Interconnect::nb_transport_fw_A(tlm_generic_payload &transaction,
                                               sc_time &delay) {
   SC_LOG_DEBUG(this, "A->B: request received");
 
+  tlm_generic_payload *transaction_copy = copy_transaction(transaction);
+
   if (!ready_A.read()) {
     SC_LOG_WARN(this, "A->B: A not ready -> waiting...");
     wait(rx_buffer_B_event);
   }
 
   // add bus transfer delay
-  delay += get_bus_transfer_delay(transaction.get_data_length());
+  delay += get_bus_transfer_delay(transaction_copy->get_data_length());
 
   // put transaction in tx buffer A
   SC_LOG_DEBUG(this, "A->B: put transaction in tx buffer A");
-  tx_buffer_A.push_back(&transaction);
-  tx_buffer_A_event.notify();
+  tx_buffer_A.push_back(transaction_copy);
+  tx_buffer_A_event.notify(delay);
 
   phase = END_REQ;
   return TLM_COMPLETED;
@@ -188,18 +190,20 @@ tlm_sync_enum Interconnect::nb_transport_fw_B(tlm_generic_payload &transaction,
                                               sc_time &delay) {
   SC_LOG_DEBUG(this, "B->A: request received");
 
+  tlm_generic_payload *transaction_copy = copy_transaction(transaction);
+
   if (!ready_B.read()) {
     SC_LOG_WARN(this, "B->A: B not ready -> waiting...");
     wait(rx_buffer_A_event);
   }
 
   // add bus transfer delay
-  delay += get_bus_transfer_delay(transaction.get_data_length());
+  delay += get_bus_transfer_delay(transaction_copy->get_data_length());
 
   // put transaction in tx buffer B
   SC_LOG_DEBUG(this, "Put transaction in tx buffer B");
-  tx_buffer_B.push_back(&transaction);
-  tx_buffer_B_event.notify();
+  tx_buffer_B.push_back(transaction_copy);
+  tx_buffer_B_event.notify(delay);
 
   phase = END_REQ;
   return TLM_COMPLETED;
@@ -208,18 +212,34 @@ tlm_sync_enum Interconnect::nb_transport_fw_B(tlm_generic_payload &transaction,
 tlm_sync_enum Interconnect::nb_transport_bw_A(tlm_generic_payload &transaction,
                                               tlm_phase &phase,
                                               sc_time &delay) {
-  // TODO
-  return TLM_COMPLETED;
+  if (phase == BEGIN_RESP) {
+    delay += get_bus_transfer_delay(transaction.get_data_length());
+
+    transaction_A_done.notify(delay);
+
+    phase = END_RESP;
+    return TLM_COMPLETED;
+  }
+
+  return TLM_ACCEPTED;
 }
 
 tlm_sync_enum Interconnect::nb_transport_bw_B(tlm_generic_payload &transaction,
                                               tlm_phase &phase,
                                               sc_time &delay) {
-  // TODO
-  return TLM_COMPLETED;
+  if (phase == BEGIN_RESP) {
+    delay += get_bus_transfer_delay(transaction.get_data_length());
+
+    transaction_B_done.notify(delay);
+
+    phase = END_RESP;
+    return TLM_COMPLETED;
+  }
+
+  return TLM_ACCEPTED;
 }
 
-// helper function
+// helper functions
 sc_time Interconnect::compute_delay(tlm_generic_payload *transaction) {
   size_t size = transaction->get_data_length();
   size_t size_bits = size * 8;

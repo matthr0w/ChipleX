@@ -8,15 +8,16 @@
 using namespace sc_core;
 using namespace tlm;
 
-Core::Core(sc_module_name name, unsigned int chiplet_instances)
-    : sc_module(name), chiplet_instances(chiplet_instances), socket("socket") {
+Core::Core(sc_module_name name, unsigned int chiplet_instances, unsigned int id)
+    : sc_module(name), chiplet_instances(chiplet_instances), id(id),
+      socket("socket") {
   socket.register_nb_transport_bw(this, &Core::nb_transport_bw);
   SC_THREAD(run_core);
 }
 
 void Core::run_core() {
   thread_local std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<int> delay_dist(0, 200);
+  std::uniform_int_distribution<int> delay_dist(0, 400);
   std::uniform_int_distribution<int> chiplet_dist(0, chiplet_instances - 1);
   std::uniform_int_distribution<uint32_t> address_dist(0x0000, 0xFFFF);
   std::uniform_int_distribution<uint32_t> data_dist;
@@ -84,6 +85,7 @@ void Core::send_request(tlm_command command, uint32_t address,
     break;
   }
 
+  delete data;
   delete transaction;
 }
 
@@ -100,7 +102,12 @@ tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
     phase = END_RESP;
     return TLM_COMPLETED;
   } else if (phase == END_REQ) {
-    transaction_done.notify(delay);
+    uint32_t address = transaction.get_address();
+    unsigned int destination = address >> 16;
+
+    if (destination != id) {
+      transaction_done.notify(delay);
+    }
 
     return TLM_ACCEPTED;
   }

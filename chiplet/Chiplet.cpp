@@ -7,8 +7,9 @@ unsigned int Chiplet::total_instances = 0;
 unsigned int Chiplet::instance = 0;
 
 Chiplet::Chiplet(sc_module_name name)
-    : sc_module(name), id(Chiplet::instance++), core1("Core1", total_instances),
-      core2("Core2", total_instances), ram("RAM"), bus("Bus", id) {
+    : sc_module(name), id(Chiplet::instance++),
+      core1("Core1", total_instances, id), core2("Core2", total_instances, id),
+      ram("RAM"), bus("Bus", id) {
   initialize();
 }
 
