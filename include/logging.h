@@ -7,6 +7,9 @@
 
 const bool debug_msgs = true;
 
+const std::array<std::string, 6> modules = {
+    "Free", "Core1", "Core2", "RAM", "Interconnect1", "Interconnect2"};
+
 #define SC_LOG_DEBUG(module, ...)                                              \
   do {                                                                         \
     if (debug_msgs) {                                                          \

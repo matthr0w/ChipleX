@@ -14,13 +14,13 @@ Bus::Bus(sc_module_name name, unsigned int id)
       ram_initiator_socket("ram_initiator_socket"),
       interconnect_initiator_socket("interconnect_initiator_socket"),
       peq_fw("peq_fw"), peq_bw("peq_bw"),
-      current_owner(0) // 0: free, 1: Core1, 2: Core2, 3: Interconnect
+      current_owner(0) // see modules table in logging.h
 {
   target_socket_core1.register_nb_transport_fw(this, &Bus::nb_transport_fw, 1);
   target_socket_core2.register_nb_transport_fw(this, &Bus::nb_transport_fw, 2);
+  ram_initiator_socket.register_nb_transport_bw(this, &Bus::nb_transport_bw, 3);
   interconnect_target_socket.register_nb_transport_fw(this,
-                                                      &Bus::nb_transport_fw, 3);
-  ram_initiator_socket.register_nb_transport_bw(this, &Bus::nb_transport_bw, 4);
+                                                      &Bus::nb_transport_fw, 4);
 
   SC_THREAD(process_transaction_fw);
   sensitive << peq_fw.get_event();
@@ -41,15 +41,15 @@ void Bus::process_transaction_fw() {
     uint32_t address = transaction->get_address();
     unsigned int destination = address >> 16;
 
-    SC_LOG_DEBUG(this,
-                 "Processing forward transaction for Module" << current_owner);
+    SC_LOG_DEBUG(this, "Processing forward transaction for "
+                           << modules[current_owner]);
 
     phase = BEGIN_REQ;
     delay = SC_ZERO_TIME;
 
     if (destination != id) {
-      SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for Module"
-                             << current_owner << " to Interconnect");
+      SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
+                                                     << " to Interconnect");
 
       tlm_resp = interconnect_initiator_socket->nb_transport_fw(*transaction,
                                                                 phase, delay);
@@ -77,8 +77,8 @@ void Bus::process_transaction_fw() {
         process_queue();
       }
     } else {
-      SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for Module" << current_owner
-                                                           << " to RAM");
+      SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
+                                                     << " to RAM");
 
       tlm_resp =
           ram_initiator_socket->nb_transport_fw(*transaction, phase, delay);
@@ -104,7 +104,7 @@ void Bus::process_transaction_bw() {
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
 
-    SC_LOG_DEBUG(this, "Backwarding BEGIN_RESP to Module" << current_owner);
+    SC_LOG_DEBUG(this, "Backwarding BEGIN_RESP to " << modules[current_owner]);
 
     if (current_owner == 1) {
       tlm_resp =
@@ -112,7 +112,7 @@ void Bus::process_transaction_bw() {
     } else if (current_owner == 2) {
       tlm_resp =
           target_socket_core2->nb_transport_bw(*transaction, phase, delay);
-    } else if (current_owner == 3) {
+    } else if (current_owner == 4) {
       tlm_resp = interconnect_target_socket->nb_transport_bw(*transaction,
                                                              phase, delay);
     }
@@ -149,8 +149,8 @@ void Bus::process_queue() {
 
   delay = get_bus_arbitration_delay();
 
-  SC_LOG_INFO(this, "Granting bus access to Module" << current_owner
-                                                    << " from queue");
+  SC_LOG_INFO(this, "Granting bus access to " << modules[current_owner]
+                                              << " from queue");
 
   peq_fw.notify(*next_transaction, delay);
 
@@ -174,17 +174,17 @@ void Bus::process_queue() {
 // -------------------------------------------------------
 tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
                                    tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Received request from Module" << id);
+  SC_LOG_DEBUG(this, "Received request from " << modules[id]);
 
   if (phase != BEGIN_REQ) {
-    SC_LOG_ERROR(this, "Protocol Error: Request from Module" << id << " with "
-                                                             << phase);
+    SC_LOG_ERROR(this, "Protocol Error: Request from " << modules[id]
+                                                       << " with " << phase);
     exit(1);
   }
 
   if (current_owner == 0 && m_request_queue.empty()) {
     // bus is free and queue is empty: grant access immediately
-    SC_LOG_INFO(this, "Bus is empty -> granting bus access to Module" << id);
+    SC_LOG_INFO(this, "Bus is empty -> granting bus access to " << modules[id]);
 
     current_owner = id;
 
@@ -196,10 +196,14 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
     return TLM_UPDATED;
   } else {
     // bus is busy or queue is not empty: enqueue request
-    SC_LOG_INFO(this, "Bus is busy with Module"
-                          << current_owner
-                          << " -> enqueuing request from Module" << id);
-    m_request_queue.push_back({id, &transaction});
+    SC_LOG_INFO(this, "Bus is busy with " << modules[current_owner]
+                                          << " -> enqueuing request from "
+                                          << modules[id]);
+    if (id == 4) { // to avoid deadlocks prefer interconnect ?
+      m_request_queue.push_front({id, &transaction});
+    } else {
+      m_request_queue.push_back({id, &transaction});
+    }
 
     return TLM_ACCEPTED;
   }
@@ -207,11 +211,11 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
 
 tlm_sync_enum Bus::nb_transport_bw(int id, tlm_generic_payload &transaction,
                                    tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Received response from RAM");
+  SC_LOG_DEBUG(this, "Received response from " << modules[id]);
 
   if (phase != BEGIN_RESP) {
-    SC_LOG_ERROR(this,
-                 "Protocol Error: Response from RAM" << " with " << phase);
+    SC_LOG_ERROR(this, "Protocol Error: Response from " << modules[id]
+                                                        << " with " << phase);
     exit(1);
   }
 
