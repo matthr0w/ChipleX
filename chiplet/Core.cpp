@@ -8,7 +8,8 @@
 using namespace sc_core;
 using namespace tlm;
 
-Core::Core(sc_module_name name) : sc_module(name), socket("socket") {
+Core::Core(sc_module_name name, unsigned int chiplet_instances)
+    : sc_module(name), chiplet_instances(chiplet_instances), socket("socket") {
   socket.register_nb_transport_bw(this, &Core::nb_transport_bw);
   SC_THREAD(run_core);
 }
@@ -16,6 +17,7 @@ Core::Core(sc_module_name name) : sc_module(name), socket("socket") {
 void Core::run_core() {
   thread_local std::mt19937 gen(std::random_device{}());
   std::uniform_int_distribution<int> delay_dist(0, 200);
+  std::uniform_int_distribution<int> chiplet_dist(0, chiplet_instances - 1);
   std::uniform_int_distribution<uint32_t> address_dist(0x0000, 0xFFFF);
   std::uniform_int_distribution<uint32_t> data_dist;
   std::bernoulli_distribution write_dist(0.5);
@@ -24,9 +26,9 @@ void Core::run_core() {
     // random delay between requests (0-200ns)
     wait(delay_dist(gen), SC_NS);
 
-    // RAM address space: 0x0000 - 0xFFFF -> testing: 0x010000 - 0x01ffff to other chiplet
-    // random address
-    uint32_t address = 0x010000 + address_dist(gen);
+    // RAM address space: 0x0000 - 0xFFFF + 0x010000 - 0xCHIPLETS0000 for
+    // chiplet selection other chiplet random address
+    uint32_t address = chiplet_dist(gen) * 0x010000 + address_dist(gen);
 
     // random 4 bytes
     uint32_t *data = new uint32_t(data_dist(gen));

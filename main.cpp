@@ -17,6 +17,8 @@ using namespace tlm;
 // + bus arbitration with interconnect
 
 int sc_main(int argc, char *argv[]) {
+  Chiplet::total_instances = 2;
+
   Chiplet chiplet1("Chiplet1");
   Chiplet chiplet2("Chiplet2");
   Interconnect interconnect("Interconnect");

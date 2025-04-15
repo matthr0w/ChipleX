@@ -8,10 +8,12 @@
 
 SC_MODULE(Chiplet) {
 private:
-  static unsigned int instances;
+  static unsigned int instance;
   const unsigned int id;
 
 public:
+  static unsigned int total_instances;
+
   // public for interconnect
   Bus bus;
 
