@@ -8,8 +8,8 @@
 using namespace sc_core;
 using namespace tlm;
 
-Bus::Bus(sc_module_name name)
-    : sc_module(name), target_socket_core1("target_socket_core1"),
+Bus::Bus(sc_module_name name, unsigned int id)
+    : sc_module(name), id(id), target_socket_core1("target_socket_core1"),
       target_socket_core2("target_socket_core2"),
       ram_initiator_socket("ram_initiator_socket"),
       interconnect_initiator_socket("interconnect_initiator_socket"),
@@ -103,8 +103,9 @@ void Bus::process_transaction() {
           tlm_resp =
               target_socket_core2->nb_transport_bw(*transaction, phase, delay);
         } else if (current_owner == 3) {
-          //tlm_resp = 
-              //interconnect_target_socket->nb_transport_bw(*transaction, phase, delay);
+          // tlm_resp =
+          // interconnect_target_socket->nb_transport_bw(*transaction, phase,
+          // delay);
         }
 
         if (tlm_resp == TLM_COMPLETED) {

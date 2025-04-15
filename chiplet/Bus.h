@@ -23,9 +23,10 @@ public:
   tlm_utils::simple_initiator_socket<Bus> interconnect_initiator_socket;
   tlm_utils::simple_initiator_socket_tagged<Bus> ram_initiator_socket;
 
-  SC_CTOR(Bus);
+  Bus(sc_core::sc_module_name name, unsigned int id);
 
 private:
+  const unsigned int id;
   int current_owner;
 
   void process_transaction();

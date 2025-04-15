@@ -7,6 +7,10 @@
 #include "RAM.h"
 
 SC_MODULE(Chiplet) {
+private:
+  static unsigned int instances;
+  const unsigned int id;
+
 public:
   // public for interconnect
   Bus bus;

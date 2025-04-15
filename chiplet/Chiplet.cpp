@@ -3,8 +3,10 @@
 using namespace sc_core;
 using namespace tlm;
 
+unsigned int Chiplet::instances = 0;
+
 Chiplet::Chiplet(sc_module_name name)
-    : sc_module(name), core1("Core1"), core2("Core2"), ram("RAM"), bus("Bus") {
+    : sc_module(name), id(Chiplet::instances++), core1("Core1"), core2("Core2"), ram("RAM"), bus("Bus", id) {
   initialize();
 }
 
