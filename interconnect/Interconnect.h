@@ -36,14 +36,6 @@ private:
   std::deque<tlm_generic_payload *> rx_buffer_B;
 
   // -------------------------------------------------------
-  // signals
-  // -------------------------------------------------------
-  sc_signal<bool> ready_A;
-  sc_signal<bool> ready_B;
-  sc_signal<bool> rx_buffer_A_full;
-  sc_signal<bool> rx_buffer_B_full;
-
-  // -------------------------------------------------------
   // events
   // -------------------------------------------------------
   sc_core::sc_event transaction_A_done;
@@ -75,30 +67,10 @@ private:
                                   tlm_phase & phase, sc_time & delay);
 
   // helper functions
+  tlm_generic_payload *copy_transaction(tlm_generic_payload & transaction);
+  void free_transaction(tlm_generic_payload * transaction);
+
   sc_time compute_delay(tlm_generic_payload * transaction);
 
-  tlm_generic_payload *copy_transaction(tlm_generic_payload & transaction) {
-    tlm_generic_payload *copy = new tlm_generic_payload;
-    copy->deep_copy_from(transaction);
-
-    if (transaction.get_data_ptr() && transaction.get_data_length() > 0) {
-      unsigned char *copy_data =
-          new unsigned char[transaction.get_data_length()];
-      std::memcpy(copy_data, transaction.get_data_ptr(),
-                  transaction.get_data_length());
-      copy->set_data_ptr(copy_data);
-    }
-
-    return copy;
-  }
-
-  void free_transaction(tlm_generic_payload * transaction) {
-    if (transaction) {
-      if (transaction->get_data_ptr()) {
-        delete[] transaction->get_data_ptr();
-      }
-
-      delete transaction;
-    }
-  }
+  void output_buffer_levels();
 };
