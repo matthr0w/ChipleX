@@ -11,7 +11,7 @@ const unsigned int BUS_WIDTH = 4;
 // inverse of clock frequency
 const sc_time BUS_CLK_CYCLE = sc_time(5, SC_NS);
 // fixed arbitration delay
-const sc_time BUS_ARBITRATION_DELAY = sc_time(10, SC_NS);
+const sc_time BUS_ARBITRATION_DELAY = BUS_CLK_CYCLE;
 
 // RAM
 // -----------------------------------------------

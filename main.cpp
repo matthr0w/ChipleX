@@ -28,7 +28,7 @@ int sc_main(int argc, char *argv[]) {
   interconnect.socket_A_out.bind(chiplet1.bus.interconnect_target_socket);
   interconnect.socket_B_out.bind(chiplet2.bus.interconnect_target_socket);
 
-  sc_start(200, SC_NS);
+  sc_start(10000, SC_NS);
 
   return 0;
 }

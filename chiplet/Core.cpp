@@ -17,7 +17,7 @@ Core::Core(sc_module_name name, unsigned int chiplet_instances, unsigned int id)
 
 void Core::run_core() {
   thread_local std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<int> delay_dist(0, 400);
+  std::uniform_int_distribution<int> delay_dist(0, 20);
   std::uniform_int_distribution<int> chiplet_dist(0, chiplet_instances - 1);
   std::uniform_int_distribution<uint32_t> address_dist(0x0000, 0xFFFF);
   std::uniform_int_distribution<uint32_t> data_dist;
@@ -29,7 +29,8 @@ void Core::run_core() {
 
     // RAM address space: 0x0000 - 0xFFFF + 0x010000 - 0xCHIPLETS0000 for
     // chiplet selection other chiplet random address
-    uint32_t address = chiplet_dist(gen) * 0x010000 + address_dist(gen);
+    unsigned int forwarder = (id == 0) ? 1 : 0;
+    uint32_t address = forwarder * 0x010000 + address_dist(gen);
 
     // random 4 bytes
     uint32_t *data = new uint32_t(data_dist(gen));
