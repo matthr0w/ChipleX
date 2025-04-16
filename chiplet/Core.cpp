@@ -4,33 +4,38 @@
 #include <random>
 
 #include "include/logging.h"
+#include "include/payload.h"
+#include "include/payload_extension.h"
 
 using namespace sc_core;
 using namespace tlm;
 
-Core::Core(sc_module_name name, unsigned int chiplet_instances, unsigned int id)
-    : sc_module(name), chiplet_instances(chiplet_instances), id(id),
+Core::Core(sc_module_name name, unsigned int chiplet_id, unsigned int core_id)
+    : sc_module(name), chiplet_id(chiplet_id), core_id(core_id), request(0),
       socket("socket") {
   socket.register_nb_transport_bw(this, &Core::nb_transport_bw);
   SC_THREAD(run_core);
 }
 
 void Core::run_core() {
+  // random number distributions
   thread_local std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<int> delay_dist(0, 20);
-  std::uniform_int_distribution<int> chiplet_dist(0, chiplet_instances - 1);
+  std::uniform_int_distribution<int> delay_dist(0, 100);
   std::uniform_int_distribution<uint32_t> address_dist(0x0000, 0xFFFF);
   std::uniform_int_distribution<uint32_t> data_dist;
   std::bernoulli_distribution write_dist(0.5);
 
   while (true) {
-    // random delay between requests (0-200ns)
+    // random delay between requests
     wait(delay_dist(gen), SC_NS);
 
-    // RAM address space: 0x0000 - 0xFFFF + 0x010000 - 0xCHIPLETS0000 for
-    // chiplet selection other chiplet random address
-    unsigned int forwarder = (id == 0) ? 1 : 0;
-    uint32_t address = forwarder * 0x010000 + address_dist(gen);
+    // RAM address spaces:
+    // 0x000000 - 0x00FFFF RAM Chiplet 0
+    // 0x010000 - 0x01FFFF RAM Chiplet 1
+    // ...
+
+    // random RAM address
+    uint32_t address = address_dist(gen);
 
     // random 4 bytes
     uint32_t *data = new uint32_t(data_dist(gen));
@@ -51,12 +56,14 @@ void Core::run_core() {
       send_request(TLM_READ_COMMAND, address,
                    reinterpret_cast<unsigned char *>(data), data_size);
     }
+
+    request += 1;
   }
 }
 
 void Core::send_request(tlm_command command, uint32_t address,
                         unsigned char *data, unsigned int data_size) {
-  auto *transaction = new tlm_generic_payload();
+  auto *transaction = new payload();
   tlm_phase phase;
   sc_time delay;
   tlm_sync_enum tlm_resp;
@@ -66,6 +73,12 @@ void Core::send_request(tlm_command command, uint32_t address,
     transaction->set_address(address);
     transaction->set_data_ptr(data);
     transaction->set_data_length(data_size);
+
+    transaction->set_request_id(request);
+    transaction->set_chiplet_id(chiplet_id);
+    transaction->set_core_id(core_id);
+    // for now: always send to other chiplet
+    transaction->set_destination_id((chiplet_id == 0) ? 1 : 0);
 
     phase = BEGIN_REQ;
     delay = SC_ZERO_TIME;
@@ -86,7 +99,6 @@ void Core::send_request(tlm_command command, uint32_t address,
     break;
   }
 
-  delete data;
   delete transaction;
 }
 
@@ -103,10 +115,10 @@ tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
     phase = END_RESP;
     return TLM_COMPLETED;
   } else if (phase == END_REQ) {
-    uint32_t address = transaction.get_address();
-    unsigned int destination = address >> 16;
+    payload_extension *ext;
+    transaction.get_extension(ext);
 
-    if (destination != id) {
+    if (ext->destination_id != chiplet_id) {
       transaction_done.notify(delay);
     }
 

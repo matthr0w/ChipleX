@@ -4,6 +4,7 @@
 #include <deque>
 
 #include "include/logging.h"
+#include "include/payload.h"
 
 Interconnect::Interconnect(sc_module_name name)
     : sc_module(name), socket_A_in("socket_A_in"), socket_B_in("socket_B_in"),
@@ -73,7 +74,8 @@ void Interconnect::process_rx_buffer_A() {
 
       // remove from rx buffer A
       rx_buffer_A.pop_front();
-      free_transaction(transaction);
+      
+      delete transaction;
     }
   }
 }
@@ -130,7 +132,8 @@ void Interconnect::process_rx_buffer_B() {
 
       // remove from rx buffer B
       rx_buffer_B.pop_front();
-      free_transaction(transaction);
+
+      delete transaction;
     }
   }
 }
@@ -145,7 +148,7 @@ tlm_sync_enum Interconnect::nb_transport_fw_A(tlm_generic_payload &transaction,
 
   output_buffer_levels();
 
-  tlm_generic_payload *transaction_copy = copy_transaction(transaction);
+  auto *transaction_copy = static_cast<payload*>(&transaction)->clone();
 
   if (tx_buffer_A.size() == m_buffer_depth) {
     SC_LOG_WARN(this, "A->B: A not ready -> waiting...");
@@ -171,7 +174,7 @@ tlm_sync_enum Interconnect::nb_transport_fw_B(tlm_generic_payload &transaction,
 
   output_buffer_levels();
 
-  tlm_generic_payload *transaction_copy = copy_transaction(transaction);
+  auto *transaction_copy = static_cast<payload*>(&transaction)->clone();
 
   if (tx_buffer_B.size() == m_buffer_depth) {
     SC_LOG_WARN(this, "B->A: B not ready -> waiting...");

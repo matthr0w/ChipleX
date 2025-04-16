@@ -4,20 +4,20 @@
 #include <deque>
 
 #include "include/logging.h"
+#include "include/payload_extension.h"
 
 using namespace sc_core;
 using namespace tlm;
 
 Bus::Bus(sc_module_name name, unsigned int id)
-    : sc_module(name), id(id), target_socket_core1("target_socket_core1"),
-      target_socket_core2("target_socket_core2"),
+    : sc_module(name), chiplet_id(id),
+      core0_target_socket("core0_target_socket"),
+      core1_target_socket("core1_target_socket"),
       ram_initiator_socket("ram_initiator_socket"),
       interconnect_initiator_socket("interconnect_initiator_socket"),
-      peq_fw("peq_fw"), peq_bw("peq_bw"),
-      current_owner(0) // see modules table in logging.h
-{
-  target_socket_core1.register_nb_transport_fw(this, &Bus::nb_transport_fw, 1);
-  target_socket_core2.register_nb_transport_fw(this, &Bus::nb_transport_fw, 2);
+      peq_fw("peq_fw"), peq_bw("peq_bw"), current_owner(0) {
+  core0_target_socket.register_nb_transport_fw(this, &Bus::nb_transport_fw, 1);
+  core1_target_socket.register_nb_transport_fw(this, &Bus::nb_transport_fw, 2);
   ram_initiator_socket.register_nb_transport_bw(this, &Bus::nb_transport_bw, 3);
   interconnect_target_socket.register_nb_transport_fw(this,
                                                       &Bus::nb_transport_fw, 4);
@@ -30,6 +30,7 @@ Bus::Bus(sc_module_name name, unsigned int id)
 
 void Bus::process_transaction_fw() {
   tlm_generic_payload *transaction;
+  payload_extension *ext;
   tlm_phase phase;
   sc_time delay;
   tlm_sync_enum tlm_resp;
@@ -38,8 +39,7 @@ void Bus::process_transaction_fw() {
     wait();
 
     transaction = peq_fw.get_next_transaction();
-    uint32_t address = transaction->get_address();
-    unsigned int destination = address >> 16;
+    transaction->get_extension(ext);
 
     SC_LOG_DEBUG(this, "Processing forward transaction for "
                            << modules[current_owner]);
@@ -47,7 +47,7 @@ void Bus::process_transaction_fw() {
     phase = BEGIN_REQ;
     delay = SC_ZERO_TIME;
 
-    if (destination != id) {
+    if (ext->destination_id != chiplet_id) {
       SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
                                                      << " to Interconnect");
 
@@ -63,17 +63,17 @@ void Bus::process_transaction_fw() {
 
       if (current_owner == 1) {
         tlm_resp =
-            target_socket_core1->nb_transport_bw(*transaction, phase, delay);
+            core0_target_socket->nb_transport_bw(*transaction, phase, delay);
       } else if (current_owner == 2) {
         tlm_resp =
-            target_socket_core2->nb_transport_bw(*transaction, phase, delay);
+            core1_target_socket->nb_transport_bw(*transaction, phase, delay);
       }
 
       // release bus
       current_owner = 0;
 
       // process queue
-      if (!m_request_queue.empty()) {
+      if (!request_queue.empty()) {
         process_queue();
       }
     } else {
@@ -108,10 +108,10 @@ void Bus::process_transaction_bw() {
 
     if (current_owner == 1) {
       tlm_resp =
-          target_socket_core1->nb_transport_bw(*transaction, phase, delay);
+          core0_target_socket->nb_transport_bw(*transaction, phase, delay);
     } else if (current_owner == 2) {
       tlm_resp =
-          target_socket_core2->nb_transport_bw(*transaction, phase, delay);
+          core1_target_socket->nb_transport_bw(*transaction, phase, delay);
     } else if (current_owner == 4) {
       tlm_resp = interconnect_target_socket->nb_transport_bw(*transaction,
                                                              phase, delay);
@@ -124,7 +124,7 @@ void Bus::process_transaction_bw() {
       current_owner = 0;
 
       // process queue
-      if (!m_request_queue.empty()) {
+      if (!request_queue.empty()) {
         process_queue();
       }
     }
@@ -133,19 +133,19 @@ void Bus::process_transaction_bw() {
 
 void Bus::process_queue() {
   tlm_generic_payload *next_transaction;
+  payload_extension *ext;
   tlm_phase phase;
   sc_time delay;
   tlm_sync_enum tlm_resp;
 
   // dequeue next waiting request
-  BusRequest next_req = m_request_queue.front();
-  m_request_queue.pop_front();
+  BusRequest next_request = request_queue.front();
+  request_queue.pop_front();
 
   // grant access
-  current_owner = next_req.module;
-  next_transaction = next_req.transaction;
-  uint32_t address = next_transaction->get_address();
-  unsigned int destination = address >> 16;
+  current_owner = next_request.module;
+  next_transaction = next_request.transaction;
+  next_transaction->get_extension(ext);
 
   delay = get_bus_arbitration_delay();
 
@@ -158,13 +158,13 @@ void Bus::process_queue() {
   delay = SC_ZERO_TIME;
 
   // end request
-  if (destination == id) {
+  if (ext->destination_id == chiplet_id) {
     if (current_owner == 1) {
       tlm_resp =
-          target_socket_core1->nb_transport_bw(*next_transaction, phase, delay);
+          core0_target_socket->nb_transport_bw(*next_transaction, phase, delay);
     } else if (current_owner == 2) {
       tlm_resp =
-          target_socket_core2->nb_transport_bw(*next_transaction, phase, delay);
+          core1_target_socket->nb_transport_bw(*next_transaction, phase, delay);
     }
   }
 }
@@ -182,7 +182,7 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
     exit(1);
   }
 
-  if (current_owner == 0 && m_request_queue.empty()) {
+  if (current_owner == 0 && request_queue.empty()) {
     // bus is free and queue is empty: grant access immediately
     SC_LOG_INFO(this, "Bus is empty -> granting bus access to " << modules[id]);
 
@@ -199,10 +199,10 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
     SC_LOG_INFO(this, "Bus is busy with " << modules[current_owner]
                                           << " -> enqueuing request from "
                                           << modules[id]);
-    if (id == 4) { // to avoid deadlocks prefer interconnect ?
-      m_request_queue.push_front({id, &transaction});
+    if (id == 4) { // to avoid deadlocks prefer interconnect
+      request_queue.push_front({id, &transaction});
     } else {
-      m_request_queue.push_back({id, &transaction});
+      request_queue.push_back({id, &transaction});
     }
 
     return TLM_ACCEPTED;

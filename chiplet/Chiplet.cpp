@@ -3,20 +3,19 @@
 using namespace sc_core;
 using namespace tlm;
 
-unsigned int Chiplet::total_instances = 0;
 unsigned int Chiplet::instance = 0;
 
 Chiplet::Chiplet(sc_module_name name)
-    : sc_module(name), id(Chiplet::instance++),
-      core1("Core1", total_instances, id), core2("Core2", total_instances, id),
-      ram("RAM"), bus("Bus", id) {
+    : sc_module(name), chiplet_id(Chiplet::instance++),
+      core0("Core0", chiplet_id, 0), core1("Core1", chiplet_id, 1),
+      ram("RAM"), bus("Bus", chiplet_id) {
   initialize();
 }
 
 void Chiplet::initialize() {
   // connect core initiator sockets to bus target sockets
-  core1.socket.bind(bus.target_socket_core1);
-  core2.socket.bind(bus.target_socket_core2);
+  core0.socket.bind(bus.core0_target_socket);
+  core1.socket.bind(bus.core1_target_socket);
 
   // connect bus initiator socket to RAM target socket
   bus.ram_initiator_socket.bind(ram.socket);
