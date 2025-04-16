@@ -5,10 +5,9 @@
 #include <iomanip>
 #include <iostream>
 
-const bool debug_msgs = true;
+#include "payload_extension.h"
 
-const std::array<std::string, 6> modules = {
-    "Free", "Core1", "Core2", "RAM", "Interconnect1", "Interconnect2"};
+const bool debug_msgs = true;
 
 #define SC_LOG_DEBUG(module, ...)                                              \
   do {                                                                         \
@@ -39,4 +38,25 @@ const std::array<std::string, 6> modules = {
     std::cerr << std::setw(9) << sc_time_stamp()                               \
               << " | \033[31m[ERROR]\033[0m  | " << std::left << std::setw(20) \
               << (module)->name() << " | " << __VA_ARGS__ << std::endl;        \
+  } while (0)
+
+#define SC_DUMP_TRANS(module, transaction)                                     \
+  do {                                                                         \
+    const auto *ext = (transaction).get_extension<payload_extension>();        \
+    std::ostringstream _sc_dump_trans_stream;                                  \
+    _sc_dump_trans_stream << std::setw(9) << sc_time_stamp()                   \
+                          << " | \033[35m[TRACE]\033[0m  | " << std::left      \
+                          << std::setw(20) << (module)->name() << " | ";       \
+    _sc_dump_trans_stream                                                      \
+        << "ADDR: 0x" << std::hex << (transaction).get_address() << " CMD: "   \
+        << ((transaction).get_command() == tlm::TLM_READ_COMMAND ? "READ"      \
+                                                                 : "WRITE")    \
+        << " LEN: " << std::dec << (transaction).get_data_length();            \
+    if (ext) {                                                                 \
+      _sc_dump_trans_stream << " | Chiplet: " << ext->chiplet_id               \
+                            << " Core: " << ext->core_id                       \
+                            << " Destination: " << ext->destination_id         \
+                            << " Request: " << ext->request_id;                \
+    }                                                                          \
+    std::cerr << _sc_dump_trans_stream.str() << std::endl;                     \
   } while (0)
