@@ -7,7 +7,7 @@
 
 #include "payload_extension.h"
 
-const bool debug_msgs = true;
+extern bool debug_msgs;
 
 #define SC_LOG_DEBUG(module, ...)                                              \
   do {                                                                         \
