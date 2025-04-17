@@ -4,6 +4,7 @@
 
 #include "Bus.h"
 #include "Core.h"
+#include "Interconnect.h"
 #include "RAM.h"
 
 SC_MODULE(Chiplet) {
@@ -12,12 +13,12 @@ private:
   const unsigned int chiplet_id;
 
 public:
-  // public for interconnect
-  Bus bus;
+  Interconnect interconnect;
 
   SC_CTOR(Chiplet);
 
 private:
+  Bus bus;
   Core core0;
   Core core1;
   RAM ram;

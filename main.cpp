@@ -1,5 +1,4 @@
 #include "chiplet/Chiplet.h"
-#include "interconnect/Interconnect.h"
 
 #include <systemc>
 
@@ -25,12 +24,11 @@ int sc_main(int argc, char *argv[]) {
 
   Chiplet chiplet0("Chiplet0");
   Chiplet chiplet1("Chiplet1");
-  Interconnect interconnect("Interconnect");
 
-  chiplet0.bus.interconnect_initiator_socket.bind(interconnect.socket_A_in);
-  chiplet1.bus.interconnect_initiator_socket.bind(interconnect.socket_B_in);
-  interconnect.socket_A_out.bind(chiplet0.bus.interconnect_target_socket);
-  interconnect.socket_B_out.bind(chiplet1.bus.interconnect_target_socket);
+  chiplet0.interconnect.interconnect_initiator_socket.bind(
+      chiplet1.interconnect.interconnect_target_socket);
+  chiplet1.interconnect.interconnect_initiator_socket.bind(
+      chiplet0.interconnect.interconnect_target_socket);
 
   sc_start(sim_duration);
 

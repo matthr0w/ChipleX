@@ -65,7 +65,7 @@ public:
   }
 
   void set_request_id(int id) { ensure_extension()->request_id = id; }
-  void set_chiplet_id(int id) { ensure_extension()->chiplet_id = id; }
+  void set_source_id(int id) { ensure_extension()->source_id = id; }
   void set_core_id(int id) { ensure_extension()->core_id = id; }
   void set_destination_id(int id) { ensure_extension()->destination_id = id; }
 };

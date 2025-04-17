@@ -42,10 +42,10 @@ void RAM::process_transaction() {
       transaction->set_response_status(TLM_OK_RESPONSE);
     }
 
-    wait(get_mem_access_delay(
-        transaction->get_data_length())); // RAM access delay
+    // RAM access delay
+    wait(get_mem_access_delay(transaction->get_data_length()));
 
-    transaction->set_command(TLM_IGNORE_COMMAND);
+    SC_DUMP_TRANS(this, *transaction);
 
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;

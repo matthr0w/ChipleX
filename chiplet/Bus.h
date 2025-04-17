@@ -7,7 +7,7 @@
 #include <tlm_utils/simple_target_socket.h>
 
 const std::array<std::string, 6> modules = {
-    "Unassigned", "Core0", "Core1", "RAM", "Interconnect0", "Interconnect1"};
+    "Unassigned", "Core0", "Core1", "Interconnect0", "RAM"};
 
 struct BusRequest {
   int module;

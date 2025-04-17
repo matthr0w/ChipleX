@@ -4,6 +4,7 @@
 #include <deque>
 
 #include "include/logging.h"
+#include "include/payload.h"
 #include "include/payload_extension.h"
 
 using namespace sc_core;
@@ -18,9 +19,11 @@ Bus::Bus(sc_module_name name, unsigned int id)
       peq_fw("peq_fw"), peq_bw("peq_bw"), current_owner(0) {
   core0_target_socket.register_nb_transport_fw(this, &Bus::nb_transport_fw, 1);
   core1_target_socket.register_nb_transport_fw(this, &Bus::nb_transport_fw, 2);
-  ram_initiator_socket.register_nb_transport_bw(this, &Bus::nb_transport_bw, 3);
+
   interconnect_target_socket.register_nb_transport_fw(this,
-                                                      &Bus::nb_transport_fw, 4);
+                                                      &Bus::nb_transport_fw, 3);
+
+  ram_initiator_socket.register_nb_transport_bw(this, &Bus::nb_transport_bw, 4);
 
   SC_THREAD(process_transaction_fw);
   sensitive << peq_fw.get_event();
@@ -61,6 +64,7 @@ void Bus::process_transaction_fw() {
       phase = END_REQ;
       delay = SC_ZERO_TIME;
 
+      // end request
       if (current_owner == 1) {
         tlm_resp =
             core0_target_socket->nb_transport_bw(*transaction, phase, delay);
@@ -79,6 +83,12 @@ void Bus::process_transaction_fw() {
     } else {
       SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
                                                      << " to RAM");
+
+      // if read operation, source becomes destination now
+      if (transaction->get_command() == TLM_READ_COMMAND) {
+        int source_id = ext->source_id;
+        static_cast<payload *>(transaction)->set_destination_id(source_id);
+      }
 
       tlm_resp =
           ram_initiator_socket->nb_transport_fw(*transaction, phase, delay);
@@ -106,13 +116,14 @@ void Bus::process_transaction_bw() {
 
     SC_LOG_DEBUG(this, "Backwarding BEGIN_RESP to " << modules[current_owner]);
 
+    // begin response
     if (current_owner == 1) {
       tlm_resp =
           core0_target_socket->nb_transport_bw(*transaction, phase, delay);
     } else if (current_owner == 2) {
       tlm_resp =
           core1_target_socket->nb_transport_bw(*transaction, phase, delay);
-    } else if (current_owner == 4) {
+    } else if (current_owner == 3) {
       tlm_resp = interconnect_target_socket->nb_transport_bw(*transaction,
                                                              phase, delay);
     }
@@ -158,14 +169,17 @@ void Bus::process_queue() {
   delay = SC_ZERO_TIME;
 
   // end request
-  if (ext->destination_id == chiplet_id) {
-    if (current_owner == 1) {
-      tlm_resp =
-          core0_target_socket->nb_transport_bw(*next_transaction, phase, delay);
-    } else if (current_owner == 2) {
-      tlm_resp =
-          core1_target_socket->nb_transport_bw(*next_transaction, phase, delay);
-    }
+  // for cores only if request was not to interconnect
+  // -> otherwise transaction is deleted to early
+  if (current_owner == 1 && ext->destination_id == chiplet_id) {
+    tlm_resp =
+        core0_target_socket->nb_transport_bw(*next_transaction, phase, delay);
+  } else if (current_owner == 2 && ext->destination_id == chiplet_id) {
+    tlm_resp =
+        core1_target_socket->nb_transport_bw(*next_transaction, phase, delay);
+  } else if (current_owner == 3) {
+    tlm_resp = interconnect_target_socket->nb_transport_bw(*next_transaction,
+                                                           phase, delay);
   }
 }
 
@@ -199,7 +213,8 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
     SC_LOG_INFO(this, "Bus is busy with " << modules[current_owner]
                                           << " -> enqueuing request from "
                                           << modules[id]);
-    if (id == 4) { // to avoid deadlocks prefer interconnect
+
+    if (id == 3) { // to avoid deadlocks prefer interconnect
       request_queue.push_front({id, &transaction});
     } else {
       request_queue.push_back({id, &transaction});
