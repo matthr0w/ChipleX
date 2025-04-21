@@ -3,9 +3,11 @@
 
 #include <deque>
 
+#include "common/RoutingTable.h"
+#include "common/protocol/ChipletExtension.h"
+#include "common/protocol/ChipletPayload.h"
+
 #include "include/logging.h"
-#include "include/payload.h"
-#include "include/payload_extension.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -14,16 +16,21 @@ Bus::Bus(sc_module_name name, unsigned int id)
     : sc_module(name), chiplet_id(id),
       core0_target_socket("core0_target_socket"),
       core1_target_socket("core1_target_socket"),
-      ram_initiator_socket("ram_initiator_socket"),
-      interconnect_initiator_socket("interconnect_initiator_socket"),
-      peq_fw("peq_fw"), peq_bw("peq_bw"), current_owner(0) {
+      interconnect0_target_socket("interconnect0_target_socket"),
+      interconnect1_target_socket("interconnect1_target_socket"),
+      interconnect0_initiator_socket("interconnect0_initiator_socket"),
+      interconnect1_initiator_socket("interconnect1_initiator_socket"),
+      ram_initiator_socket("ram_initiator_socket"), peq_fw("peq_fw"),
+      peq_bw("peq_bw"), current_owner(0) {
   core0_target_socket.register_nb_transport_fw(this, &Bus::nb_transport_fw, 1);
   core1_target_socket.register_nb_transport_fw(this, &Bus::nb_transport_fw, 2);
 
-  interconnect_target_socket.register_nb_transport_fw(this,
-                                                      &Bus::nb_transport_fw, 3);
+  interconnect0_target_socket.register_nb_transport_fw(
+      this, &Bus::nb_transport_fw, 3);
+  interconnect1_target_socket.register_nb_transport_fw(
+      this, &Bus::nb_transport_fw, 4);
 
-  ram_initiator_socket.register_nb_transport_bw(this, &Bus::nb_transport_bw, 4);
+  ram_initiator_socket.register_nb_transport_bw(this, &Bus::nb_transport_bw, 5);
 
   SC_THREAD(process_transaction_fw);
   sensitive << peq_fw.get_event();
@@ -33,7 +40,7 @@ Bus::Bus(sc_module_name name, unsigned int id)
 
 void Bus::process_transaction_fw() {
   tlm_generic_payload *transaction;
-  payload_extension *ext;
+  ChipletExtension *ext;
   tlm_phase phase;
   sc_time delay;
   tlm_sync_enum tlm_resp;
@@ -51,11 +58,20 @@ void Bus::process_transaction_fw() {
     delay = SC_ZERO_TIME;
 
     if (ext->destination_id != chiplet_id) {
-      SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
-                                                     << " to Interconnect");
+      int interconnect =
+          RoutingTable::get_route(chiplet_id, ext->destination_id);
 
-      tlm_resp = interconnect_initiator_socket->nb_transport_fw(*transaction,
-                                                                phase, delay);
+      if (interconnect == 0) {
+        SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
+                                                       << " to Interconnect0");
+        tlm_resp = interconnect0_initiator_socket->nb_transport_fw(
+            *transaction, phase, delay);
+      } else {
+        SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
+                                                       << " to Interconnect1");
+        tlm_resp = interconnect1_initiator_socket->nb_transport_fw(
+            *transaction, phase, delay);
+      }
 
       if (tlm_resp == TLM_COMPLETED) {
         wait(delay);
@@ -87,7 +103,8 @@ void Bus::process_transaction_fw() {
       // if read operation, source becomes destination now
       if (transaction->get_command() == TLM_READ_COMMAND) {
         int source_id = ext->source_id;
-        static_cast<payload *>(transaction)->set_destination_id(source_id);
+        static_cast<ChipletPayload *>(transaction)
+            ->set_destination_id(source_id);
       }
 
       tlm_resp =
@@ -124,8 +141,11 @@ void Bus::process_transaction_bw() {
       tlm_resp =
           core1_target_socket->nb_transport_bw(*transaction, phase, delay);
     } else if (current_owner == 3) {
-      tlm_resp = interconnect_target_socket->nb_transport_bw(*transaction,
-                                                             phase, delay);
+      tlm_resp = interconnect0_target_socket->nb_transport_bw(*transaction,
+                                                              phase, delay);
+    } else if (current_owner == 4) {
+      tlm_resp = interconnect1_target_socket->nb_transport_bw(*transaction,
+                                                              phase, delay);
     }
 
     if (tlm_resp == TLM_COMPLETED) {
@@ -144,7 +164,7 @@ void Bus::process_transaction_bw() {
 
 void Bus::process_queue() {
   tlm_generic_payload *next_transaction;
-  payload_extension *ext;
+  ChipletExtension *ext;
   tlm_phase phase;
   sc_time delay;
   tlm_sync_enum tlm_resp;
@@ -178,8 +198,11 @@ void Bus::process_queue() {
     tlm_resp =
         core1_target_socket->nb_transport_bw(*next_transaction, phase, delay);
   } else if (current_owner == 3) {
-    tlm_resp = interconnect_target_socket->nb_transport_bw(*next_transaction,
-                                                           phase, delay);
+    tlm_resp = interconnect0_target_socket->nb_transport_bw(*next_transaction,
+                                                            phase, delay);
+  } else if (current_owner == 4) {
+    tlm_resp = interconnect1_target_socket->nb_transport_bw(*next_transaction,
+                                                            phase, delay);
   }
 }
 
@@ -214,7 +237,7 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
                                           << " -> enqueuing request from "
                                           << modules[id]);
 
-    if (id == 3) { // to avoid deadlocks prefer interconnect
+    if (id == 3 || id == 4) { // to avoid deadlocks prefer interconnects
       request_queue.push_front({id, &transaction});
     } else {
       request_queue.push_back({id, &transaction});

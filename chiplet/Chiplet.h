@@ -13,7 +13,8 @@ private:
   const unsigned int chiplet_id;
 
 public:
-  Interconnect interconnect;
+  Interconnect interconnect0;
+  Interconnect interconnect1;
 
   SC_CTOR(Chiplet);
 

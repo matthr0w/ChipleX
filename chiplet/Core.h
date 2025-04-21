@@ -1,7 +1,6 @@
 #pragma once
 
 #include <systemc>
-
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
@@ -12,7 +11,8 @@ public:
   // sockets
   // -------------------------------------------------------
   tlm_utils::simple_initiator_socket<Core> socket;
-  tlm_utils::simple_target_socket<Core> irq_socket;
+  tlm_utils::simple_target_socket<Core> irq0_socket;
+  tlm_utils::simple_target_socket<Core> irq1_socket;
 
   Core(sc_core::sc_module_name name, unsigned int chiplet_id,
        unsigned int core_id);
@@ -21,8 +21,7 @@ private:
   const unsigned int chiplet_id;
   const unsigned int core_id;
 
-  bool running;
-
+  sc_core::sc_mutex request_mutex;
   unsigned int request;
 
   void core_thread();

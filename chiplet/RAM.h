@@ -1,10 +1,8 @@
 #pragma once
 
 #include <systemc>
-
 #include <tlm>
 #include <tlm_utils/simple_target_socket.h>
-
 #include <vector>
 
 SC_MODULE(RAM) {

@@ -1,13 +1,12 @@
 #pragma once
 
 #include <systemc>
-
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
 const std::array<std::string, 6> modules = {
-    "Unassigned", "Core0", "Core1", "Interconnect0", "RAM"};
+    "Unassigned", "Core0", "Core1", "Interconnect0", "Interconnect1", "RAM"};
 
 struct BusRequest {
   int module;
@@ -21,8 +20,10 @@ public:
   // -------------------------------------------------------
   tlm_utils::simple_target_socket_tagged<Bus> core0_target_socket;
   tlm_utils::simple_target_socket_tagged<Bus> core1_target_socket;
-  tlm_utils::simple_target_socket_tagged<Bus> interconnect_target_socket;
-  tlm_utils::simple_initiator_socket<Bus> interconnect_initiator_socket;
+  tlm_utils::simple_target_socket_tagged<Bus> interconnect0_target_socket;
+  tlm_utils::simple_target_socket_tagged<Bus> interconnect1_target_socket;
+  tlm_utils::simple_initiator_socket<Bus> interconnect0_initiator_socket;
+  tlm_utils::simple_initiator_socket<Bus> interconnect1_initiator_socket;
   tlm_utils::simple_initiator_socket_tagged<Bus> ram_initiator_socket;
 
   Bus(sc_core::sc_module_name name, unsigned int chiplet_id);

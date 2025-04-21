@@ -1,33 +1,33 @@
 #pragma once
 
-#include "payload_extension.h"
+#include "ChipletExtension.h"
 
 #include <tlm>
 
-class payload : public tlm::tlm_generic_payload {
+class ChipletPayload : public tlm::tlm_generic_payload {
 public:
-  payload() {
-    auto *ext = new payload_extension();
+  ChipletPayload() {
+    auto *ext = new ChipletExtension();
     this->set_extension(ext);
   }
 
-  ~payload() {
+  ~ChipletPayload() {
     // data buffer
     if (this->get_data_ptr()) {
       delete this->get_data_ptr();
     }
 
     // extension
-    payload_extension *ext = nullptr;
+    ChipletExtension *ext = nullptr;
     this->get_extension(ext);
     if (ext) {
       delete ext;
-      this->clear_extension<payload_extension>();
+      this->clear_extension<ChipletExtension>();
     }
   }
 
-  payload *clone() const {
-    auto *cp = new payload();
+  ChipletPayload *clone() const {
+    auto *cp = new ChipletPayload();
 
     // TLM attributes
     cp->set_command(this->get_command());
@@ -44,10 +44,10 @@ public:
     cp->set_data_length(this->get_data_length());
 
     // extension
-    payload_extension *ext = nullptr;
+    ChipletExtension *ext = nullptr;
     this->get_extension(ext);
     if (ext) {
-      payload_extension *cp_ext = new payload_extension();
+      ChipletExtension *cp_ext = new ChipletExtension();
       cp_ext->copy_from(*ext);
       cp->set_extension(cp_ext);
     }
@@ -55,10 +55,10 @@ public:
     return cp;
   }
 
-  payload_extension *ensure_extension() {
-    auto *ext = get_extension<payload_extension>();
+  ChipletExtension *ensure_extension() {
+    auto *ext = get_extension<ChipletExtension>();
     if (!ext) {
-      ext = new payload_extension();
+      ext = new ChipletExtension();
       set_extension(ext);
     }
     return ext;

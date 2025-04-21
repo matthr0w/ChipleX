@@ -4,10 +4,9 @@
 
 #include <deque>
 
+#include "common/protocol/ChipletPayload.h"
+
 #include "include/logging.h"
-#include "include/payload.h"
-#include "sysc/kernel/sc_time.h"
-#include "tlm_core/tlm_2/tlm_generic_payload/tlm_phase.h"
 
 Interconnect::Interconnect(sc_module_name name, unsigned int chiplet_id)
     : sc_module(name), chiplet_id(chiplet_id),
@@ -66,7 +65,7 @@ void Interconnect::process_rx_buffer() {
 
     while (!rx_buffer.empty()) {
       tlm_generic_payload *transaction = rx_buffer.front();
-      payload_extension *ext;
+      ChipletExtension *ext;
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
 
@@ -104,7 +103,8 @@ void Interconnect::process_rx_buffer() {
 
       // check if destination has changed
       if (ext->destination_id != destination_id) {
-        auto *transaction_copy = static_cast<payload *>(transaction)->clone();
+        auto *transaction_copy =
+            static_cast<ChipletPayload *>(transaction)->clone();
         // put transaction in tx buffer
         // TODO: handle tx buffer fill level
         SC_LOG_DEBUG(this, "Write transaction in Tx buffer");
@@ -121,7 +121,7 @@ void Interconnect::send_irq(int request_id, int core_id, uint32_t address,
                             unsigned int data_size) {
   SC_LOG_WARN(this, "Sending IRQ to Core" << core_id);
 
-  auto *irq = new payload();
+  auto *irq = new ChipletPayload();
   tlm_phase phase;
   sc_time delay;
   tlm_sync_enum tlm_resp;
@@ -160,7 +160,7 @@ Interconnect::nb_transport_fw_bus(tlm_generic_payload &transaction,
 
   output_buffer_levels();
 
-  auto *transaction_copy = static_cast<payload *>(&transaction)->clone();
+  auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
   if (tx_buffer.size() == INTERCONNECT_BUFFER_SIZE) {
     SC_LOG_WARN(this, "Tx buffer full -> waiting...");
@@ -186,7 +186,7 @@ Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
 
   output_buffer_levels();
 
-  auto *transaction_copy = static_cast<payload *>(&transaction)->clone();
+  auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
   if (rx_buffer.size() == INTERCONNECT_BUFFER_SIZE) {
     SC_LOG_WARN(this, "Rx buffer full -> waiting...");

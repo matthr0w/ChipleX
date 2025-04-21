@@ -11,26 +11,28 @@ find_library(SYSTEMC_LIB
     REQUIRED
 )
 
-# Find source files
-# Chiplet sources
+# find source files
+# chiplet sources
 file(GLOB CHIPLET_SOURCES ${PROJECT_SOURCE_DIR}/chiplet/*.cpp)
+# common sources
+file(GLOB COMMON_SOURCES ${PROJECT_SOURCE_DIR}/common/*.cpp)
 
-# Add source files
-add_executable(sim main.cpp ${CHIPLET_SOURCES})
+# add source files
+add_executable(sim main.cpp ${CHIPLET_SOURCES} ${COMMON_SOURCES})
 
-# Include SystemC headers
+# include SystemC headers
 target_include_directories(sim PRIVATE $ENV{SYSTEMC_PATH}/include)
 
-# Include project headers
+# include project headers
 target_include_directories(sim PRIVATE ${PROJECT_SOURCE_DIR})
 
-# Link SystemC library
+# link SystemC library
 target_link_libraries(sim PRIVATE ${SYSTEMC_LIB})
 
-# Link statically, and disable PIE (VSCodium Flatpak enforces PIE by default)
+# link statically, and disable PIE (VSCodium flatpak enforces PIE by default)
 set(CMAKE_EXE_LINKER_FLAGS "-static -no-pie")
 
-# Set the runtime output directory
+# set the runtime output directory
 set_target_properties(sim
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}"

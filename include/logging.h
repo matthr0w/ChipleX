@@ -1,17 +1,16 @@
 #pragma once
 
-#include <systemc.h>
-
 #include <iomanip>
 #include <iostream>
+#include <systemc.h>
 
-#include "payload_extension.h"
+#include "globals.h"
 
-extern bool debug_msgs;
+#include "common/protocol/ChipletExtension.h"
 
 #define SC_LOG_DEBUG(module, ...)                                              \
   do {                                                                         \
-    if (debug_msgs) {                                                          \
+    if (print_debug_msgs) {                                                    \
       std::cout << std::setw(9) << sc_time_stamp()                             \
                 << " | \033[34m[DEBUG]\033[0m  | " << std::left                \
                 << std::setw(25) << (module)->name() << " | " << __VA_ARGS__   \
@@ -49,7 +48,7 @@ extern bool debug_msgs;
 
 #define SC_DUMP_TRANS(module, transaction)                                     \
   do {                                                                         \
-    const auto *ext = (transaction).get_extension<payload_extension>();        \
+    const auto *ext = (transaction).get_extension<ChipletExtension>();         \
     std::ostringstream _sc_dump_trans_stream;                                  \
     _sc_dump_trans_stream << std::setw(9) << sc_time_stamp()                   \
                           << " | \033[35m[TRACE]\033[0m  | " << std::left      \
