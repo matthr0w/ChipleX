@@ -57,11 +57,9 @@ void Core::core_thread() {
     bool do_write = write_dist(gen);
 
     if (do_write) {
-      std::scoped_lock lock(request_mutex);
       send_request(TLM_WRITE_COMMAND, request, destination_id, address,
                    reinterpret_cast<unsigned char *>(data), data_size);
     } else {
-      std::scoped_lock lock(request_mutex);
       send_request(TLM_READ_COMMAND, request, destination_id, address,
                    reinterpret_cast<unsigned char *>(data), data_size);
     }
@@ -85,7 +83,7 @@ void Core::handle_interrupt() {
     transaction->get_extension(ext);
     int request_id = ext->request_id;
 
-    SC_LOG_WARN(this, "IRQ received from request " << request_id);
+    SC_LOG_WARN(this, "Received IRQ from request " << request_id);
 
     uint32_t address = transaction->get_address();
 
@@ -93,7 +91,6 @@ void Core::handle_interrupt() {
     uint32_t *data = new uint32_t(0);
     unsigned int data_size = 4;
 
-    std::scoped_lock lock(request_mutex);
     send_request(TLM_READ_COMMAND, request_id, chiplet_id, address,
                  reinterpret_cast<unsigned char *>(data), data_size);
 
@@ -104,6 +101,8 @@ void Core::handle_interrupt() {
 void Core::send_request(tlm_command command, int request_id, int destination_id,
                         uint32_t address, unsigned char *data,
                         unsigned int data_size) {
+  std::scoped_lock lock(request_mutex);
+
   auto *transaction = new ChipletPayload();
   tlm_phase phase;
   sc_time delay;
@@ -156,12 +155,15 @@ tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
   if (phase == BEGIN_REQ) {
     delay += SC_ZERO_TIME; // TODO: add delay
 
-    auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
+    auto *transaction_copy =
+        static_cast<ChipletPayload *>(&transaction)->clone();
+
     irq_peq.notify(*transaction_copy, delay);
 
     phase = END_REQ;
     return TLM_COMPLETED;
   }
+
   return TLM_ACCEPTED;
 }
 
@@ -174,18 +176,7 @@ tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
 
     phase = END_RESP;
     return TLM_COMPLETED;
-  } else if (phase == END_REQ) {
-    ChipletExtension *ext;
-    transaction.get_extension(ext);
-
-    // transaction is done if request was to interconnect
-    // -> no handshake to other chiplets
-    if (ext->destination_id != chiplet_id) {
-      transaction_done.notify(delay);
-      return TLM_COMPLETED;
-    }
-
-    return TLM_ACCEPTED;
   }
+
   return TLM_ACCEPTED;
 }

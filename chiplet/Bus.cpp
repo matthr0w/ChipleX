@@ -30,6 +30,11 @@ Bus::Bus(sc_module_name name, unsigned int id)
   interconnect1_target_socket.register_nb_transport_fw(
       this, &Bus::nb_transport_fw, 4);
 
+  interconnect0_initiator_socket.register_nb_transport_bw(
+      this, &Bus::nb_transport_bw, 3);
+  interconnect1_initiator_socket.register_nb_transport_bw(
+      this, &Bus::nb_transport_bw, 4);
+
   ram_initiator_socket.register_nb_transport_bw(this, &Bus::nb_transport_bw, 5);
 
   SC_THREAD(process_transaction_fw);
@@ -73,28 +78,8 @@ void Bus::process_transaction_fw() {
             *transaction, phase, delay);
       }
 
-      if (tlm_resp == TLM_COMPLETED) {
+      if (tlm_resp == TLM_UPDATED) {
         wait(delay);
-      }
-
-      phase = END_REQ;
-      delay = SC_ZERO_TIME;
-
-      // end request
-      if (current_owner == 1) {
-        tlm_resp =
-            core0_target_socket->nb_transport_bw(*transaction, phase, delay);
-      } else if (current_owner == 2) {
-        tlm_resp =
-            core1_target_socket->nb_transport_bw(*transaction, phase, delay);
-      }
-
-      // release bus
-      current_owner = 0;
-
-      // process queue
-      if (!request_queue.empty()) {
-        process_queue();
       }
     } else {
       SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
@@ -189,12 +174,10 @@ void Bus::process_queue() {
   delay = SC_ZERO_TIME;
 
   // end request
-  // for cores only if request was not to interconnect
-  // -> otherwise transaction is deleted to early
-  if (current_owner == 1 && ext->destination_id == chiplet_id) {
+  if (current_owner == 1) {
     tlm_resp =
         core0_target_socket->nb_transport_bw(*next_transaction, phase, delay);
-  } else if (current_owner == 2 && ext->destination_id == chiplet_id) {
+  } else if (current_owner == 2) {
     tlm_resp =
         core1_target_socket->nb_transport_bw(*next_transaction, phase, delay);
   } else if (current_owner == 3) {

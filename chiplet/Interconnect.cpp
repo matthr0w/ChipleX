@@ -156,7 +156,7 @@ void Interconnect::send_irq(int request_id, int core_id, uint32_t address,
 tlm_sync_enum
 Interconnect::nb_transport_fw_bus(tlm_generic_payload &transaction,
                                   tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Bus request received");
+  SC_LOG_DEBUG(this, "Received request from Bus");
 
   output_buffer_levels();
 
@@ -175,6 +175,12 @@ Interconnect::nb_transport_fw_bus(tlm_generic_payload &transaction,
   tx_buffer.push_back(transaction_copy);
   tx_buffer_in_event.notify(delay);
 
+  // begin response to bus
+  tlm_phase resp_phase = BEGIN_RESP;
+  sc_time resp_delay = SC_ZERO_TIME;
+
+  bus_target_socket->nb_transport_bw(transaction, resp_phase, resp_delay);
+
   phase = END_REQ;
   return TLM_COMPLETED;
 }
@@ -182,7 +188,7 @@ Interconnect::nb_transport_fw_bus(tlm_generic_payload &transaction,
 tlm_sync_enum
 Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
                                            tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Interconnect request received");
+  SC_LOG_DEBUG(this, "Received request from Interconnect");
 
   output_buffer_levels();
 
@@ -201,6 +207,13 @@ Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
   rx_buffer.push_back(transaction_copy);
   rx_buffer_in_event.notify(delay);
 
+  // begin response to interconnect
+  tlm_phase resp_phase = BEGIN_RESP;
+  sc_time resp_delay = SC_ZERO_TIME;
+
+  interconnect_target_socket->nb_transport_bw(transaction, resp_phase,
+                                              resp_delay);
+
   phase = END_REQ;
   return TLM_COMPLETED;
 }
@@ -208,30 +221,30 @@ Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
 tlm_sync_enum
 Interconnect::nb_transport_bw_bus(tlm_generic_payload &transaction,
                                   tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Bus response received");
-
   if (phase == BEGIN_RESP) {
+    SC_LOG_DEBUG(this, "Received response from Bus");
+
     delay += get_bus_transfer_delay(transaction.get_data_length());
 
     rx_transaction_done.notify(delay);
 
     phase = END_RESP;
     return TLM_COMPLETED;
-  } else if (phase == END_REQ) {
-    return TLM_ACCEPTED;
   }
+
   return TLM_ACCEPTED;
 }
 
 tlm_sync_enum
 Interconnect::nb_transport_bw_interconnect(tlm_generic_payload &transaction,
                                            tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Interconnect response received");
-
   if (phase == BEGIN_RESP) {
+    SC_LOG_DEBUG(this, "Received response from Interconnect");
+
     phase = END_RESP;
     return TLM_COMPLETED;
   }
+
   return TLM_ACCEPTED;
 }
 
