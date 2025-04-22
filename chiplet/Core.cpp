@@ -83,7 +83,7 @@ void Core::handle_interrupt() {
     transaction->get_extension(ext);
     int request_id = ext->request_id;
 
-    SC_LOG_WARN(this, "Received IRQ from request " << request_id);
+    SC_LOG_WARN(this, *transaction, "Received IRQ from request " << request_id);
 
     uint32_t address = transaction->get_address();
 
@@ -108,13 +108,6 @@ void Core::send_request(tlm_command command, int request_id, int destination_id,
   sc_time delay;
   tlm_sync_enum tlm_resp;
 
-  if (command == TLM_READ_COMMAND) {
-    SC_LOG_INFO(this, "Sending request: READ from 0x" << std::hex << address);
-  } else if (command == TLM_WRITE_COMMAND) {
-    SC_LOG_INFO(this, "Sending request: WRITE to 0x"
-                          << std::hex << address << " with data 0x" << *data);
-  }
-
   transaction->set_command(command);
   transaction->set_address(address);
   transaction->set_data_ptr(data);
@@ -125,10 +118,17 @@ void Core::send_request(tlm_command command, int request_id, int destination_id,
   transaction->set_core_id(core_id);
   transaction->set_destination_id(destination_id);
 
+  if (command == TLM_READ_COMMAND) {
+    SC_LOG_INFO(this, *transaction,
+                "Sending request: READ from 0x" << std::hex << address);
+  } else if (command == TLM_WRITE_COMMAND) {
+    SC_LOG_INFO(this, *transaction,
+                "Sending request: WRITE to 0x" << std::hex << address
+                                               << " with data 0x" << *data);
+  }
+
   phase = BEGIN_REQ;
   delay = SC_ZERO_TIME;
-
-  SC_DUMP_TRANS(this, *transaction);
 
   tlm_resp = socket->nb_transport_fw(*transaction, phase, delay);
 
@@ -141,7 +141,7 @@ void Core::send_request(tlm_command command, int request_id, int destination_id,
 
   wait(transaction_done);
 
-  SC_LOG_INFO(this, "Transaction successful");
+  SC_LOG_INFO(this, *transaction, "Transaction successful");
 
   delete transaction;
 }
@@ -170,7 +170,7 @@ tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
 tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
                                     tlm_phase &phase, sc_core::sc_time &delay) {
   if (phase == BEGIN_RESP) {
-    delay += get_bus_transfer_delay(transaction.get_data_length());
+    delay += get_bus_transfer_delay(*this, transaction);
 
     transaction_done.notify(delay);
 

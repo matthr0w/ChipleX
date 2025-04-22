@@ -8,61 +8,107 @@
 
 #include "common/protocol/ChipletExtension.h"
 
-#define SC_LOG_DEBUG(module, ...)                                              \
-  do {                                                                         \
-    if (print_debug_msgs) {                                                    \
-      std::cout << std::setw(9) << sc_time_stamp()                             \
-                << " | \033[34m[DEBUG]\033[0m  | " << std::left                \
-                << std::setw(25) << (module)->name() << " | " << __VA_ARGS__   \
-                << std::endl;                                                  \
-    }                                                                          \
-  } while (0)
-
-#define SC_LOG_INFO(module, ...)                                               \
-  do {                                                                         \
-    std::cout << std::setw(9) << sc_time_stamp()                               \
-              << " | \033[0m[INFO]\033[0m   | " << std::left << std::setw(25)  \
-              << (module)->name() << " | " << __VA_ARGS__ << std::endl;        \
-  } while (0)
-
-#define SC_LOG_WARN(module, ...)                                               \
-  do {                                                                         \
-    std::cerr << std::setw(9) << sc_time_stamp()                               \
-              << " | \033[33m[WARN]\033[0m   | " << std::left << std::setw(25) \
-              << (module)->name() << " | " << __VA_ARGS__ << std::endl;        \
-  } while (0)
-
-#define SC_LOG_ERROR(module, ...)                                              \
-  do {                                                                         \
-    std::cerr << std::setw(9) << sc_time_stamp()                               \
-              << " | \033[31m[ERROR]\033[0m  | " << std::left << std::setw(25) \
-              << (module)->name() << " | " << __VA_ARGS__ << std::endl;        \
-  } while (0)
-
-#define SC_LOG_DELAY(type, value)                                              \
-  do {                                                                         \
-    std::cout << std::setw(9) << sc_time_stamp()                               \
-              << " | \033[32m[DELAY]\033[0m  | " << std::left << std::setw(25) \
-              << type << " | " << value << std::endl;                          \
-  } while (0)
-
-#define SC_DUMP_TRANS(module, transaction)                                     \
+#define SC_LOG_DEBUG(module, transaction, ...)                                 \
   do {                                                                         \
     const auto *ext = (transaction).get_extension<ChipletExtension>();         \
-    std::ostringstream _sc_dump_trans_stream;                                  \
-    _sc_dump_trans_stream << std::setw(9) << sc_time_stamp()                   \
-                          << " | \033[35m[TRACE]\033[0m  | " << std::left      \
-                          << std::setw(25) << (module)->name() << " | ";       \
-    _sc_dump_trans_stream                                                      \
-        << "ADDR: 0x" << std::hex << (transaction).get_address() << " CMD: "   \
-        << ((transaction).get_command() == tlm::TLM_READ_COMMAND ? "READ"      \
-                                                                 : "WRITE")    \
-        << " LEN: " << std::dec << (transaction).get_data_length();            \
-    if (ext) {                                                                 \
-      _sc_dump_trans_stream << " | Request: " << ext->request_id               \
-                            << " Source: " << ext->source_id                   \
-                            << " Core: " << ext->core_id                       \
-                            << " Destination: " << ext->destination_id;        \
+    if (print_debug_msgs) {                                                    \
+      std::ostringstream _sc_stream, _sc_idstream;                             \
+      _sc_stream << std::left << std::setw(9) << sc_time_stamp()               \
+                 << " | \033[34m[DEBUG]\033[0m  | " << std::setw(25)           \
+                 << (module)->name() << " | ";                                 \
+                                                                               \
+      if (ext) {                                                               \
+        _sc_idstream << ext->request_id << "-" << ext->source_id << "-"        \
+                     << ext->core_id << "-" << ext->destination_id;            \
+      } else {                                                                 \
+        _sc_idstream << "no-extension";                                        \
+      }                                                                        \
+                                                                               \
+      _sc_stream << std::setw(25) << _sc_idstream.str();                       \
+      _sc_stream << " | " << __VA_ARGS__;                                      \
+      std::cout << _sc_stream.str() << std::endl;                              \
     }                                                                          \
-    std::cerr << _sc_dump_trans_stream.str() << std::endl;                     \
+  } while (0)
+
+#define SC_LOG_DEBUG_NO_TX(module, ...)                                        \
+  do {                                                                         \
+    if (print_debug_msgs) {                                                    \
+      std::ostringstream _sc_stream;                                           \
+      _sc_stream << std::left << std::setw(9) << sc_time_stamp()               \
+                 << " | \033[34m[DEBUG]\033[0m  | " << std::setw(25)           \
+                 << (module)->name() << " | " << __VA_ARGS__;                  \
+      std::cout << _sc_stream.str() << std::endl;                              \
+    }                                                                          \
+  } while (0)
+
+#define SC_LOG_INFO(module, transaction, ...)                                  \
+  do {                                                                         \
+    const auto *ext = (transaction).get_extension<ChipletExtension>();         \
+    std::ostringstream _sc_stream, _sc_idstream;                               \
+    _sc_stream << std::left << std::setw(9) << sc_time_stamp()                 \
+               << " | \033[0m[INFO]\033[0m   | " << std::setw(25)              \
+               << (module)->name() << " | ";                                   \
+    if (ext) {                                                                 \
+      _sc_idstream << ext->request_id << "-" << ext->source_id << "-"          \
+                   << ext->core_id << "-" << ext->destination_id;              \
+    } else {                                                                   \
+      _sc_idstream << "no-extension";                                          \
+    }                                                                          \
+    _sc_stream << std::setw(25) << _sc_idstream.str();                         \
+    _sc_stream << " | " << __VA_ARGS__;                                        \
+    std::cout << _sc_stream.str() << std::endl;                                \
+  } while (0)
+
+#define SC_LOG_WARN(module, transaction, ...)                                  \
+  do {                                                                         \
+    const auto *ext = (transaction).get_extension<ChipletExtension>();         \
+    std::ostringstream _sc_stream, _sc_idstream;                               \
+    _sc_stream << std::left << std::setw(9) << sc_time_stamp()                 \
+               << " | \033[33m[WARN]\033[0m   | " << std::setw(25)             \
+               << (module)->name() << " | ";                                   \
+    if (ext) {                                                                 \
+      _sc_idstream << ext->request_id << "-" << ext->source_id << "-"          \
+                   << ext->core_id << "-" << ext->destination_id;              \
+    } else {                                                                   \
+      _sc_idstream << "no-extension";                                          \
+    }                                                                          \
+    _sc_stream << std::setw(25) << _sc_idstream.str();                         \
+    _sc_stream << " | " << __VA_ARGS__;                                        \
+    std::cerr << _sc_stream.str() << std::endl;                                \
+  } while (0)
+
+#define SC_LOG_ERROR(module, transaction, ...)                                 \
+  do {                                                                         \
+    const auto *ext = (transaction).get_extension<ChipletExtension>();         \
+    std::ostringstream _sc_stream, _sc_idstream;                               \
+    _sc_stream << std::left << std::setw(9) << sc_time_stamp()                 \
+               << " | \033[31m[ERROR]\033[0m  | " << std::setw(25)             \
+               << (module)->name() << " | ";                                   \
+    if (ext) {                                                                 \
+      _sc_idstream << ext->request_id << "-" << ext->source_id << "-"          \
+                   << ext->core_id << "-" << ext->destination_id;              \
+    } else {                                                                   \
+      _sc_idstream << "no-extension";                                          \
+    }                                                                          \
+    _sc_stream << std::setw(25) << _sc_idstream.str();                         \
+    _sc_stream << " | " << __VA_ARGS__;                                        \
+    std::cerr << _sc_stream.str() << std::endl;                                \
+  } while (0)
+
+#define SC_LOG_DELAY(module, transaction, type, value)                         \
+  do {                                                                         \
+    const auto *ext = (transaction).get_extension<ChipletExtension>();         \
+    std::ostringstream _sc_stream, _sc_idstream;                               \
+    _sc_stream << std::left << std::setw(9) << sc_time_stamp()                 \
+               << " | \033[32m[DELAY]\033[0m  | " << std::setw(25)             \
+               << (module)->name() << " | ";                                   \
+    if (ext) {                                                                 \
+      _sc_idstream << ext->request_id << "-" << ext->source_id << "-"          \
+                   << ext->core_id << "-" << ext->destination_id;              \
+    } else {                                                                   \
+      _sc_idstream << "no-extension";                                          \
+    }                                                                          \
+    _sc_stream << std::setw(25) << _sc_idstream.str();                         \
+    _sc_stream << " | " << type << ": " << value;                              \
+    std::cout << _sc_stream.str() << std::endl;                                \
   } while (0)

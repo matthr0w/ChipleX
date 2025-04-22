@@ -27,8 +27,7 @@ private:
   void process_tx_buffer();
   void process_rx_buffer();
 
-  void send_irq(int request_id, int core_id, uint32_t address,
-                unsigned int data_size);
+  void send_irq(tlm_generic_payload & transaction);
 
   std::deque<tlm_generic_payload *> tx_buffer;
   std::deque<tlm_generic_payload *> rx_buffer;

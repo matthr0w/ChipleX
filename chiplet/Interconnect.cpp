@@ -40,14 +40,14 @@ void Interconnect::process_tx_buffer() {
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
 
-      SC_LOG_DEBUG(this, "Tx->Rx transmission started");
+      SC_LOG_DEBUG(this, *transaction, "Tx->Rx transmission started");
       tlm_sync_enum tlm_resp = interconnect_initiator_socket->nb_transport_fw(
           *transaction, phase, delay);
 
       if (tlm_resp == TLM_COMPLETED) {
         wait(delay);
 
-        SC_LOG_DEBUG(this, "Tx->Rx transmission finished");
+        SC_LOG_DEBUG(this, *transaction, "Tx->Rx transmission finished");
       }
 
       // remove from tx buffer
@@ -75,7 +75,7 @@ void Interconnect::process_rx_buffer() {
       int core_id = ext->core_id;
       int destination_id = ext->destination_id;
 
-      SC_LOG_DEBUG(this, "Rx->Bus transmission started");
+      SC_LOG_DEBUG(this, *transaction, "Rx->Bus transmission started");
       tlm_sync_enum tlm_resp =
           bus_initiator_socket->nb_transport_fw(*transaction, phase, delay);
 
@@ -88,13 +88,12 @@ void Interconnect::process_rx_buffer() {
 
       wait(rx_transaction_done);
 
-      SC_LOG_DEBUG(this, "Rx->Bus transmission finished");
+      SC_LOG_DEBUG(this, *transaction, "Rx->Bus transmission finished");
 
       // send IRQ to core
       if (source_id == chiplet_id &&
           transaction->get_command() == TLM_READ_COMMAND) {
-        send_irq(request_id, core_id, transaction->get_address(),
-                 transaction->get_data_length());
+        send_irq(*transaction);
       }
 
       // remove from rx buffer
@@ -107,7 +106,7 @@ void Interconnect::process_rx_buffer() {
             static_cast<ChipletPayload *>(transaction)->clone();
         // put transaction in tx buffer
         // TODO: handle tx buffer fill level
-        SC_LOG_DEBUG(this, "Write transaction in Tx buffer");
+        SC_LOG_DEBUG(this, *transaction, "Write transaction in Tx buffer");
         tx_buffer.push_back(transaction_copy);
         tx_buffer_in_event.notify();
       }
@@ -117,27 +116,32 @@ void Interconnect::process_rx_buffer() {
   }
 }
 
-void Interconnect::send_irq(int request_id, int core_id, uint32_t address,
-                            unsigned int data_size) {
-  SC_LOG_WARN(this, "Sending IRQ to Core" << core_id);
-
+void Interconnect::send_irq(tlm_generic_payload &transaction) {
   auto *irq = new ChipletPayload();
+  ChipletExtension *ext;
   tlm_phase phase;
   sc_time delay;
   tlm_sync_enum tlm_resp;
 
-  irq->set_command(TLM_IGNORE_COMMAND);
-  irq->set_address(address);
-  irq->set_data_length(data_size);
+  transaction.get_extension(ext);
 
-  irq->set_request_id(request_id);
+  irq->set_command(TLM_IGNORE_COMMAND);
+  irq->set_address(transaction.get_address());
+  irq->set_data_length(transaction.get_data_length());
+
+  irq->set_request_id(ext->request_id);
+  irq->set_source_id(ext->source_id);
+  irq->set_core_id(ext->core_id);
+  irq->set_destination_id(ext->destination_id);
+
+  SC_LOG_WARN(this, transaction, "Sending IRQ to Core" << ext->core_id);
 
   phase = BEGIN_REQ;
   delay = SC_ZERO_TIME;
 
-  if (core_id == 0) {
+  if (ext->core_id == 0) {
     tlm_resp = core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
-  } else if (core_id == 1) {
+  } else if (ext->core_id == 1) {
     tlm_resp = core1_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
   }
 
@@ -147,7 +151,7 @@ void Interconnect::send_irq(int request_id, int core_id, uint32_t address,
 
   delete irq;
 
-  SC_LOG_WARN(this, "Sending IRQ to Core" << core_id << " done");
+  SC_LOG_WARN(this, transaction, "Sending IRQ to Core" << ext->core_id << " done");
 }
 
 // -------------------------------------------------------
@@ -156,22 +160,22 @@ void Interconnect::send_irq(int request_id, int core_id, uint32_t address,
 tlm_sync_enum
 Interconnect::nb_transport_fw_bus(tlm_generic_payload &transaction,
                                   tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Received request from Bus");
+  SC_LOG_DEBUG(this, transaction, "Received request from Bus");
 
   output_buffer_levels();
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
   if (tx_buffer.size() == INTERCONNECT_BUFFER_SIZE) {
-    SC_LOG_WARN(this, "Tx buffer full -> waiting...");
+    SC_LOG_WARN(this, transaction, "Tx buffer full -> waiting...");
     wait(tx_buffer_out_event);
   }
 
   // add bus transfer delay
-  delay += get_bus_transfer_delay(transaction_copy->get_data_length());
+  delay += get_bus_transfer_delay(*this, transaction);
 
   // put transaction in tx buffer
-  SC_LOG_DEBUG(this, "Write transaction in Tx buffer");
+  SC_LOG_DEBUG(this, transaction, "Write transaction in Tx buffer");
   tx_buffer.push_back(transaction_copy);
   tx_buffer_in_event.notify(delay);
 
@@ -188,22 +192,22 @@ Interconnect::nb_transport_fw_bus(tlm_generic_payload &transaction,
 tlm_sync_enum
 Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
                                            tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Received request from Interconnect");
+  SC_LOG_DEBUG(this, transaction, "Received request from Interconnect");
 
   output_buffer_levels();
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
   if (rx_buffer.size() == INTERCONNECT_BUFFER_SIZE) {
-    SC_LOG_WARN(this, "Rx buffer full -> waiting...");
+    SC_LOG_WARN(this, transaction, "Rx buffer full -> waiting...");
     wait(rx_buffer_out_event);
   }
 
   // add interconnect transfer delay
-  delay += get_interconnect_transfer_delay(transaction_copy->get_data_length());
+  delay += get_interconnect_transfer_delay(*this, transaction);
 
   // put transaction in rx buffer
-  SC_LOG_DEBUG(this, "Write transaction in Rx buffer");
+  SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");
   rx_buffer.push_back(transaction_copy);
   rx_buffer_in_event.notify(delay);
 
@@ -222,9 +226,9 @@ tlm_sync_enum
 Interconnect::nb_transport_bw_bus(tlm_generic_payload &transaction,
                                   tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
-    SC_LOG_DEBUG(this, "Received response from Bus");
+    SC_LOG_DEBUG(this, transaction, "Received response from Bus");
 
-    delay += get_bus_transfer_delay(transaction.get_data_length());
+    delay += get_bus_transfer_delay(*this, transaction);
 
     rx_transaction_done.notify(delay);
 
@@ -239,7 +243,7 @@ tlm_sync_enum
 Interconnect::nb_transport_bw_interconnect(tlm_generic_payload &transaction,
                                            tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
-    SC_LOG_DEBUG(this, "Received response from Interconnect");
+    SC_LOG_DEBUG(this, transaction, "Received response from Interconnect");
 
     phase = END_RESP;
     return TLM_COMPLETED;
@@ -250,7 +254,7 @@ Interconnect::nb_transport_bw_interconnect(tlm_generic_payload &transaction,
 
 // helper functions
 void Interconnect::output_buffer_levels() {
-  SC_LOG_DEBUG(this, "Buffer Levels");
-  SC_LOG_DEBUG(this, "Tx buffer: " << tx_buffer.size());
-  SC_LOG_DEBUG(this, "Rx buffer: " << rx_buffer.size());
+  SC_LOG_DEBUG_NO_TX(this, "Buffer Levels");
+  SC_LOG_DEBUG_NO_TX(this, "Tx buffer: " << tx_buffer.size());
+  SC_LOG_DEBUG_NO_TX(this, "Rx buffer: " << rx_buffer.size());
 }

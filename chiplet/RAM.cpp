@@ -43,9 +43,7 @@ void RAM::process_transaction() {
     }
 
     // RAM access delay
-    wait(get_mem_access_delay(transaction->get_data_length()));
-
-    SC_DUMP_TRANS(this, *transaction);
+    wait(get_mem_access_delay(*this, *transaction));
 
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
@@ -64,12 +62,12 @@ void RAM::process_transaction() {
 tlm_sync_enum RAM::nb_transport_fw(tlm_generic_payload &transaction,
                                    tlm_phase &phase, sc_time &delay) {
   if (phase != BEGIN_REQ) {
-    SC_LOG_ERROR(this,
+    SC_LOG_ERROR(this, transaction,
                  "Protocol Error: Request from Bus with Phase != BEGIN_REQ");
     exit(1);
   }
 
-  delay += get_bus_transfer_delay(transaction.get_data_length());
+  delay += get_bus_transfer_delay(*this, transaction);
 
   peq.notify(transaction, delay);
 

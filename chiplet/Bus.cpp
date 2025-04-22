@@ -56,8 +56,9 @@ void Bus::process_transaction_fw() {
     transaction = peq_fw.get_next_transaction();
     transaction->get_extension(ext);
 
-    SC_LOG_DEBUG(this, "Processing forward transaction for "
-                           << modules[current_owner]);
+    SC_LOG_DEBUG(this, *transaction,
+                 "Processing forward transaction for "
+                     << modules[current_owner]);
 
     phase = BEGIN_REQ;
     delay = SC_ZERO_TIME;
@@ -67,13 +68,15 @@ void Bus::process_transaction_fw() {
           RoutingTable::get_route(chiplet_id, ext->destination_id);
 
       if (interconnect == 0) {
-        SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
-                                                       << " to Interconnect0");
+        SC_LOG_DEBUG(this, *transaction,
+                     "Forwarding BEGIN_REQ for " << modules[current_owner]
+                                                 << " to Interconnect0");
         tlm_resp = interconnect0_initiator_socket->nb_transport_fw(
             *transaction, phase, delay);
       } else {
-        SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
-                                                       << " to Interconnect1");
+        SC_LOG_DEBUG(this, *transaction,
+                     "Forwarding BEGIN_REQ for " << modules[current_owner]
+                                                 << " to Interconnect1");
         tlm_resp = interconnect1_initiator_socket->nb_transport_fw(
             *transaction, phase, delay);
       }
@@ -82,8 +85,9 @@ void Bus::process_transaction_fw() {
         wait(delay);
       }
     } else {
-      SC_LOG_DEBUG(this, "Forwarding BEGIN_REQ for " << modules[current_owner]
-                                                     << " to RAM");
+      SC_LOG_DEBUG(this, *transaction,
+                   "Forwarding BEGIN_REQ for " << modules[current_owner]
+                                               << " to RAM");
 
       // if read operation, source becomes destination now
       if (transaction->get_command() == TLM_READ_COMMAND) {
@@ -116,7 +120,8 @@ void Bus::process_transaction_bw() {
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
 
-    SC_LOG_DEBUG(this, "Backwarding BEGIN_RESP to " << modules[current_owner]);
+    SC_LOG_DEBUG(this, *transaction,
+                 "Backwarding BEGIN_RESP to " << modules[current_owner]);
 
     // begin response
     if (current_owner == 1) {
@@ -163,10 +168,11 @@ void Bus::process_queue() {
   next_transaction = next_request.transaction;
   next_transaction->get_extension(ext);
 
-  delay = get_bus_arbitration_delay();
+  delay = get_bus_arbitration_delay(*this, *next_transaction);
 
-  SC_LOG_INFO(this, "Granting bus access to " << modules[current_owner]
-                                              << " from queue");
+  SC_LOG_INFO(this, *next_transaction,
+              "Granting bus access to " << modules[current_owner]
+                                        << " from queue");
 
   peq_fw.notify(*next_transaction, delay);
 
@@ -194,21 +200,23 @@ void Bus::process_queue() {
 // -------------------------------------------------------
 tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
                                    tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Received request from " << modules[id]);
+  SC_LOG_DEBUG(this, transaction, "Received request from " << modules[id]);
 
   if (phase != BEGIN_REQ) {
-    SC_LOG_ERROR(this, "Protocol Error: Request from " << modules[id]
-                                                       << " with " << phase);
+    SC_LOG_ERROR(this, transaction,
+                 "Protocol Error: Request from " << modules[id] << " with "
+                                                 << phase);
     exit(1);
   }
 
   if (current_owner == 0 && request_queue.empty()) {
     // bus is free and queue is empty: grant access immediately
-    SC_LOG_INFO(this, "Bus is empty -> granting bus access to " << modules[id]);
+    SC_LOG_INFO(this, transaction,
+                "Bus is empty -> granting bus access to " << modules[id]);
 
     current_owner = id;
 
-    delay = get_bus_arbitration_delay();
+    delay = get_bus_arbitration_delay(*this, transaction);
 
     peq_fw.notify(transaction, delay);
 
@@ -216,9 +224,10 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
     return TLM_UPDATED;
   } else {
     // bus is busy or queue is not empty: enqueue request
-    SC_LOG_INFO(this, "Bus is busy with " << modules[current_owner]
-                                          << " -> enqueuing request from "
-                                          << modules[id]);
+    SC_LOG_INFO(this, transaction,
+                "Bus is busy with " << modules[current_owner]
+                                    << " -> enqueuing request from "
+                                    << modules[id]);
 
     if (id == 3 || id == 4) { // to avoid deadlocks prefer interconnects
       request_queue.push_front({id, &transaction});
@@ -232,15 +241,16 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
 
 tlm_sync_enum Bus::nb_transport_bw(int id, tlm_generic_payload &transaction,
                                    tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, "Received response from " << modules[id]);
+  SC_LOG_DEBUG(this, transaction, "Received response from " << modules[id]);
 
   if (phase != BEGIN_RESP) {
-    SC_LOG_ERROR(this, "Protocol Error: Response from " << modules[id]
-                                                        << " with " << phase);
+    SC_LOG_ERROR(this, transaction,
+                 "Protocol Error: Response from " << modules[id] << " with "
+                                                  << phase);
     exit(1);
   }
 
-  delay += get_bus_arbitration_delay();
+  delay += get_bus_arbitration_delay(*this, transaction);
 
   peq_bw.notify(transaction, delay);
 
