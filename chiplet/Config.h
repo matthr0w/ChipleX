@@ -15,6 +15,8 @@ const sc_time BUS_ARBITRATION_DELAY = BUS_CLK_CYCLE;
 
 // RAM
 // -----------------------------------------------
+// RAM size in kilobytes
+const unsigned int RAM_SIZE = 16;
 // RAM width in bytes
 const unsigned int RAM_WIDTH = 1;
 // inverse of clock frequency

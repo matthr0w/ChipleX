@@ -23,6 +23,8 @@ public:
 
 private:
   const unsigned int chiplet_id;
+  uint32_t write_address; // TODO: share address between interconnects
+                          // -> protocol layer
 
   void process_tx_buffer();
   void process_rx_buffer();

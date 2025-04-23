@@ -12,7 +12,7 @@ public:
   SC_CTOR(RAM);
 
 private:
-  std::vector<uint32_t> mem;
+  std::vector<uint8_t> mem;
 
   // -------------------------------------------------------
   // peqs

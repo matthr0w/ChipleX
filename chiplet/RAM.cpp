@@ -1,4 +1,5 @@
 #include "RAM.h"
+#include "Config.h"
 #include "Delays.h"
 
 #include "include/logging.h"
@@ -7,8 +8,8 @@ using namespace sc_core;
 using namespace tlm;
 
 RAM::RAM(sc_module_name name)
-    : sc_module(name), socket("socket"), mem(0x20000, 0), // 0x10000 - 0x1FFFF
-      peq("peq") {
+    : sc_module(name), socket("socket"),
+      mem(RAM_SIZE * 1024, 0), peq("peq") {
   socket.register_nb_transport_fw(this, &RAM::nb_transport_fw);
 
   SC_THREAD(process_transaction);

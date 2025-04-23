@@ -27,6 +27,8 @@ Interconnect::Interconnect(sc_module_name name, unsigned int chiplet_id)
   interconnect_initiator_socket.register_nb_transport_bw(
       this, &Interconnect::nb_transport_bw_interconnect);
 
+  write_address = (RAM_SIZE * 1024) / 2;
+
   SC_THREAD(process_tx_buffer);
   SC_THREAD(process_rx_buffer);
 }
@@ -75,6 +77,26 @@ void Interconnect::process_rx_buffer() {
       int core_id = ext->core_id;
       int destination_id = ext->destination_id;
 
+      bool read_offchip = source_id == chiplet_id &&
+                             transaction->get_command() == TLM_READ_COMMAND;
+
+      if (read_offchip) {
+        transaction->set_command(TLM_WRITE_COMMAND);
+      }
+
+      if (destination_id == chiplet_id &&
+          transaction->get_command() == TLM_WRITE_COMMAND) {
+        SC_LOG_DEBUG(this, *transaction,
+                     "Setting write address to: " << std::hex << write_address);
+        transaction->set_address(write_address);
+
+        write_address += sizeof(uint32_t);
+
+        if (write_address >= RAM_SIZE * 1024) {
+          write_address = (RAM_SIZE * 1024) / 2;
+        }
+      }
+
       SC_LOG_DEBUG(this, *transaction, "Rx->Bus transmission started");
       tlm_sync_enum tlm_resp =
           bus_initiator_socket->nb_transport_fw(*transaction, phase, delay);
@@ -91,8 +113,7 @@ void Interconnect::process_rx_buffer() {
       SC_LOG_DEBUG(this, *transaction, "Rx->Bus transmission finished");
 
       // send IRQ to core
-      if (source_id == chiplet_id &&
-          transaction->get_command() == TLM_READ_COMMAND) {
+      if (read_offchip) {
         send_irq(*transaction);
       }
 
@@ -151,7 +172,8 @@ void Interconnect::send_irq(tlm_generic_payload &transaction) {
 
   delete irq;
 
-  SC_LOG_WARN(this, transaction, "Sending IRQ to Core" << ext->core_id << " done");
+  SC_LOG_WARN(this, transaction,
+              "Sending IRQ to Core" << ext->core_id << " done");
 }
 
 // -------------------------------------------------------

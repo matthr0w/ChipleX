@@ -1,4 +1,5 @@
 #include "Core.h"
+#include "Config.h"
 #include "Delays.h"
 
 #include <random>
@@ -26,13 +27,21 @@ Core::Core(sc_module_name name, unsigned int chiplet_id, unsigned int core_id)
 }
 
 void Core::core_thread() {
+  size_t total_bytes = RAM_SIZE * 1024;
+  size_t half_bytes = total_bytes / 2;
+
   // random number distributions
   thread_local std::mt19937 gen(std::random_device{}());
   std::uniform_int_distribution<int> delay_dist(0, 100);
-  std::uniform_int_distribution<uint32_t> destination_dist(0, num_chiplets - 1);
-  std::uniform_int_distribution<uint32_t> address_dist(0x0000, 0xFFFF);
-  std::uniform_int_distribution<uint32_t> data_dist;
+
   std::bernoulli_distribution write_dist(0.5);
+  std::uniform_int_distribution<uint32_t> data_dist;
+
+  std::uniform_int_distribution<uint32_t> destination_dist(0, num_chiplets - 1);
+  std::uniform_int_distribution<uint32_t> address_onchip_dist(0,
+                                                              half_bytes - 1);
+  std::uniform_int_distribution<uint32_t> address_offchip_dist(half_bytes,
+                                                               total_bytes - 1);
 
   while (true) {
     // random delay between requests
@@ -41,28 +50,24 @@ void Core::core_thread() {
     // random destination id
     int destination_id = destination_dist(gen);
 
-    // RAM address spaces:
-    // 0x000000 - 0x00FFFF RAM Chiplet 0
-    // 0x010000 - 0x01FFFF RAM Chiplet 1
-    // ...
-
-    // random RAM address
-    uint32_t address = address_dist(gen);
-
-    // random 4 bytes
-    uint32_t *data = new uint32_t(data_dist(gen));
-    unsigned int data_size = 4;
-
     // read or write
     bool do_write = write_dist(gen);
 
-    if (do_write) {
-      send_request(TLM_WRITE_COMMAND, request, destination_id, address,
-                   reinterpret_cast<unsigned char *>(data), data_size);
+    // random RAM address
+    uint32_t address;
+    if (destination_id == chiplet_id) {
+      address = address_onchip_dist(gen);
     } else {
-      send_request(TLM_READ_COMMAND, request, destination_id, address,
-                   reinterpret_cast<unsigned char *>(data), data_size);
+      address = address_offchip_dist(gen);
     }
+
+    // random 4 bytes
+    uint32_t *data = new uint32_t(data_dist(gen));
+    unsigned int data_size = sizeof(uint32_t);
+
+    send_request(do_write ? TLM_WRITE_COMMAND : TLM_READ_COMMAND, request,
+                 destination_id, address,
+                 reinterpret_cast<unsigned char *>(data), data_size);
 
     request += 1;
   }
@@ -123,8 +128,9 @@ void Core::send_request(tlm_command command, int request_id, int destination_id,
                 "Sending request: READ from 0x" << std::hex << address);
   } else if (command == TLM_WRITE_COMMAND) {
     SC_LOG_INFO(this, *transaction,
-                "Sending request: WRITE to 0x" << std::hex << address
-                                               << " with data 0x" << *data);
+                "Sending request: WRITE to 0x"
+                    << std::hex << address << " with data 0x"
+                    << *reinterpret_cast<uint32_t *>(data));
   }
 
   phase = BEGIN_REQ;
