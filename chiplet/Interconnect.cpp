@@ -78,7 +78,7 @@ void Interconnect::process_rx_buffer() {
       int destination_id = ext->destination_id;
 
       bool read_offchip = source_id == chiplet_id &&
-                             transaction->get_command() == TLM_READ_COMMAND;
+                          transaction->get_command() == TLM_READ_COMMAND;
 
       if (read_offchip) {
         transaction->set_command(TLM_WRITE_COMMAND);
@@ -195,6 +195,13 @@ Interconnect::nb_transport_fw_bus(tlm_generic_payload &transaction,
 
   // add bus transfer delay
   delay += get_bus_transfer_delay(*this, transaction);
+
+  // set source id
+  ChipletExtension *ext;
+  transaction.get_extension(ext);
+  if (ext->source_id == -1) {
+    transaction_copy->set_source_id(chiplet_id);
+  }
 
   // put transaction in tx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Tx buffer");

@@ -119,8 +119,6 @@ void Core::send_request(tlm_command command, int request_id, int destination_id,
   transaction->set_data_length(data_size);
 
   transaction->set_request_id(request_id);
-  transaction->set_source_id(chiplet_id);
-  transaction->set_core_id(core_id);
   transaction->set_destination_id(destination_id);
 
   if (command == TLM_READ_COMMAND) {

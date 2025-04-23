@@ -209,6 +209,14 @@ tlm_sync_enum Bus::nb_transport_fw(int id, tlm_generic_payload &transaction,
     exit(1);
   }
 
+  // set core id
+  ChipletExtension *ext;
+  transaction.get_extension(ext);
+  if (ext->core_id == -1) {
+    int core_id = (id == 1) ? 0 : 1;
+    static_cast<ChipletPayload *>(&transaction)->set_core_id(core_id);
+  }
+
   if (current_owner == 0 && request_queue.empty()) {
     // bus is free and queue is empty: grant access immediately
     SC_LOG_INFO(this, transaction,

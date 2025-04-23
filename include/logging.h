@@ -18,8 +18,8 @@
                  << (module)->name() << " | ";                                 \
                                                                                \
       if (ext) {                                                               \
-        _sc_idstream << ext->request_id << "-" << ext->source_id << "-"        \
-                     << ext->core_id << "-" << ext->destination_id;            \
+        _sc_idstream << ext->request_id << "/" << ext->source_id << "/"        \
+                     << ext->core_id << "/" << ext->destination_id;            \
       } else {                                                                 \
         _sc_idstream << "no-extension";                                        \
       }                                                                        \
@@ -49,8 +49,8 @@
                << " | \033[0m[INFO]\033[0m   | " << std::setw(25)              \
                << (module)->name() << " | ";                                   \
     if (ext) {                                                                 \
-      _sc_idstream << ext->request_id << "-" << ext->source_id << "-"          \
-                   << ext->core_id << "-" << ext->destination_id;              \
+      _sc_idstream << ext->request_id << "/" << ext->source_id << "/"          \
+                   << ext->core_id << "/" << ext->destination_id;              \
     } else {                                                                   \
       _sc_idstream << "no-extension";                                          \
     }                                                                          \
@@ -67,8 +67,8 @@
                << " | \033[33m[WARN]\033[0m   | " << std::setw(25)             \
                << (module)->name() << " | ";                                   \
     if (ext) {                                                                 \
-      _sc_idstream << ext->request_id << "-" << ext->source_id << "-"          \
-                   << ext->core_id << "-" << ext->destination_id;              \
+      _sc_idstream << ext->request_id << "/" << ext->source_id << "/"          \
+                   << ext->core_id << "/" << ext->destination_id;              \
     } else {                                                                   \
       _sc_idstream << "no-extension";                                          \
     }                                                                          \
@@ -85,8 +85,8 @@
                << " | \033[31m[ERROR]\033[0m  | " << std::setw(25)             \
                << (module)->name() << " | ";                                   \
     if (ext) {                                                                 \
-      _sc_idstream << ext->request_id << "-" << ext->source_id << "-"          \
-                   << ext->core_id << "-" << ext->destination_id;              \
+      _sc_idstream << ext->request_id << "/" << ext->source_id << "/"          \
+                   << ext->core_id << "/" << ext->destination_id;              \
     } else {                                                                   \
       _sc_idstream << "no-extension";                                          \
     }                                                                          \
@@ -103,8 +103,8 @@
                << " | \033[32m[DELAY]\033[0m  | " << std::setw(25)             \
                << (module)->name() << " | ";                                   \
     if (ext) {                                                                 \
-      _sc_idstream << ext->request_id << "-" << ext->source_id << "-"          \
-                   << ext->core_id << "-" << ext->destination_id;              \
+      _sc_idstream << ext->request_id << "/" << ext->source_id << "/"          \
+                   << ext->core_id << "/" << ext->destination_id;              \
     } else {                                                                   \
       _sc_idstream << "no-extension";                                          \
     }                                                                          \
