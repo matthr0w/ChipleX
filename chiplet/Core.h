@@ -11,8 +11,7 @@ public:
   // sockets
   // -------------------------------------------------------
   tlm_utils::simple_initiator_socket<Core> socket;
-  tlm_utils::simple_target_socket<Core> irq0_socket;
-  tlm_utils::simple_target_socket<Core> irq1_socket;
+  tlm_utils::simple_target_socket<Core> irq_socket;
 
   Core(sc_core::sc_module_name name, unsigned int chiplet_id,
        unsigned int core_id);

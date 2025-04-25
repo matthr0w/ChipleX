@@ -14,7 +14,7 @@
     if (print_debug_msgs) {                                                    \
       std::ostringstream _sc_stream, _sc_idstream;                             \
       _sc_stream << std::left << std::setw(9) << sc_time_stamp()               \
-                 << " | \033[34m[DEBUG]\033[0m  | " << std::setw(25)           \
+                 << " | \033[34m[DEBUG]\033[0m  | " << std::setw(30)           \
                  << (module)->name() << " | ";                                 \
                                                                                \
       if (ext) {                                                               \
@@ -35,7 +35,7 @@
     if (print_debug_msgs) {                                                    \
       std::ostringstream _sc_stream;                                           \
       _sc_stream << std::left << std::setw(9) << sc_time_stamp()               \
-                 << " | \033[34m[DEBUG]\033[0m  | " << std::setw(25)           \
+                 << " | \033[34m[DEBUG]\033[0m  | " << std::setw(30)           \
                  << (module)->name() << " | " << __VA_ARGS__;                  \
       std::cout << _sc_stream.str() << std::endl;                              \
     }                                                                          \
@@ -46,7 +46,7 @@
     const auto *ext = (transaction).get_extension<ChipletExtension>();         \
     std::ostringstream _sc_stream, _sc_idstream;                               \
     _sc_stream << std::left << std::setw(9) << sc_time_stamp()                 \
-               << " | \033[0m[INFO]\033[0m   | " << std::setw(25)              \
+               << " | \033[0m[INFO]\033[0m   | " << std::setw(30)              \
                << (module)->name() << " | ";                                   \
     if (ext) {                                                                 \
       _sc_idstream << ext->request_id << "/" << ext->source_id << "/"          \
@@ -64,7 +64,7 @@
     const auto *ext = (transaction).get_extension<ChipletExtension>();         \
     std::ostringstream _sc_stream, _sc_idstream;                               \
     _sc_stream << std::left << std::setw(9) << sc_time_stamp()                 \
-               << " | \033[33m[WARN]\033[0m   | " << std::setw(25)             \
+               << " | \033[33m[WARN]\033[0m   | " << std::setw(30)             \
                << (module)->name() << " | ";                                   \
     if (ext) {                                                                 \
       _sc_idstream << ext->request_id << "/" << ext->source_id << "/"          \
@@ -82,7 +82,7 @@
     const auto *ext = (transaction).get_extension<ChipletExtension>();         \
     std::ostringstream _sc_stream, _sc_idstream;                               \
     _sc_stream << std::left << std::setw(9) << sc_time_stamp()                 \
-               << " | \033[31m[ERROR]\033[0m  | " << std::setw(25)             \
+               << " | \033[31m[ERROR]\033[0m  | " << std::setw(30)             \
                << (module)->name() << " | ";                                   \
     if (ext) {                                                                 \
       _sc_idstream << ext->request_id << "/" << ext->source_id << "/"          \
@@ -100,7 +100,7 @@
     const auto *ext = (transaction).get_extension<ChipletExtension>();         \
     std::ostringstream _sc_stream, _sc_idstream;                               \
     _sc_stream << std::left << std::setw(9) << sc_time_stamp()                 \
-               << " | \033[32m[DELAY]\033[0m  | " << std::setw(25)             \
+               << " | \033[32m[DELAY]\033[0m  | " << std::setw(30)             \
                << (module)->name() << " | ";                                   \
     if (ext) {                                                                 \
       _sc_idstream << ext->request_id << "/" << ext->source_id << "/"          \

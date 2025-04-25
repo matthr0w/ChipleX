@@ -17,8 +17,7 @@ Core::Core(sc_module_name name, unsigned int chiplet_id, unsigned int core_id)
     : sc_module(name), chiplet_id(chiplet_id), core_id(core_id), request(0),
       socket("socket"), irq_peq("irq_peq") {
   socket.register_nb_transport_bw(this, &Core::nb_transport_bw);
-  irq0_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
-  irq1_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
+  irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
 
   SC_THREAD(core_thread);
 
@@ -157,7 +156,8 @@ tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                         tlm_phase &phase,
                                         sc_core::sc_time &delay) {
   if (phase == BEGIN_REQ) {
-    delay += SC_ZERO_TIME; // TODO: add delay
+    // TODO: DELAY
+    delay += SC_ZERO_TIME;
 
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();

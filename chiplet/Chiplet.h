@@ -5,6 +5,7 @@
 #include "Bus.h"
 #include "Core.h"
 #include "Interconnect.h"
+#include "InterconnectProtocol.h"
 #include "RAM.h"
 
 SC_MODULE(Chiplet) {
@@ -23,6 +24,7 @@ private:
   Core core0;
   Core core1;
   RAM ram;
+  InterconnectProtocol interconnectprotocol;
 
   void initialize();
 };
