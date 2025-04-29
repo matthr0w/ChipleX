@@ -20,9 +20,18 @@ const unsigned int RAM_SIZE = 16;
 // RAM width in bytes
 const unsigned int RAM_WIDTH = 1;
 // inverse of clock frequency
-const sc_time RAM_CLK_CYCLE = sc_time(1, SC_NS);
+const sc_time RAM_CLK_CYCLE = sc_time(3, SC_NS);
 // fixed access delay
 const sc_time RAM_ACCESS_DELAY = sc_time(20, SC_NS);
+
+// Interconnect Protocol Layer
+// -----------------------------------------------
+// interconnect protocol layer width in bytes
+const unsigned int INTERCONNECT_PROTOCOL_WIDTH = 4;
+// interconnect protocol layer buffers size
+const unsigned int INTERCONNECT_PROTOCOL_BUFFER_SIZE = 3;
+// inverse of clock frequency
+const sc_time INTERCONNECT_PROTOCOL_CLK_CYCLE = sc_time(5, SC_NS);
 
 // Interconnect
 // -----------------------------------------------

@@ -90,7 +90,7 @@ void Interconnect::process_rx_buffer() {
 // -------------------------------------------------------
 tlm_sync_enum
 Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
-                                  tlm_phase &phase, sc_time &delay) {
+                                       tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "Received request from Protocol Layer");
 
   output_buffer_levels();
@@ -102,8 +102,8 @@ Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
     wait(tx_buffer_out_event);
   }
 
-  // TODO: DELAY
-  delay += SC_ZERO_TIME;
+  // add protocol layer to interconnect transfer delay
+  delay += get_protocol2interconnect_transfer_delay(*this, transaction);
 
   // put transaction in tx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Tx buffer");
@@ -112,7 +112,7 @@ Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
 
   // begin response to protocol layer
   tlm_phase resp_phase = BEGIN_RESP;
-  sc_time resp_delay = SC_ZERO_TIME;
+  sc_time resp_delay = delay;
 
   protocol_target_socket->nb_transport_bw(transaction, resp_phase, resp_delay);
 
@@ -134,9 +134,8 @@ Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
     wait(rx_buffer_out_event);
   }
 
-  // TODO: DELAY
-  // add interconnect transfer delay
-  delay += get_interconnect_transfer_delay(*this, transaction);
+  // add chiplet to chiplet transfer delay
+  delay += get_chiplet2chiplet_transfer_delay(*this, transaction);
 
   // put transaction in rx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");
@@ -145,7 +144,7 @@ Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
 
   // begin response to interconnect
   tlm_phase resp_phase = BEGIN_RESP;
-  sc_time resp_delay = SC_ZERO_TIME;
+  sc_time resp_delay = delay;
 
   interconnect_target_socket->nb_transport_bw(transaction, resp_phase,
                                               resp_delay);
@@ -156,12 +155,9 @@ Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
 
 tlm_sync_enum
 Interconnect::nb_transport_bw_protocol(tlm_generic_payload &transaction,
-                                  tlm_phase &phase, sc_time &delay) {
+                                       tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction, "Received response from Protocol Layer");
-
-    // TODO: DELAY
-    delay += SC_ZERO_TIME;
 
     rx_transaction_done.notify(delay);
 

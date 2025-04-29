@@ -52,6 +52,8 @@ void InterconnectProtocol::process_tx_buffer() {
 
       transaction->get_extension(ext);
 
+      // entry point for protocol methods
+
       send_to_interconnect(*transaction);
 
       // remove from tx buffer
@@ -142,9 +144,9 @@ void InterconnectProtocol::process_bus_transaction(
     wait(delay);
   }
 
-  SC_LOG_DEBUG(this, transaction, "Protocol->Bus transmission started");
-
   wait(rx_transaction_done);
+
+  SC_LOG_DEBUG(this, transaction, "Protocol->Bus transmission finished");
 }
 
 void InterconnectProtocol::send_to_interconnect(
@@ -228,12 +230,13 @@ InterconnectProtocol::nb_transport_fw_bus(tlm_generic_payload &transaction,
   }
 
   // add bus transfer delay
-  delay += get_bus_transfer_delay(*this, transaction);
+  delay += get_bus_transfer_fw_delay(*this, transaction);
 
   // set source id
   ChipletExtension *ext;
   transaction.get_extension(ext);
   if (ext->source_id == -1) {
+    static_cast<ChipletPayload *>(&transaction)->set_source_id(chiplet_id);
     transaction_copy->set_source_id(chiplet_id);
   }
 
@@ -244,7 +247,7 @@ InterconnectProtocol::nb_transport_fw_bus(tlm_generic_payload &transaction,
 
   // begin response to bus
   tlm_phase resp_phase = BEGIN_RESP;
-  sc_time resp_delay = SC_ZERO_TIME;
+  sc_time resp_delay = delay;
 
   bus_target_socket->nb_transport_bw(transaction, resp_phase, resp_delay);
 
@@ -265,8 +268,8 @@ tlm_sync_enum InterconnectProtocol::nb_transport_fw_interconnect0(
     wait(rx_buffer_out_event);
   }
 
-  // add interconnect transfer delay
-  delay += get_interconnect_transfer_delay(*this, transaction);
+  // add interconnect to protocol layer transfer delay
+  delay += get_protocol2interconnect_transfer_delay(*this, transaction);
 
   // put transaction in rx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");
@@ -275,7 +278,7 @@ tlm_sync_enum InterconnectProtocol::nb_transport_fw_interconnect0(
 
   // begin response to interconnect
   tlm_phase resp_phase = BEGIN_RESP;
-  sc_time resp_delay = SC_ZERO_TIME;
+  sc_time resp_delay = delay;
 
   interconnect0_target_socket->nb_transport_bw(transaction, resp_phase,
                                                resp_delay);
@@ -297,8 +300,8 @@ tlm_sync_enum InterconnectProtocol::nb_transport_fw_interconnect1(
     wait(rx_buffer_out_event);
   }
 
-  // add interconnect transfer delay
-  delay += get_interconnect_transfer_delay(*this, transaction);
+  // add interconnect to protocol layer transfer delay
+  delay += get_protocol2interconnect_transfer_delay(*this, transaction);
 
   // put transaction in rx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");
@@ -307,7 +310,7 @@ tlm_sync_enum InterconnectProtocol::nb_transport_fw_interconnect1(
 
   // begin response to interconnect
   tlm_phase resp_phase = BEGIN_RESP;
-  sc_time resp_delay = SC_ZERO_TIME;
+  sc_time resp_delay = delay;
 
   interconnect1_target_socket->nb_transport_bw(transaction, resp_phase,
                                                resp_delay);
@@ -322,7 +325,7 @@ InterconnectProtocol::nb_transport_bw_bus(tlm_generic_payload &transaction,
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction, "Received response from Bus");
 
-    delay += get_bus_transfer_delay(*this, transaction);
+    delay += get_bus_transfer_bw_delay(*this, transaction);
 
     rx_transaction_done.notify(delay);
 

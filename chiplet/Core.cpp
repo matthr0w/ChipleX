@@ -31,7 +31,7 @@ void Core::core_thread() {
 
   // random number distributions
   thread_local std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<int> delay_dist(0, 100);
+  std::uniform_int_distribution<int> delay_dist(10, 100);
 
   std::bernoulli_distribution write_dist(0.5);
   std::uniform_int_distribution<uint32_t> data_dist;
@@ -156,8 +156,7 @@ tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                         tlm_phase &phase,
                                         sc_core::sc_time &delay) {
   if (phase == BEGIN_REQ) {
-    // TODO: DELAY
-    delay += SC_ZERO_TIME;
+    delay += get_irq_transfer_delay(*this, transaction);
 
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();
@@ -174,7 +173,17 @@ tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
 tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
                                     tlm_phase &phase, sc_core::sc_time &delay) {
   if (phase == BEGIN_RESP) {
-    delay += get_bus_transfer_delay(*this, transaction);
+    ChipletExtension *ext;
+
+    transaction.get_extension(ext);
+
+    if (ext->source_id == -1) {
+      delay += get_bus_transfer_bw_delay(*this, transaction);
+    } else {
+      // request to interconnect
+      // no direct data response -> no extra delay
+      delay += SC_ZERO_TIME;
+    }
 
     transaction_done.notify(delay);
 

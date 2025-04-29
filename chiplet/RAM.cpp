@@ -68,7 +68,7 @@ tlm_sync_enum RAM::nb_transport_fw(tlm_generic_payload &transaction,
     exit(1);
   }
 
-  delay += get_bus_transfer_delay(*this, transaction);
+  delay += get_bus_transfer_fw_delay(*this, transaction);
 
   peq.notify(transaction, delay);
 

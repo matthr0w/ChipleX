@@ -2,45 +2,272 @@
 
 #include "Config.h"
 
-#include "sysc/kernel/sc_module.h"
 #include "systemc"
+
+#include "common/protocol/ChipletExtension.h"
 
 #include "include/logging.h"
 
 using namespace sc_core;
 using namespace tlm;
 
-inline sc_time get_bus_arbitration_delay(sc_module &module,
-                                         tlm_generic_payload &transaction) {
-  SC_LOG_DELAY(&module, transaction, "Bus Arbitration", BUS_ARBITRATION_DELAY);
-  return BUS_ARBITRATION_DELAY;
+// helper functions
+inline sc_time get_data_cycles_delay(tlm_generic_payload &transaction,
+                                     unsigned int width, sc_time cycle) {
+  unsigned int data_size = transaction.get_data_length();
+  unsigned int num_cycles = (data_size + width - 1) / width;
+  return num_cycles * cycle;
 }
 
-inline sc_time get_bus_transfer_delay(sc_module &module,
-                                      tlm_generic_payload &transaction) {
-  unsigned int data_size = transaction.get_data_length();
-  unsigned int cycles = (data_size + BUS_WIDTH - 1) / BUS_WIDTH;
-  SC_LOG_DELAY(&module, transaction, "Bus Transfer", cycles * BUS_CLK_CYCLE);
-  return cycles * BUS_CLK_CYCLE;
+inline sc_time get_extension_cycles_delay(tlm_generic_payload &transaction,
+                                          unsigned int width, sc_time cycle) {
+  unsigned int extension_size = sizeof(ChipletExtension);
+  unsigned int num_cycles = (extension_size + width - 1) / width;
+  return num_cycles * cycle;
+}
+
+// -------------------------------------------------------
+// delays
+// -------------------------------------------------------
+inline sc_time get_bus_arbitration_delay(sc_module &module,
+                                         tlm_generic_payload &transaction) {
+  // Bus Arbitration Delay
+  // -----------------------------------------------
+  //      + fixed arbitration delay
+
+  sc_time delay = BUS_ARBITRATION_DELAY;
+
+  SC_LOG_DELAY(&module, transaction, "Bus Arbitration", delay);
+  return delay;
+}
+
+inline sc_time get_bus_transfer_fw_delay(sc_module &module,
+                                         tlm_generic_payload &transaction) {
+  // Bus Transfer Forward Delay
+  // -----------------------------------------------
+  // read operation:
+  //      + address cycle delay
+  //      - no data cycles delay
+  //      + extension cycles delay
+  // write operation:
+  //      + address cycle delay
+  //      + data cycles delay
+  //      + extension cycles delay
+
+  sc_time delay;
+  sc_time address_cycle_delay;
+  sc_time data_cycles_delay;
+  sc_time extension_cycles_delay;
+
+  if (transaction.get_command() == TLM_READ_COMMAND) {
+    address_cycle_delay = BUS_CLK_CYCLE;
+    data_cycles_delay = SC_ZERO_TIME;
+    extension_cycles_delay =
+        get_extension_cycles_delay(transaction, BUS_WIDTH, BUS_CLK_CYCLE);
+  } else if (transaction.get_command() == TLM_WRITE_COMMAND) {
+    address_cycle_delay = BUS_CLK_CYCLE;
+    data_cycles_delay =
+        get_data_cycles_delay(transaction, BUS_WIDTH, BUS_CLK_CYCLE);
+    extension_cycles_delay =
+        get_extension_cycles_delay(transaction, BUS_WIDTH, BUS_CLK_CYCLE);
+  }
+
+  delay = address_cycle_delay + data_cycles_delay + extension_cycles_delay;
+
+  SC_LOG_DELAY(&module, transaction, "Bus Transfer Forward", delay);
+  return delay;
+}
+
+inline sc_time get_bus_transfer_bw_delay(sc_module &module,
+                                         tlm_generic_payload &transaction) {
+  // Bus Transfer Backward Delay
+  // -----------------------------------------------
+  // read operation:
+  //      - no address cycle delay
+  //      + data cycles delay
+  //      + extension cycles delay
+  // write operation:
+  //      - no address cycle delay
+  //      - no data cycles delay
+  //      + extension cycles delay
+
+  sc_time delay;
+  sc_time address_cycle_delay;
+  sc_time data_cycles_delay;
+  sc_time extension_cycles_delay;
+
+  if (transaction.get_command() == TLM_READ_COMMAND) {
+    address_cycle_delay = SC_ZERO_TIME;
+    data_cycles_delay =
+        get_data_cycles_delay(transaction, BUS_WIDTH, BUS_CLK_CYCLE);
+    extension_cycles_delay =
+        get_extension_cycles_delay(transaction, BUS_WIDTH, BUS_CLK_CYCLE);
+  } else if (transaction.get_command() == TLM_WRITE_COMMAND) {
+    address_cycle_delay = SC_ZERO_TIME;
+    data_cycles_delay = SC_ZERO_TIME;
+    extension_cycles_delay =
+        get_extension_cycles_delay(transaction, BUS_WIDTH, BUS_CLK_CYCLE);
+  }
+
+  delay = address_cycle_delay + data_cycles_delay + extension_cycles_delay;
+
+  SC_LOG_DELAY(&module, transaction, "Bus Transfer Backward", delay);
+  return delay;
 }
 
 inline sc_time get_mem_access_delay(sc_module &module,
                                     tlm_generic_payload &transaction) {
-  unsigned int data_size = transaction.get_data_length();
-  unsigned int cycles = (data_size + RAM_WIDTH - 1) / RAM_WIDTH;
-  sc_time data_delay = cycles * RAM_CLK_CYCLE;
-  SC_LOG_DELAY(&module, transaction, "RAM Access",
-               data_delay + RAM_ACCESS_DELAY);
-  return data_delay + RAM_ACCESS_DELAY;
+  // RAM Access Delay
+  // -----------------------------------------------
+  //      + fixed access delay
+  //      + data cycles delay
+
+  sc_time delay;
+  sc_time access_delay;
+  sc_time data_cycles_delay;
+
+  access_delay = RAM_ACCESS_DELAY;
+  data_cycles_delay =
+      get_data_cycles_delay(transaction, RAM_WIDTH, RAM_CLK_CYCLE);
+
+  delay = access_delay + data_cycles_delay;
+
+  SC_LOG_DELAY(&module, transaction, "RAM Access", delay);
+  return delay;
 }
 
 inline sc_time
-get_interconnect_transfer_delay(sc_module &module,
-                                tlm_generic_payload &transaction) {
-  unsigned int data_size = transaction.get_data_length();
-  unsigned int cycles =
-      (data_size + INTERCONNECT_WIDTH - 1) / INTERCONNECT_WIDTH;
-  SC_LOG_DELAY(&module, transaction, "Interconnect Transfer",
-               cycles * INTERCONNECT_CLK_CYCLE);
-  return cycles * INTERCONNECT_CLK_CYCLE;
+get_protocol2interconnect_transfer_delay(sc_module &module,
+                                         tlm_generic_payload &transaction) {
+  // Protocol Layer to Interconnect Transfer Delay
+  // Interconnect to Protocol Layer Transfer Delay
+  // -----------------------------------------------
+  // read operation pending:
+  //      + address cycle delay
+  //      - no data cycles delay
+  //      + extension cycles delay
+  // read operation done:
+  //      - no address cycle delay
+  //      + data cycles delay
+  //      + extension cycles delay
+  // write operation pending:
+  //      + address cycle delay
+  //      + data cycles delay
+  //      + extension cycles delay
+  // write operation done:
+  //      - no backward call
+
+  sc_time delay;
+  sc_time address_cycle_delay;
+  sc_time data_cycles_delay;
+  sc_time extension_cycles_delay;
+
+  if (transaction.get_command() == TLM_READ_COMMAND) {
+    // destination_id != source_id -> read operation pending
+    // (see bus implementation)
+    ChipletExtension *ext;
+    transaction.get_extension(ext);
+    if (ext->destination_id != ext->source_id) {
+      address_cycle_delay = INTERCONNECT_PROTOCOL_CLK_CYCLE;
+      data_cycles_delay = SC_ZERO_TIME;
+      extension_cycles_delay =
+          get_extension_cycles_delay(transaction, INTERCONNECT_PROTOCOL_WIDTH,
+                                     INTERCONNECT_PROTOCOL_CLK_CYCLE);
+    } else {
+      address_cycle_delay = SC_ZERO_TIME;
+      data_cycles_delay =
+          get_data_cycles_delay(transaction, INTERCONNECT_PROTOCOL_WIDTH,
+                                INTERCONNECT_PROTOCOL_CLK_CYCLE);
+      extension_cycles_delay =
+          get_extension_cycles_delay(transaction, INTERCONNECT_PROTOCOL_WIDTH,
+                                     INTERCONNECT_PROTOCOL_CLK_CYCLE);
+    }
+  } else if (transaction.get_command() == TLM_WRITE_COMMAND) {
+    address_cycle_delay = INTERCONNECT_PROTOCOL_CLK_CYCLE;
+    data_cycles_delay =
+        get_data_cycles_delay(transaction, INTERCONNECT_PROTOCOL_WIDTH,
+                              INTERCONNECT_PROTOCOL_CLK_CYCLE);
+    extension_cycles_delay =
+        get_extension_cycles_delay(transaction, INTERCONNECT_PROTOCOL_WIDTH,
+                                   INTERCONNECT_PROTOCOL_CLK_CYCLE);
+  }
+
+  delay = address_cycle_delay + data_cycles_delay + extension_cycles_delay;
+
+  SC_LOG_DELAY(&module, transaction, "Protocol Layer to Interconnect Transfer",
+               delay);
+  return delay;
+}
+
+inline sc_time
+get_chiplet2chiplet_transfer_delay(sc_module &module,
+                                   tlm_generic_payload &transaction) {
+  // Chiplet to Chiplet Transfer Delay
+  // -----------------------------------------------
+  // read operation pending:
+  //      + address cycle delay
+  //      - no data cycles delay
+  //      + extension cycles delay
+  // read operation done:
+  //      - no address cycle delay
+  //      + data cycles delay
+  //      + extension cycles delay
+  // write operation pending:
+  //      + address cycle delay
+  //      + data cycles delay
+  //      + extension cycles delay
+  // write operation done:
+  //      - no backward call
+
+  sc_time delay;
+  sc_time address_cycle_delay;
+  sc_time data_cycles_delay;
+  sc_time extension_cycles_delay;
+
+  if (transaction.get_command() == TLM_READ_COMMAND) {
+    // destination_id != source_id -> read operation pending
+    // (see bus implementation)
+    ChipletExtension *ext;
+    transaction.get_extension(ext);
+    if (ext->destination_id != ext->source_id) {
+      address_cycle_delay = INTERCONNECT_CLK_CYCLE;
+      data_cycles_delay = SC_ZERO_TIME;
+      extension_cycles_delay = get_extension_cycles_delay(
+          transaction, INTERCONNECT_WIDTH, INTERCONNECT_CLK_CYCLE);
+    } else {
+      address_cycle_delay = SC_ZERO_TIME;
+      data_cycles_delay = get_data_cycles_delay(transaction, INTERCONNECT_WIDTH,
+                                                INTERCONNECT_CLK_CYCLE);
+      extension_cycles_delay = get_extension_cycles_delay(
+          transaction, INTERCONNECT_WIDTH, INTERCONNECT_CLK_CYCLE);
+    }
+  } else if (transaction.get_command() == TLM_WRITE_COMMAND) {
+    address_cycle_delay = INTERCONNECT_CLK_CYCLE;
+    data_cycles_delay = get_data_cycles_delay(transaction, INTERCONNECT_WIDTH,
+                                              INTERCONNECT_CLK_CYCLE);
+    extension_cycles_delay = get_extension_cycles_delay(
+        transaction, INTERCONNECT_WIDTH, INTERCONNECT_CLK_CYCLE);
+  }
+
+  delay = address_cycle_delay + data_cycles_delay + extension_cycles_delay;
+
+  SC_LOG_DELAY(&module, transaction, "Chiplet to Chiplet Transfer", delay);
+  return delay;
+}
+
+inline sc_time get_irq_transfer_delay(sc_module &module,
+                                      tlm_generic_payload &transaction) {
+  // IRQ Transfer Delay
+  // -----------------------------------------------
+  //      + address cycle delay
+  //      + irq cycle delay
+
+  sc_time delay;
+  sc_time address_cycle_delay = INTERCONNECT_PROTOCOL_CLK_CYCLE;
+  sc_time irq_cycle_delay = INTERCONNECT_PROTOCOL_CLK_CYCLE;
+
+  delay = address_cycle_delay + irq_cycle_delay;
+
+  SC_LOG_DELAY(&module, transaction, "IRQ Transfer", delay);
+  return delay;
 }
