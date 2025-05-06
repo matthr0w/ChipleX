@@ -9,7 +9,7 @@ using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-namespace chiplet {
+namespace fpga {
 SC_MODULE(RAM) {
 public:
   simple_target_socket<RAM> socket;
@@ -31,4 +31,4 @@ private:
   tlm_sync_enum nb_transport_fw(tlm_generic_payload & transaction,
                                 tlm_phase & phase, sc_time & delay);
 };
-}; // namespace chiplet
+}; // namespace fpga

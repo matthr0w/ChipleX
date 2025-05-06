@@ -10,7 +10,7 @@ using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-namespace chiplet {
+namespace fpga {
 SC_MODULE(Interconnect) {
 public:
   // -------------------------------------------------------
@@ -58,4 +58,4 @@ private:
   // helper functions
   void output_buffer_levels();
 };
-}; // namespace chiplet
+}; // namespace fpga

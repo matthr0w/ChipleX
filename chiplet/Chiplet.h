@@ -8,23 +8,28 @@
 #include "InterconnectProtocol.h"
 #include "RAM.h"
 
+#include "include/globals.h"
+
+using namespace sc_core;
+using namespace tlm;
+using namespace tlm_utils;
+
 SC_MODULE(Chiplet) {
 private:
   static unsigned int instance;
   const unsigned int chiplet_id;
 
 public:
-  Interconnect interconnect0;
-  Interconnect interconnect1;
+  std::vector<chiplet::Interconnect *> interconnects;
 
   SC_CTOR(Chiplet);
 
 private:
-  Bus bus;
-  Core core0;
-  Core core1;
-  RAM ram;
-  InterconnectProtocol interconnectprotocol;
+  chiplet::Bus bus;
+  chiplet::Core core0;
+  chiplet::Core core1;
+  chiplet::InterconnectProtocol interconnectprotocol;
+  chiplet::RAM ram;
 
   void initialize();
 };

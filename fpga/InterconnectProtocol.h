@@ -10,26 +10,24 @@ using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-namespace chiplet {
+namespace fpga {
 SC_MODULE(InterconnectProtocol) {
 public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket_tagged<InterconnectProtocol>
-      *interconnect_target_sockets;
+  simple_target_socket_tagged<InterconnectProtocol> *interconnect_target_sockets;
   simple_initiator_socket_tagged<InterconnectProtocol>
       *interconnect_initiator_sockets;
 
   simple_target_socket<InterconnectProtocol> bus_target_socket;
   simple_initiator_socket<InterconnectProtocol> bus_initiator_socket;
-  simple_initiator_socket<InterconnectProtocol> core0_irq_initiator_socket;
-  simple_initiator_socket<InterconnectProtocol> core1_irq_initiator_socket;
+  simple_initiator_socket<InterconnectProtocol> generator_irq_initiator_socket;
 
-  InterconnectProtocol(sc_core::sc_module_name name, unsigned int chiplet_id);
+  InterconnectProtocol(sc_core::sc_module_name name, unsigned int fpga_id);
 
 private:
-  const unsigned int chiplet_id;
+  const unsigned int fpga_id;
   uint32_t write_address;
 
   void process_tx_buffer();
@@ -74,4 +72,4 @@ private:
   // helper functions
   void output_buffer_levels();
 };
-}; // namespace chiplet
+}; // namespace fpga

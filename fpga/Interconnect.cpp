@@ -6,27 +6,27 @@
 
 #include "include/logging.h"
 
-chiplet::Interconnect::Interconnect(sc_module_name name)
+fpga::Interconnect::Interconnect(sc_module_name name)
     : sc_module(name), protocol_target_socket("protocol_target_socket"),
       protocol_initiator_socket("protocol_initiator_socket"),
       interconnect_target_socket("interconnect_target_socket"),
       interconnect_initiator_socket("interconnect_initiator_socket") {
 
   protocol_target_socket.register_nb_transport_fw(
-      this, &chiplet::Interconnect::nb_transport_fw_protocol);
+      this, &fpga::Interconnect::nb_transport_fw_protocol);
   protocol_initiator_socket.register_nb_transport_bw(
-      this, &chiplet::Interconnect::nb_transport_bw_protocol);
+      this, &fpga::Interconnect::nb_transport_bw_protocol);
 
   interconnect_target_socket.register_nb_transport_fw(
-      this, &chiplet::Interconnect::nb_transport_fw_interconnect);
+      this, &fpga::Interconnect::nb_transport_fw_interconnect);
   interconnect_initiator_socket.register_nb_transport_bw(
-      this, &chiplet::Interconnect::nb_transport_bw_interconnect);
+      this, &fpga::Interconnect::nb_transport_bw_interconnect);
 
   SC_THREAD(process_tx_buffer);
   SC_THREAD(process_rx_buffer);
 }
 
-void chiplet::Interconnect::process_tx_buffer() {
+void fpga::Interconnect::process_tx_buffer() {
   while (true) {
     wait(tx_buffer_in_event);
 
@@ -54,7 +54,7 @@ void chiplet::Interconnect::process_tx_buffer() {
   }
 }
 
-void chiplet::Interconnect::process_rx_buffer() {
+void fpga::Interconnect::process_rx_buffer() {
   while (true) {
     wait(rx_buffer_in_event);
 
@@ -85,8 +85,9 @@ void chiplet::Interconnect::process_rx_buffer() {
 // -------------------------------------------------------
 // transport functions
 // -------------------------------------------------------
-tlm_sync_enum chiplet::Interconnect::nb_transport_fw_protocol(
-    tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum
+fpga::Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
+                                             tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "Received request from Protocol Layer");
 
   output_buffer_levels();
@@ -118,7 +119,7 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_protocol(
   return TLM_COMPLETED;
 }
 
-tlm_sync_enum chiplet::Interconnect::nb_transport_fw_interconnect(
+tlm_sync_enum fpga::Interconnect::nb_transport_fw_interconnect(
     tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "Received request from Interconnect");
 
@@ -131,8 +132,8 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_interconnect(
     wait(rx_buffer_out_event);
   }
 
-  // add chiplet to chiplet transfer delay
-  delay += get_chiplet2chiplet_transfer_delay(
+  // add fpga to chiplet transfer delay
+  delay += get_fpga2chiplet_transfer_delay(
       *this, transaction, INTERCONNECT_CLK_CYCLE, INTERCONNECT_WIDTH);
 
   // put transaction in rx buffer
@@ -151,8 +152,9 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_interconnect(
   return TLM_COMPLETED;
 }
 
-tlm_sync_enum chiplet::Interconnect::nb_transport_bw_protocol(
-    tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum
+fpga::Interconnect::nb_transport_bw_protocol(tlm_generic_payload &transaction,
+                                             tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction, "Received response from Protocol Layer");
 
@@ -165,7 +167,7 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_bw_protocol(
   return TLM_ACCEPTED;
 }
 
-tlm_sync_enum chiplet::Interconnect::nb_transport_bw_interconnect(
+tlm_sync_enum fpga::Interconnect::nb_transport_bw_interconnect(
     tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction, "Received response from Interconnect");
@@ -178,7 +180,7 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_bw_interconnect(
 }
 
 // helper functions
-void chiplet::Interconnect::output_buffer_levels() {
+void fpga::Interconnect::output_buffer_levels() {
   SC_LOG_DEBUG_NO_TX(this, "Buffer Levels");
   SC_LOG_DEBUG_NO_TX(this, "Tx buffer: " << tx_buffer.size());
   SC_LOG_DEBUG_NO_TX(this, "Rx buffer: " << rx_buffer.size());

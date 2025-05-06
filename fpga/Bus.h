@@ -10,25 +10,24 @@ using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-namespace chiplet {
+namespace fpga {
 SC_MODULE(Bus) {
 public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket_tagged<Bus> core0_target_socket;
-  simple_target_socket_tagged<Bus> core1_target_socket;
+  simple_target_socket_tagged<Bus> generator_target_socket;
   simple_target_socket_tagged<Bus> interconnect_target_socket;
   simple_initiator_socket_tagged<Bus> interconnect_initiator_socket;
   simple_initiator_socket_tagged<Bus> ram_initiator_socket;
 
-  Bus(sc_module_name name, unsigned int chiplet_id);
+  Bus(sc_module_name name, unsigned int fpga_id);
 
 private:
-  const unsigned int chiplet_id;
+  const unsigned int fpga_id;
   unsigned int current_owner;
 
-  const std::array<std::string, 5> modules = {"Unassigned", "Core0", "Core1",
+  const std::array<std::string, 4> modules = {"Unassigned", "Generator",
                                               "Interconnect", "RAM"};
 
   struct BusRequest {
@@ -56,4 +55,4 @@ private:
   tlm_sync_enum nb_transport_bw(int id, tlm_generic_payload &transaction,
                                 tlm_phase &phase, sc_time &delay);
 };
-}; // namespace chiplet
+}; // namespace fpga

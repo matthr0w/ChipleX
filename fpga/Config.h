@@ -4,7 +4,7 @@
 
 using namespace sc_core;
 
-namespace chiplet {
+namespace fpga {
 // Bus
 // -----------------------------------------------
 // bus width in bytes
@@ -17,7 +17,7 @@ const sc_time BUS_ARBITRATION_DELAY = BUS_CLK_CYCLE;
 // RAM
 // -----------------------------------------------
 // RAM size in kilobytes
-const unsigned int RAM_SIZE = 16;
+const unsigned int RAM_SIZE = 64;
 // RAM width in bytes
 const unsigned int RAM_WIDTH = 1;
 // inverse of clock frequency
@@ -41,5 +41,5 @@ const unsigned int INTERCONNECT_WIDTH = 1;
 // interconnect buffers size
 const unsigned int INTERCONNECT_BUFFER_SIZE = 3;
 // inverse of clock frequency
-const sc_time INTERCONNECT_CLK_CYCLE = sc_time(5, SC_NS);
-}; // namespace chiplet
+const sc_time INTERCONNECT_CLK_CYCLE = sc_time(10, SC_NS);
+}; // namespace fpga

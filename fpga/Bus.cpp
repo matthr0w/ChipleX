@@ -7,26 +7,23 @@
 
 #include "include/logging.h"
 
-chiplet::Bus::Bus(sc_module_name name, unsigned int id)
-    : sc_module(name), chiplet_id(id),
-      core0_target_socket("core0_target_socket"),
-      core1_target_socket("core1_target_socket"),
+fpga::Bus::Bus(sc_module_name name, unsigned int id)
+    : sc_module(name), fpga_id(id),
+      generator_target_socket("generator_target_socket"),
       interconnect_target_socket("interconnect_target_socket"),
       interconnect_initiator_socket("interconnect_initiator_socket"),
       ram_initiator_socket("ram_initiator_socket"), peq_fw("peq_fw"),
       peq_bw("peq_bw"), current_owner(0) {
-  core0_target_socket.register_nb_transport_fw(
-      this, &chiplet::Bus::nb_transport_fw, 1);
-  core1_target_socket.register_nb_transport_fw(
-      this, &chiplet::Bus::nb_transport_fw, 2);
+  generator_target_socket.register_nb_transport_fw(
+      this, &fpga::Bus::nb_transport_fw, 1);
 
   interconnect_target_socket.register_nb_transport_fw(
-      this, &chiplet::Bus::nb_transport_fw, 3);
+      this, &fpga::Bus::nb_transport_fw, 2);
   interconnect_initiator_socket.register_nb_transport_bw(
-      this, &chiplet::Bus::nb_transport_bw, 3);
+      this, &fpga::Bus::nb_transport_bw, 2);
 
-  ram_initiator_socket.register_nb_transport_bw(
-      this, &chiplet::Bus::nb_transport_bw, 4);
+  ram_initiator_socket.register_nb_transport_bw(this,
+                                                &fpga::Bus::nb_transport_bw, 3);
 
   SC_THREAD(process_transaction_fw);
   sensitive << peq_fw.get_event();
@@ -34,7 +31,7 @@ chiplet::Bus::Bus(sc_module_name name, unsigned int id)
   sensitive << peq_bw.get_event();
 }
 
-void chiplet::Bus::process_transaction_fw() {
+void fpga::Bus::process_transaction_fw() {
   tlm_generic_payload *transaction;
   ChipletExtension *ext;
   tlm_phase phase;
@@ -54,7 +51,7 @@ void chiplet::Bus::process_transaction_fw() {
     phase = BEGIN_REQ;
     delay = SC_ZERO_TIME;
 
-    if (ext->destination_id != chiplet_id) {
+    if (ext->destination_id != fpga_id) {
       SC_LOG_DEBUG(this, *transaction,
                    "Forwarding BEGIN_REQ for " << modules[current_owner]
                                                << " to Interconnect");
@@ -86,7 +83,7 @@ void chiplet::Bus::process_transaction_fw() {
   }
 }
 
-void chiplet::Bus::process_transaction_bw() {
+void fpga::Bus::process_transaction_bw() {
   tlm_generic_payload *transaction;
   tlm_phase phase;
   sc_time delay;
@@ -106,11 +103,8 @@ void chiplet::Bus::process_transaction_bw() {
     // begin response
     if (current_owner == 1) {
       tlm_resp =
-          core0_target_socket->nb_transport_bw(*transaction, phase, delay);
+          generator_target_socket->nb_transport_bw(*transaction, phase, delay);
     } else if (current_owner == 2) {
-      tlm_resp =
-          core1_target_socket->nb_transport_bw(*transaction, phase, delay);
-    } else if (current_owner == 3) {
       tlm_resp = interconnect_target_socket->nb_transport_bw(*transaction,
                                                              phase, delay);
     }
@@ -129,7 +123,7 @@ void chiplet::Bus::process_transaction_bw() {
   }
 }
 
-void chiplet::Bus::process_queue() {
+void fpga::Bus::process_queue() {
   tlm_generic_payload *next_transaction;
   ChipletExtension *ext;
   tlm_phase phase;
@@ -146,7 +140,7 @@ void chiplet::Bus::process_queue() {
   next_transaction->get_extension(ext);
 
   delay = get_bus_arbitration_delay(*this, *next_transaction,
-                                    BUS_ARBITRATION_DELAY);
+                                    fpga::BUS_ARBITRATION_DELAY);
 
   SC_LOG_INFO(this, *next_transaction,
               "Granting bus access to " << modules[current_owner]
@@ -159,12 +153,9 @@ void chiplet::Bus::process_queue() {
 
   // end request
   if (current_owner == 1) {
-    tlm_resp =
-        core0_target_socket->nb_transport_bw(*next_transaction, phase, delay);
+    tlm_resp = generator_target_socket->nb_transport_bw(*next_transaction,
+                                                        phase, delay);
   } else if (current_owner == 2) {
-    tlm_resp =
-        core1_target_socket->nb_transport_bw(*next_transaction, phase, delay);
-  } else if (current_owner == 3) {
     tlm_resp = interconnect_target_socket->nb_transport_bw(*next_transaction,
                                                            phase, delay);
   }
@@ -173,9 +164,9 @@ void chiplet::Bus::process_queue() {
 // -------------------------------------------------------
 // transport functions
 // -------------------------------------------------------
-tlm_sync_enum chiplet::Bus::nb_transport_fw(int id,
-                                            tlm_generic_payload &transaction,
-                                            tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum fpga::Bus::nb_transport_fw(int id,
+                                         tlm_generic_payload &transaction,
+                                         tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "Received request from " << modules[id]);
 
   if (phase != BEGIN_REQ) {
@@ -200,8 +191,8 @@ tlm_sync_enum chiplet::Bus::nb_transport_fw(int id,
 
     current_owner = id;
 
-    delay =
-        get_bus_arbitration_delay(*this, transaction, BUS_ARBITRATION_DELAY);
+    delay = get_bus_arbitration_delay(*this, transaction,
+                                      fpga::BUS_ARBITRATION_DELAY);
 
     peq_fw.notify(transaction, delay);
 
@@ -214,7 +205,7 @@ tlm_sync_enum chiplet::Bus::nb_transport_fw(int id,
                                     << " -> enqueuing request from "
                                     << modules[id]);
 
-    if (id == 3) { // to avoid deadlocks prefer interconnect
+    if (id == 2) { // to avoid deadlocks prefer interconnect
       request_queue.push_front({id, &transaction});
     } else {
       request_queue.push_back({id, &transaction});
@@ -224,9 +215,9 @@ tlm_sync_enum chiplet::Bus::nb_transport_fw(int id,
   }
 }
 
-tlm_sync_enum chiplet::Bus::nb_transport_bw(int id,
-                                            tlm_generic_payload &transaction,
-                                            tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum fpga::Bus::nb_transport_bw(int id,
+                                         tlm_generic_payload &transaction,
+                                         tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "Received response from " << modules[id]);
 
   if (phase != BEGIN_RESP) {
@@ -236,7 +227,8 @@ tlm_sync_enum chiplet::Bus::nb_transport_bw(int id,
     exit(1);
   }
 
-  delay += get_bus_arbitration_delay(*this, transaction, BUS_ARBITRATION_DELAY);
+  delay += get_bus_arbitration_delay(*this, transaction,
+                                     fpga::BUS_ARBITRATION_DELAY);
 
   peq_bw.notify(transaction, delay);
 

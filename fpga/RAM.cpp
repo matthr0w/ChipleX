@@ -8,15 +8,15 @@
 using namespace sc_core;
 using namespace tlm;
 
-chiplet::RAM::RAM(sc_module_name name)
+fpga::RAM::RAM(sc_module_name name)
     : sc_module(name), socket("socket"), mem(RAM_SIZE * 1024, 0), peq("peq") {
-  socket.register_nb_transport_fw(this, &chiplet::RAM::nb_transport_fw);
+  socket.register_nb_transport_fw(this, &fpga::RAM::nb_transport_fw);
 
   SC_THREAD(process_transaction);
   sensitive << peq.get_event();
 }
 
-void chiplet::RAM::process_transaction() {
+void fpga::RAM::process_transaction() {
   tlm_generic_payload *transaction;
   tlm_phase phase;
   sc_time delay;
@@ -61,8 +61,8 @@ void chiplet::RAM::process_transaction() {
 // -------------------------------------------------------
 // transport functions
 // -------------------------------------------------------
-tlm_sync_enum chiplet::RAM::nb_transport_fw(tlm_generic_payload &transaction,
-                                            tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum fpga::RAM::nb_transport_fw(tlm_generic_payload &transaction,
+                                         tlm_phase &phase, sc_time &delay) {
   if (phase != BEGIN_REQ) {
     SC_LOG_ERROR(this, transaction,
                  "Protocol Error: Request from Bus with Phase != BEGIN_REQ");

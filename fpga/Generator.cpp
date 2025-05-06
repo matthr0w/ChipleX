@@ -1,4 +1,4 @@
-#include "Core.h"
+#include "Generator.h"
 #include "Config.h"
 
 #include <random>
@@ -10,36 +10,32 @@
 #include "include/globals.h"
 #include "include/logging.h"
 
-chiplet::Core::Core(sc_module_name name, unsigned int chiplet_id,
-                    unsigned int core_id)
-    : sc_module(name), chiplet_id(chiplet_id), core_id(core_id), request(0),
-      socket("socket"), irq_peq("irq_peq") {
-  socket.register_nb_transport_bw(this, &chiplet::Core::nb_transport_bw);
+fpga::Generator::Generator(sc_module_name name, unsigned int fpga_id)
+    : sc_module(name), fpga_id(fpga_id), request(0), socket("socket"),
+      irq_peq("irq_peq") {
+  socket.register_nb_transport_bw(this, &fpga::Generator::nb_transport_bw);
   irq_socket.register_nb_transport_fw(this,
-                                      &chiplet::Core::nb_transport_fw_irq);
+                                      &fpga::Generator::nb_transport_fw_irq);
 
-  SC_THREAD(core_thread);
+  SC_THREAD(gen_thread);
 
   SC_THREAD(handle_interrupt);
   sensitive << irq_peq.get_event();
 }
 
-void chiplet::Core::core_thread() {
-  size_t total_bytes = RAM_SIZE * 1024;
-  size_t half_bytes = total_bytes / 2;
-
+void fpga::Generator::gen_thread() {
   // random number distributions
   thread_local std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<int> delay_dist(10, 100);
+  std::uniform_int_distribution<int> delay_dist(1000, 2000);
 
   std::bernoulli_distribution write_dist(0.5);
   std::uniform_int_distribution<uint32_t> data_dist;
 
   std::uniform_int_distribution<uint32_t> destination_dist(0, num_chiplets);
   std::uniform_int_distribution<uint32_t> address_onchip_dist(0,
-                                                              half_bytes - 1);
-  std::uniform_int_distribution<uint32_t> address_offchip_dist(half_bytes,
-                                                               total_bytes - 1);
+                                                              RAM_SIZE * 1024);
+  std::uniform_int_distribution<uint32_t> address_offchip_dist(
+      0, 16 * 1024); // TODO: config
 
   while (true) {
     // random delay between requests
@@ -53,7 +49,7 @@ void chiplet::Core::core_thread() {
 
     // random RAM address
     uint32_t address;
-    if (destination_id == chiplet_id) {
+    if (destination_id == fpga_id) {
       address = address_onchip_dist(gen);
     } else {
       address = address_offchip_dist(gen);
@@ -71,7 +67,7 @@ void chiplet::Core::core_thread() {
   }
 }
 
-void chiplet::Core::handle_interrupt() {
+void fpga::Generator::handle_interrupt() {
   tlm_generic_payload *transaction;
   ChipletExtension *ext;
   tlm_phase phase;
@@ -94,16 +90,17 @@ void chiplet::Core::handle_interrupt() {
     uint32_t *data = new uint32_t(0);
     unsigned int data_size = 4;
 
-    send_request(TLM_READ_COMMAND, request_id, chiplet_id, address,
+    send_request(TLM_READ_COMMAND, request_id, fpga_id, address,
                  reinterpret_cast<unsigned char *>(data), data_size);
 
     delete transaction;
   }
 }
 
-void chiplet::Core::send_request(tlm_command command, int request_id,
-                                 int destination_id, uint32_t address,
-                                 unsigned char *data, unsigned int data_size) {
+void fpga::Generator::send_request(tlm_command command, int request_id,
+                                   int destination_id, uint32_t address,
+                                   unsigned char *data,
+                                   unsigned int data_size) {
   std::scoped_lock lock(request_mutex);
 
   auto *transaction = new ChipletPayload();
@@ -152,11 +149,12 @@ void chiplet::Core::send_request(tlm_command command, int request_id,
 // transport functions
 // -------------------------------------------------------
 tlm_sync_enum
-chiplet::Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
-                                   tlm_phase &phase, sc_core::sc_time &delay) {
+fpga::Generator::nb_transport_fw_irq(tlm_generic_payload &transaction,
+                                     tlm_phase &phase,
+                                     sc_core::sc_time &delay) {
   if (phase == BEGIN_REQ) {
     delay += get_irq_transfer_delay(*this, transaction,
-                                    INTERCONNECT_PROTOCOL_CLK_CYCLE);
+                                    fpga::INTERCONNECT_PROTOCOL_CLK_CYCLE);
 
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();
@@ -170,17 +168,17 @@ chiplet::Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
   return TLM_ACCEPTED;
 }
 
-tlm_sync_enum chiplet::Core::nb_transport_bw(tlm_generic_payload &transaction,
-                                             tlm_phase &phase,
-                                             sc_core::sc_time &delay) {
+tlm_sync_enum fpga::Generator::nb_transport_bw(tlm_generic_payload &transaction,
+                                               tlm_phase &phase,
+                                               sc_core::sc_time &delay) {
   if (phase == BEGIN_RESP) {
     ChipletExtension *ext;
 
     transaction.get_extension(ext);
 
     if (ext->source_id == -1) {
-      delay += get_bus_transfer_bw_delay(*this, transaction, BUS_CLK_CYCLE,
-                                         BUS_WIDTH);
+      delay += get_bus_transfer_bw_delay(*this, transaction,
+                                         fpga::BUS_CLK_CYCLE, fpga::BUS_WIDTH);
     } else {
       // request to interconnect
       // no direct data response -> no extra delay

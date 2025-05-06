@@ -2,34 +2,32 @@
 #include "Config.h"
 
 #include "common/Delays.h"
-#include "common/RoutingTable.h"
 #include "common/protocol/ChipletPayload.h"
 
+#include "include/globals.h"
 #include "include/logging.h"
 
-chiplet::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
-                                                    unsigned int chiplet_id)
-    : sc_module(name), chiplet_id(chiplet_id),
-      bus_target_socket("bus_target_socket"),
+fpga::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
+                                                 unsigned int fpga_id)
+    : sc_module(name), fpga_id(fpga_id), bus_target_socket("bus_target_socket"),
       bus_initiator_socket("bus_initiator_socket"),
-      core0_irq_initiator_socket("core0_irq_initiator_socket"),
-      core1_irq_initiator_socket("core1_irq_initiator_socket") {
+      generator_irq_initiator_socket("generator_irq_initiator_socket") {
 
   bus_target_socket.register_nb_transport_fw(
-      this, &chiplet::InterconnectProtocol::nb_transport_fw_bus);
+      this, &fpga::InterconnectProtocol::nb_transport_fw_bus);
   bus_initiator_socket.register_nb_transport_bw(
-      this, &chiplet::InterconnectProtocol::nb_transport_bw_bus);
+      this, &fpga::InterconnectProtocol::nb_transport_bw_bus);
 
   interconnect_target_sockets =
-      new simple_target_socket_tagged<chiplet::InterconnectProtocol>[3];
-  interconnect_initiator_sockets =
-      new simple_initiator_socket_tagged<chiplet::InterconnectProtocol>[3];
+      new simple_target_socket_tagged<fpga::InterconnectProtocol>[num_chiplets];
+  interconnect_initiator_sockets = new simple_initiator_socket_tagged<
+      fpga::InterconnectProtocol>[num_chiplets];
 
-  for (unsigned int i = 0; i < 3; ++i) {
+  for (unsigned int i = 0; i < num_chiplets; ++i) {
     interconnect_target_sockets[i].register_nb_transport_fw(
-        this, &chiplet::InterconnectProtocol::nb_transport_fw_interconnect, i);
+        this, &fpga::InterconnectProtocol::nb_transport_fw_interconnect, i);
     interconnect_initiator_sockets[i].register_nb_transport_bw(
-        this, &chiplet::InterconnectProtocol::nb_transport_bw_interconnect, i);
+        this, &fpga::InterconnectProtocol::nb_transport_bw_interconnect, i);
   }
 
   write_address = (RAM_SIZE * 1024) / 2;
@@ -38,7 +36,7 @@ chiplet::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
   SC_THREAD(process_rx_buffer);
 }
 
-void chiplet::InterconnectProtocol::process_tx_buffer() {
+void fpga::InterconnectProtocol::process_tx_buffer() {
   while (true) {
     wait(tx_buffer_in_event);
 
@@ -61,7 +59,7 @@ void chiplet::InterconnectProtocol::process_tx_buffer() {
   }
 }
 
-void chiplet::InterconnectProtocol::process_rx_buffer() {
+void fpga::InterconnectProtocol::process_rx_buffer() {
   while (true) {
     wait(rx_buffer_in_event);
 
@@ -71,8 +69,8 @@ void chiplet::InterconnectProtocol::process_rx_buffer() {
 
       transaction->get_extension(ext);
 
-      bool at_source = ext->source_id == chiplet_id;
-      bool at_destination = ext->destination_id == chiplet_id;
+      bool at_source = ext->source_id == fpga_id;
+      bool at_destination = ext->destination_id == fpga_id;
 
       bool read_op = transaction->get_command() == TLM_READ_COMMAND;
       bool write_op = transaction->get_command() == TLM_WRITE_COMMAND;
@@ -118,7 +116,7 @@ void chiplet::InterconnectProtocol::process_rx_buffer() {
   }
 }
 
-void chiplet::InterconnectProtocol::set_write_address(
+void fpga::InterconnectProtocol::set_write_address(
     tlm_generic_payload &transaction) {
   SC_LOG_DEBUG(this, transaction,
                "Setting write address to: " << std::hex << write_address);
@@ -128,7 +126,7 @@ void chiplet::InterconnectProtocol::set_write_address(
     write_address = (RAM_SIZE * 1024) / 2;
 }
 
-void chiplet::InterconnectProtocol::process_bus_transaction(
+void fpga::InterconnectProtocol::process_bus_transaction(
     tlm_generic_payload &transaction) {
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
@@ -146,7 +144,7 @@ void chiplet::InterconnectProtocol::process_bus_transaction(
   SC_LOG_DEBUG(this, transaction, "Protocol->Bus transmission finished");
 }
 
-void chiplet::InterconnectProtocol::send_to_interconnect(
+void fpga::InterconnectProtocol::send_to_interconnect(
     tlm_generic_payload &transaction) {
   ChipletExtension *ext;
   tlm_phase phase = BEGIN_REQ;
@@ -157,33 +155,23 @@ void chiplet::InterconnectProtocol::send_to_interconnect(
 
   auto *transaction_copy = static_cast<ChipletPayload &>(transaction).clone();
 
-  int route;
-
-  if (ext->destination_id == 0) {
-    route = 0;
-  } else {
-    route = RoutingTable::get_route(chiplet_id, ext->destination_id);
-  }
-
-  SC_LOG_WARN(this, *transaction_copy,
-              "Chiplet ID " << chiplet_id << " Destination "
-                            << ext->destination_id << " Route to Interconnect"
-                            << route);
-
   SC_LOG_DEBUG(this, *transaction_copy,
-               "Protocol->Interconnect" << route << " transmission started");
+               "Protocol->Interconnect" << ext->destination_id
+                                        << " transmission started");
 
-  tlm_resp = interconnect_initiator_sockets[route]->nb_transport_fw(
-      *transaction_copy, phase, delay);
+  tlm_resp =
+      interconnect_initiator_sockets[ext->destination_id - 1]->nb_transport_fw(
+          *transaction_copy, phase, delay);
   if (tlm_resp == TLM_COMPLETED) {
     wait(delay);
   }
 
   SC_LOG_DEBUG(this, *transaction_copy,
-               "Protocol->Interconnect" << route << " transmission finished");
+               "Protocol->Interconnect" << ext->destination_id
+                                        << " transmission finished");
 }
 
-void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
+void fpga::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
   auto *irq = new ChipletPayload();
   ChipletExtension *ext;
   tlm_phase phase = BEGIN_REQ;
@@ -201,13 +189,10 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
   irq->set_core_id(ext->core_id);
   irq->set_destination_id(ext->destination_id);
 
-  SC_LOG_WARN(this, transaction, "Sending IRQ to Core" << ext->core_id);
+  SC_LOG_WARN(this, transaction, "Sending IRQ to Generator" << ext->core_id);
 
-  if (ext->core_id == 0) {
-    tlm_resp = core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
-  } else if (ext->core_id == 1) {
-    tlm_resp = core1_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
-  }
+  tlm_resp =
+      generator_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
 
   if (tlm_resp == TLM_COMPLETED) {
     wait(delay);
@@ -215,14 +200,13 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
 
   delete irq;
 
-  SC_LOG_WARN(this, transaction,
-              "Sending IRQ to Core" << ext->core_id << " done");
+  SC_LOG_WARN(this, transaction, "Sending IRQ to Generator done");
 }
 
 // -------------------------------------------------------
 // transport functions
 // -------------------------------------------------------
-tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
+tlm_sync_enum fpga::InterconnectProtocol::nb_transport_fw_bus(
     tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "Received request from Bus");
 
@@ -243,8 +227,8 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
   ChipletExtension *ext;
   transaction.get_extension(ext);
   if (ext->source_id == -1) {
-    static_cast<ChipletPayload *>(&transaction)->set_source_id(chiplet_id);
-    transaction_copy->set_source_id(chiplet_id);
+    static_cast<ChipletPayload *>(&transaction)->set_source_id(fpga_id);
+    transaction_copy->set_source_id(fpga_id);
   }
 
   // put transaction in tx buffer
@@ -262,7 +246,7 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
   return TLM_COMPLETED;
 }
 
-tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_interconnect(
+tlm_sync_enum fpga::InterconnectProtocol::nb_transport_fw_interconnect(
     int id, tlm_generic_payload &transaction, tlm_phase &phase,
     sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "Received request from Interconnect" << id);
@@ -297,7 +281,7 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_interconnect(
   return TLM_COMPLETED;
 }
 
-tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_bus(
+tlm_sync_enum fpga::InterconnectProtocol::nb_transport_bw_bus(
     tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction, "Received response from Bus");
@@ -314,7 +298,7 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_bus(
   return TLM_ACCEPTED;
 }
 
-tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_interconnect(
+tlm_sync_enum fpga::InterconnectProtocol::nb_transport_bw_interconnect(
     int id, tlm_generic_payload &transaction, tlm_phase &phase,
     sc_time &delay) {
   if (phase == BEGIN_RESP) {
@@ -329,7 +313,7 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_interconnect(
 }
 
 // helper functions
-void chiplet::InterconnectProtocol::output_buffer_levels() {
+void fpga::InterconnectProtocol::output_buffer_levels() {
   SC_LOG_DEBUG_NO_TX(this, "Buffer Levels");
   SC_LOG_DEBUG_NO_TX(this, "Tx buffer: " << tx_buffer.size());
   SC_LOG_DEBUG_NO_TX(this, "Rx buffer: " << rx_buffer.size());

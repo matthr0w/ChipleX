@@ -2,6 +2,7 @@
 #include <vector>
 
 #include "chiplet/Chiplet.h"
+#include "fpga/FPGA.h"
 
 #include "common/RoutingTable.h"
 
@@ -10,6 +11,7 @@
 
 using namespace sc_core;
 using namespace tlm;
+using namespace tlm_utils;
 
 bool print_debug_msgs = false;
 unsigned int num_chiplets = 2;
@@ -40,22 +42,37 @@ int sc_main(int argc, char *argv[]) {
   chiplets.reserve(num_chiplets);
 
   for (unsigned int i = 0; i < num_chiplets; ++i) {
-    std::string name = "Chiplet" + std::to_string(i);
+    std::string name =
+        "Chiplet" + std::to_string(i + 1); // id == 0 is reserved for FPGA
     chiplets.push_back(new Chiplet(name.c_str()));
   }
+
+  // create FPGA
+  FPGA fpga("FPGA");
 
   // connect chiplets in a ring topology
   for (unsigned int i = 0; i < num_chiplets; ++i) {
     int next = (i + 1) % num_chiplets;
     int prev = (i - 1 + num_chiplets) % num_chiplets;
 
-    // connect interconnect1 to next chiplet interconnect0
-    chiplets[i]->interconnect1.interconnect_initiator_socket.bind(
-        chiplets[next]->interconnect0.interconnect_target_socket);
+    // connect interconnect2 to next chiplet interconnect1
+    chiplets[i]->interconnects[2]->interconnect_initiator_socket.bind(
+        chiplets[next]->interconnects[1]->interconnect_target_socket);
 
-    // connect interconnect0 to previous chiplet interconnect1
-    chiplets[i]->interconnect0.interconnect_initiator_socket.bind(
-        chiplets[prev]->interconnect1.interconnect_target_socket);
+    // connect interconnect1 to previous chiplet interconnect2
+    chiplets[i]->interconnects[1]->interconnect_initiator_socket.bind(
+        chiplets[prev]->interconnects[2]->interconnect_target_socket);
+  }
+
+  // connect chiplets to FPGA
+  for (unsigned int i = 0; i < num_chiplets; ++i) {
+    // connect interconnect0 to FPGA interconnect
+    chiplets[i]->interconnects[0]->interconnect_initiator_socket.bind(
+        fpga.interconnects[i]->interconnect_target_socket);
+
+    // connect FPGA interconnect to interconnect0
+    fpga.interconnects[i]->interconnect_initiator_socket.bind(
+        chiplets[i]->interconnects[0]->interconnect_target_socket);
   }
 
   sc_start(sim_duration);
