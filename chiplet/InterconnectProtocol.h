@@ -27,6 +27,7 @@ public:
   simple_initiator_socket<InterconnectProtocol> core1_irq_initiator_socket;
 
   InterconnectProtocol(sc_core::sc_module_name name, unsigned int chiplet_id);
+  ~InterconnectProtocol();
 
 private:
   const unsigned int chiplet_id;

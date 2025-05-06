@@ -36,6 +36,11 @@ fpga::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
   SC_THREAD(process_rx_buffer);
 }
 
+fpga::InterconnectProtocol::~InterconnectProtocol() {
+  delete[] interconnect_target_sockets;
+  delete[] interconnect_initiator_sockets;
+}
+
 void fpga::InterconnectProtocol::process_tx_buffer() {
   while (true) {
     wait(tx_buffer_in_event);

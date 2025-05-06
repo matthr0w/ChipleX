@@ -23,6 +23,7 @@ public:
   std::vector<chiplet::Interconnect *> interconnects;
 
   SC_CTOR(Chiplet);
+  ~Chiplet();
 
 private:
   chiplet::Bus bus;

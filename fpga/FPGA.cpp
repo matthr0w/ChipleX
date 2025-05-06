@@ -16,6 +16,13 @@ FPGA::FPGA(sc_module_name name)
   initialize();
 }
 
+FPGA::~FPGA() {
+  for (auto *interconnect : interconnects) {
+    delete interconnect;
+  }
+  interconnects.clear();
+}
+
 void FPGA::initialize() {
   // sockets
   // generator

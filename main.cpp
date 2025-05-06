@@ -77,5 +77,11 @@ int sc_main(int argc, char *argv[]) {
 
   sc_start(sim_duration);
 
+  // clean up chiplets
+  for (auto *chiplet : chiplets) {
+    delete chiplet;
+  }
+  chiplets.clear();
+
   return 0;
 }

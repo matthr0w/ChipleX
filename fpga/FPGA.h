@@ -19,6 +19,7 @@ public:
   std::vector<fpga::Interconnect *> interconnects;
 
   SC_CTOR(FPGA);
+  ~FPGA();
 
 private:
   fpga::Bus bus;

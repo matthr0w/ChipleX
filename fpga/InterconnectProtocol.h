@@ -25,6 +25,7 @@ public:
   simple_initiator_socket<InterconnectProtocol> generator_irq_initiator_socket;
 
   InterconnectProtocol(sc_core::sc_module_name name, unsigned int fpga_id);
+  ~InterconnectProtocol();
 
 private:
   const unsigned int fpga_id;

@@ -15,6 +15,13 @@ Chiplet::Chiplet(sc_module_name name)
   initialize();
 }
 
+Chiplet::~Chiplet() {
+  for (auto *interconnect : interconnects) {
+    delete interconnect;
+  }
+  interconnects.clear();
+}
+
 void Chiplet::initialize() {
   // sockets
   // cores
