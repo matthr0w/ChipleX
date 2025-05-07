@@ -1,5 +1,9 @@
 #include "RoutingTable.h"
 
+#include <algorithm>
+
+#include "include/globals.h"
+
 std::vector<std::vector<int>> RoutingTable::table;
 
 void RoutingTable::initialize(unsigned int num_chiplets) {
@@ -27,5 +31,59 @@ void RoutingTable::initialize(unsigned int num_chiplets) {
 }
 
 int RoutingTable::get_route(unsigned int from, unsigned int to) {
+  if (from == to)
+    return -1;
+
+  // FPGA is source
+  if (from == 0) {
+    if (connections.empty())
+      return -1;
+
+    int min_dist = num_chiplets + 1;
+    int closest_chiplet = -1;
+
+    for (unsigned int conn : connections) {
+      int cw_dist = (to - conn + num_chiplets) % num_chiplets;
+      int ccw_dist = (conn - to + num_chiplets) % num_chiplets;
+      int dist = std::min(cw_dist, ccw_dist);
+
+      if (dist < min_dist) {
+        min_dist = dist;
+        closest_chiplet = conn;
+      }
+    }
+
+    return closest_chiplet;
+  }
+
+  // FPGA is destination
+  if (to == 0) {
+    if (connections.empty())
+      return -1;
+
+    // source has connection to FPGA -> Interconnect0
+    if (std::find(connections.begin(), connections.end(), from) !=
+        connections.end()) {
+      return 0;
+    }
+
+    int min_dist = num_chiplets + 1;
+    int closest_chiplet = -1;
+
+    for (unsigned int conn : connections) {
+      int cw_dist = (conn - from + num_chiplets) % num_chiplets;
+      int ccw_dist = (from - conn + num_chiplets) % num_chiplets;
+      int dist = std::min(cw_dist, ccw_dist);
+
+      if (dist < min_dist) {
+        min_dist = dist;
+        closest_chiplet = conn;
+      }
+    }
+
+    return table[from][closest_chiplet];
+  }
+
+  // chiplet-to-chiplet routing
   return table[from][to];
 }

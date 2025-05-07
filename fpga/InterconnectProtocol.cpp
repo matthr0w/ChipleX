@@ -2,6 +2,7 @@
 #include "Config.h"
 
 #include "common/Delays.h"
+#include "common/RoutingTable.h"
 #include "common/protocol/ChipletPayload.h"
 
 #include "include/globals.h"
@@ -161,13 +162,18 @@ void fpga::InterconnectProtocol::send_to_interconnect(
 
   auto *transaction_copy = static_cast<ChipletPayload &>(transaction).clone();
 
+  int route = RoutingTable::get_route(fpga_id, ext->destination_id);
+
+  SC_LOG_WARN(this, *transaction_copy,
+              "FPGA ID " << fpga_id << " Destination " << ext->destination_id
+                         << " Route to Interconnect" << route);
+
   SC_LOG_DEBUG(this, *transaction_copy,
                "Protocol->Interconnect" << ext->destination_id
                                         << " transmission started");
 
-  tlm_resp =
-      interconnect_initiator_sockets[ext->destination_id - 1]->nb_transport_fw(
-          *transaction_copy, phase, delay);
+  tlm_resp = interconnect_initiator_sockets[route - 1]->nb_transport_fw(
+      *transaction_copy, phase, delay);
   if (tlm_resp == TLM_COMPLETED) {
     wait(delay);
   }

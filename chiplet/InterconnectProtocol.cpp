@@ -162,13 +162,7 @@ void chiplet::InterconnectProtocol::send_to_interconnect(
 
   auto *transaction_copy = static_cast<ChipletPayload &>(transaction).clone();
 
-  int route;
-
-  if (ext->destination_id == 0) {
-    route = 0;
-  } else {
-    route = RoutingTable::get_route(chiplet_id, ext->destination_id);
-  }
+  int route = RoutingTable::get_route(chiplet_id, ext->destination_id);
 
   SC_LOG_WARN(this, *transaction_copy,
               "Chiplet ID " << chiplet_id << " Destination "

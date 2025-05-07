@@ -35,15 +35,7 @@ void chiplet::Core::core_thread() {
   std::bernoulli_distribution write_dist(0.5);
   std::uniform_int_distribution<uint32_t> data_dist;
 
-  std::uniform_int_distribution<uint32_t> destination_dist(0, 0);
-
-  // if chiplet connected to FPGA -> can send to FPGA (id == 0)
-  if (std::find(connections.begin(), connections.end(), chiplet_id) !=
-      connections.end()) {
-    destination_dist = std::uniform_int_distribution<uint32_t>(0, num_chiplets);
-  } else {
-    destination_dist = std::uniform_int_distribution<uint32_t>(1, num_chiplets);
-  }
+  std::uniform_int_distribution<uint32_t> destination_dist(0, num_chiplets);
 
   std::uniform_int_distribution<uint32_t> address_onchip_dist(0,
                                                               half_bytes - 1);
