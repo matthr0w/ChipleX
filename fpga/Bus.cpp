@@ -140,7 +140,7 @@ void fpga::Bus::process_queue() {
   next_transaction->get_extension(ext);
 
   delay = get_bus_arbitration_delay(*this, *next_transaction,
-                                    fpga::BUS_ARBITRATION_DELAY);
+                                    Config::instance().busArbitrationDelay());
 
   SC_LOG_INFO(this, *next_transaction,
               "Granting bus access to " << modules[current_owner]
@@ -192,7 +192,7 @@ tlm_sync_enum fpga::Bus::nb_transport_fw(int id,
     current_owner = id;
 
     delay = get_bus_arbitration_delay(*this, transaction,
-                                      fpga::BUS_ARBITRATION_DELAY);
+                                      Config::instance().busArbitrationDelay());
 
     peq_fw.notify(transaction, delay);
 
@@ -228,7 +228,7 @@ tlm_sync_enum fpga::Bus::nb_transport_bw(int id,
   }
 
   delay += get_bus_arbitration_delay(*this, transaction,
-                                     fpga::BUS_ARBITRATION_DELAY);
+                                     Config::instance().busArbitrationDelay());
 
   peq_bw.notify(transaction, delay);
 

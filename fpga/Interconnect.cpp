@@ -94,15 +94,15 @@ fpga::Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
-  if (tx_buffer.size() == INTERCONNECT_BUFFER_SIZE) {
+  if (tx_buffer.size() == Config::instance().interconnectBufferSize()) {
     SC_LOG_WARN(this, transaction, "Tx buffer full -> waiting...");
     wait(tx_buffer_out_event);
   }
 
   // add protocol layer to interconnect transfer delay
   delay += get_protocol2interconnect_transfer_delay(
-      *this, transaction, INTERCONNECT_PROTOCOL_CLK_CYCLE,
-      INTERCONNECT_PROTOCOL_WIDTH);
+      *this, transaction, Config::instance().interconnectProtocolClkCycle(),
+      Config::instance().interconnectProtocolWidth());
 
   // put transaction in tx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Tx buffer");
@@ -127,14 +127,15 @@ tlm_sync_enum fpga::Interconnect::nb_transport_fw_interconnect(
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
-  if (rx_buffer.size() == INTERCONNECT_BUFFER_SIZE) {
+  if (rx_buffer.size() == Config::instance().interconnectBufferSize()) {
     SC_LOG_WARN(this, transaction, "Rx buffer full -> waiting...");
     wait(rx_buffer_out_event);
   }
 
   // add fpga to chiplet transfer delay
   delay += get_fpga2chiplet_transfer_delay(
-      *this, transaction, INTERCONNECT_CLK_CYCLE, INTERCONNECT_WIDTH);
+      *this, transaction, Config::instance().interconnectClkCycle(),
+      Config::instance().interconnectWidth());
 
   // put transaction in rx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");

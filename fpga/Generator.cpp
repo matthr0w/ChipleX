@@ -32,8 +32,8 @@ void fpga::Generator::gen_thread() {
   std::uniform_int_distribution<uint32_t> data_dist;
 
   std::uniform_int_distribution<uint32_t> destination_dist(0, num_chiplets);
-  std::uniform_int_distribution<uint32_t> address_onchip_dist(0,
-                                                              RAM_SIZE * 1024);
+  std::uniform_int_distribution<uint32_t> address_onchip_dist(
+      0, Config::instance().ramSize() * 1024);
   std::uniform_int_distribution<uint32_t> address_offchip_dist(
       0, 16 * 1024); // TODO: config
 
@@ -153,8 +153,8 @@ fpga::Generator::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                      tlm_phase &phase,
                                      sc_core::sc_time &delay) {
   if (phase == BEGIN_REQ) {
-    delay += get_irq_transfer_delay(*this, transaction,
-                                    fpga::INTERCONNECT_PROTOCOL_CLK_CYCLE);
+    delay += get_irq_transfer_delay(
+        *this, transaction, Config::instance().interconnectProtocolClkCycle());
 
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();
@@ -178,7 +178,8 @@ tlm_sync_enum fpga::Generator::nb_transport_bw(tlm_generic_payload &transaction,
 
     if (ext->source_id == -1) {
       delay += get_bus_transfer_bw_delay(*this, transaction,
-                                         fpga::BUS_CLK_CYCLE, fpga::BUS_WIDTH);
+                                         Config::instance().busClkCycle(),
+                                         Config::instance().busWidth());
     } else {
       // request to interconnect
       // no direct data response -> no extra delay

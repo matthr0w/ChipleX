@@ -5,11 +5,22 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+include(FetchContent)
+
+# SystemC library
 find_library(SYSTEMC_LIB 
     NAMES libsystemc.a 
     PATHS $ENV{SYSTEMC_PATH}/lib64
     REQUIRED
 )
+
+# YAML library
+FetchContent_Declare(
+  yaml-cpp
+  GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(yaml-cpp)
 
 # find source files
 # common sources
@@ -30,6 +41,8 @@ target_include_directories(sim PRIVATE ${PROJECT_SOURCE_DIR})
 
 # link SystemC library
 target_link_libraries(sim PRIVATE ${SYSTEMC_LIB})
+# link YAML library
+target_link_libraries(sim PUBLIC yaml-cpp::yaml-cpp)
 
 # link statically, and disable PIE (VSCodium flatpak enforces PIE by default)
 set(CMAKE_EXE_LINKER_FLAGS "-static -no-pie")

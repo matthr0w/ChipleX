@@ -1,0 +1,20 @@
+bus:
+  width: 4 # bytes
+  clk_cycle: 5.0 # ns
+  arbitration_delay: 5.0 # ns
+
+ram:
+  size: 64 # KB
+  width: 1 # bytes
+  clk_cycle: 3.0 # ns
+  access_delay: 20.0 # ns
+
+interconnect_protocol:
+  width: 4 # bytes
+  buffer_size: 3 # packets
+  clk_cycle: 5.0 # ns
+
+interconnect:
+  width: 1 # bytes
+  buffer_size: 3 # packets
+  clk_cycle: 10.0 # ns

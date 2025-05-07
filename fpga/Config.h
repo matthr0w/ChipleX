@@ -1,45 +1,67 @@
 #pragma once
 
-#include "systemc"
+#include <string>
+#include <systemc>
+
+#include <yaml-cpp/yaml.h>
 
 using namespace sc_core;
 
 namespace fpga {
-// Bus
-// -----------------------------------------------
-// bus width in bytes
-const unsigned int BUS_WIDTH = 4;
-// inverse of clock frequency
-const sc_time BUS_CLK_CYCLE = sc_time(5, SC_NS);
-// fixed arbitration delay
-const sc_time BUS_ARBITRATION_DELAY = BUS_CLK_CYCLE;
+class Config {
+public:
+  static Config &instance();
 
-// RAM
-// -----------------------------------------------
-// RAM size in kilobytes
-const unsigned int RAM_SIZE = 64;
-// RAM width in bytes
-const unsigned int RAM_WIDTH = 1;
-// inverse of clock frequency
-const sc_time RAM_CLK_CYCLE = sc_time(3, SC_NS);
-// fixed access delay
-const sc_time RAM_ACCESS_DELAY = sc_time(20, SC_NS);
+  void loadFromFile(const std::string &filename);
+  void printConfig() const;
 
-// Interconnect Protocol Layer
-// -----------------------------------------------
-// interconnect protocol layer width in bytes
-const unsigned int INTERCONNECT_PROTOCOL_WIDTH = 4;
-// interconnect protocol layer buffers size
-const unsigned int INTERCONNECT_PROTOCOL_BUFFER_SIZE = 3;
-// inverse of clock frequency
-const sc_time INTERCONNECT_PROTOCOL_CLK_CYCLE = sc_time(5, SC_NS);
+  // accessors
+  unsigned int busWidth() const { return bus_width; }
+  sc_time busClkCycle() const { return bus_clk_cycle; }
+  sc_time busArbitrationDelay() const { return bus_arbitration_delay; }
 
-// Interconnect
-// -----------------------------------------------
-// interconnect width in bytes
-const unsigned int INTERCONNECT_WIDTH = 1;
-// interconnect buffers size
-const unsigned int INTERCONNECT_BUFFER_SIZE = 3;
-// inverse of clock frequency
-const sc_time INTERCONNECT_CLK_CYCLE = sc_time(10, SC_NS);
-}; // namespace fpga
+  unsigned int ramSize() const { return ram_size; }
+  unsigned int ramWidth() const { return ram_width; }
+  sc_time ramClkCycle() const { return ram_clk_cycle; }
+  sc_time ramAccessDelay() const { return ram_access_delay; }
+
+  unsigned int interconnectProtocolWidth() const {
+    return interconnect_protocol_width;
+  }
+  unsigned int interconnectProtocolBufferSize() const {
+    return interconnect_protocol_buffer_size;
+  }
+  sc_time interconnectProtocolClkCycle() const {
+    return interconnect_protocol_clk_cycle;
+  }
+
+  unsigned int interconnectWidth() const { return interconnect_width; }
+  unsigned int interconnectBufferSize() const {
+    return interconnect_buffer_size;
+  }
+  sc_time interconnectClkCycle() const { return interconnect_clk_cycle; }
+
+private:
+  Config() = default;
+
+  void validateConfig(const YAML::Node &config);
+
+  // internals
+  unsigned int bus_width;
+  sc_time bus_clk_cycle;
+  sc_time bus_arbitration_delay;
+
+  unsigned int ram_size;
+  unsigned int ram_width;
+  sc_time ram_clk_cycle;
+  sc_time ram_access_delay;
+
+  unsigned int interconnect_protocol_width;
+  unsigned int interconnect_protocol_buffer_size;
+  sc_time interconnect_protocol_clk_cycle;
+
+  unsigned int interconnect_width;
+  unsigned int interconnect_buffer_size;
+  sc_time interconnect_clk_cycle;
+};
+} // namespace fpga

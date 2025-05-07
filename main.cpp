@@ -2,6 +2,7 @@
 #include <vector>
 
 #include "chiplet/Chiplet.h"
+#include "fpga/Config.h"
 #include "fpga/FPGA.h"
 
 #include "common/RoutingTable.h"
@@ -27,7 +28,7 @@ int sc_main(int argc, char *argv[]) {
     } else if (std::strncmp(argv[i], "--chiplets=", 11) == 0) {
       num_chiplets = std::atoi(argv[i] + 11);
       if (num_chiplets < 2) {
-        SC_REPORT_ERROR("System", "Number of chiplets must be at least 2");
+        std::cerr << "[ERROR] Number of chiplets must be at least 2. Exiting.\n";
         return 1;
       }
     } else if (std::strcmp(argv[i], "--debug") == 0) {
@@ -35,6 +36,16 @@ int sc_main(int argc, char *argv[]) {
     }
   }
 
+  // load FPGA config
+  try {
+    fpga::Config::instance().loadFromFile("config_fpga.yaml");
+    fpga::Config::instance().printConfig();
+  } catch (...) {
+    std::cerr << "[ERROR] Failed to load FPGA configuration. Exiting.\n";
+    return 1;
+  }
+
+  // initialize routing table
   RoutingTable::initialize(num_chiplets);
 
   // create chiplets
