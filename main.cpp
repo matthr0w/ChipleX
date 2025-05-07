@@ -2,6 +2,7 @@
 #include <vector>
 
 #include "chiplet/Chiplet.h"
+#include "chiplet/Config.h"
 #include "fpga/Config.h"
 #include "fpga/FPGA.h"
 
@@ -28,12 +29,22 @@ int sc_main(int argc, char *argv[]) {
     } else if (std::strncmp(argv[i], "--chiplets=", 11) == 0) {
       num_chiplets = std::atoi(argv[i] + 11);
       if (num_chiplets < 2) {
-        std::cerr << "[ERROR] Number of chiplets must be at least 2. Exiting.\n";
+        std::cerr
+            << "[ERROR] Number of chiplets must be at least 2. Exiting.\n";
         return 1;
       }
     } else if (std::strcmp(argv[i], "--debug") == 0) {
       print_debug_msgs = true;
     }
+  }
+
+  // load chiplet config
+  try {
+    chiplet::Config::instance().loadFromFile("config_chiplet.yaml");
+    chiplet::Config::instance().printConfig();
+  } catch (...) {
+    std::cerr << "[ERROR] Failed to load Chiplet configuration. Exiting.\n";
+    return 1;
   }
 
   // load FPGA config

@@ -2,12 +2,12 @@
 
 #include <iostream>
 
-fpga::Config &fpga::Config::instance() {
+chiplet::Config &chiplet::Config::instance() {
   static Config instance;
   return instance;
 }
 
-void fpga::Config::loadFromFile(const std::string &filename) {
+void chiplet::Config::loadFromFile(const std::string &filename) {
   YAML::Node config = YAML::LoadFile(filename);
 
   try {
@@ -41,7 +41,7 @@ void fpga::Config::loadFromFile(const std::string &filename) {
       sc_time(config["interconnect"]["clk_cycle"].as<double>(), SC_NS);
 }
 
-void fpga::Config::validateConfig(const YAML::Node &config) {
+void chiplet::Config::validateConfig(const YAML::Node &config) {
   auto check = [](const YAML::Node &node, const std::string &keyPath) {
     if (!node || node.IsNull()) {
       throw std::runtime_error("Missing config section: " + keyPath);
@@ -73,8 +73,8 @@ void fpga::Config::validateConfig(const YAML::Node &config) {
   check(config["interconnect"]["clk_cycle"], "interconnect.clk_cycle");
 }
 
-void fpga::Config::printConfig() const {
-  std::cout << "\n=== FPGA Configuration ===\n";
+void chiplet::Config::printConfig() const {
+  std::cout << "\n=== Chiplet Configuration ===\n";
   std::cout << "Bus:\n";
   std::cout << "  Width: " << bus_width << " bytes\n";
   std::cout << "  Clock Cycle: " << bus_clk_cycle << "\n";

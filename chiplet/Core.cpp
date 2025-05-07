@@ -25,7 +25,7 @@ chiplet::Core::Core(sc_module_name name, unsigned int chiplet_id,
 }
 
 void chiplet::Core::core_thread() {
-  size_t total_bytes = RAM_SIZE * 1024;
+  size_t total_bytes = Config::instance().ramSize() * 1024;
   size_t half_bytes = total_bytes / 2;
 
   // random number distributions
@@ -155,8 +155,8 @@ tlm_sync_enum
 chiplet::Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                    tlm_phase &phase, sc_core::sc_time &delay) {
   if (phase == BEGIN_REQ) {
-    delay += get_irq_transfer_delay(*this, transaction,
-                                    INTERCONNECT_PROTOCOL_CLK_CYCLE);
+    delay += get_irq_transfer_delay(
+        *this, transaction, Config::instance().interconnectProtocolClkCycle());
 
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();
@@ -179,8 +179,9 @@ tlm_sync_enum chiplet::Core::nb_transport_bw(tlm_generic_payload &transaction,
     transaction.get_extension(ext);
 
     if (ext->source_id == -1) {
-      delay += get_bus_transfer_bw_delay(*this, transaction, BUS_CLK_CYCLE,
-                                         BUS_WIDTH);
+      delay += get_bus_transfer_bw_delay(*this, transaction,
+                                         Config::instance().busClkCycle(),
+                                         Config::instance().busWidth());
     } else {
       // request to interconnect
       // no direct data response -> no extra delay

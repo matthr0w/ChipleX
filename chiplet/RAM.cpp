@@ -9,7 +9,8 @@ using namespace sc_core;
 using namespace tlm;
 
 chiplet::RAM::RAM(sc_module_name name)
-    : sc_module(name), socket("socket"), mem(RAM_SIZE * 1024, 0), peq("peq") {
+    : sc_module(name), socket("socket"),
+      mem(Config::instance().ramSize() * 1024, 0), peq("peq") {
   socket.register_nb_transport_fw(this, &chiplet::RAM::nb_transport_fw);
 
   SC_THREAD(process_transaction);
@@ -44,8 +45,9 @@ void chiplet::RAM::process_transaction() {
     }
 
     // RAM access delay
-    wait(get_mem_access_delay(*this, *transaction, RAM_CLK_CYCLE,
-                              RAM_ACCESS_DELAY, RAM_WIDTH));
+    wait(get_mem_access_delay(
+        *this, *transaction, Config::instance().ramClkCycle(),
+        Config::instance().ramAccessDelay(), Config::instance().ramWidth()));
 
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
@@ -69,8 +71,9 @@ tlm_sync_enum chiplet::RAM::nb_transport_fw(tlm_generic_payload &transaction,
     exit(1);
   }
 
-  delay +=
-      get_bus_transfer_fw_delay(*this, transaction, BUS_CLK_CYCLE, BUS_WIDTH);
+  delay += get_bus_transfer_fw_delay(*this, transaction,
+                                     Config::instance().busClkCycle(),
+                                     Config::instance().busWidth());
 
   peq.notify(transaction, delay);
 

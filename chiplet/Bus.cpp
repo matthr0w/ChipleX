@@ -146,7 +146,7 @@ void chiplet::Bus::process_queue() {
   next_transaction->get_extension(ext);
 
   delay = get_bus_arbitration_delay(*this, *next_transaction,
-                                    BUS_ARBITRATION_DELAY);
+                                    Config::instance().busArbitrationDelay());
 
   SC_LOG_INFO(this, *next_transaction,
               "Granting bus access to " << modules[current_owner]
@@ -200,8 +200,8 @@ tlm_sync_enum chiplet::Bus::nb_transport_fw(int id,
 
     current_owner = id;
 
-    delay =
-        get_bus_arbitration_delay(*this, transaction, BUS_ARBITRATION_DELAY);
+    delay = get_bus_arbitration_delay(*this, transaction,
+                                      Config::instance().busArbitrationDelay());
 
     peq_fw.notify(transaction, delay);
 
@@ -236,7 +236,8 @@ tlm_sync_enum chiplet::Bus::nb_transport_bw(int id,
     exit(1);
   }
 
-  delay += get_bus_arbitration_delay(*this, transaction, BUS_ARBITRATION_DELAY);
+  delay += get_bus_arbitration_delay(*this, transaction,
+                                     Config::instance().busArbitrationDelay());
 
   peq_bw.notify(transaction, delay);
 

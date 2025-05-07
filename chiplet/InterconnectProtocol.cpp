@@ -32,7 +32,7 @@ chiplet::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
         this, &chiplet::InterconnectProtocol::nb_transport_bw_interconnect, i);
   }
 
-  write_address = (RAM_SIZE * 1024) / 2;
+  write_address = (Config::instance().ramSize() * 1024) / 2;
 
   SC_THREAD(process_tx_buffer);
   SC_THREAD(process_rx_buffer);
@@ -129,8 +129,8 @@ void chiplet::InterconnectProtocol::set_write_address(
                "Setting write address to: " << std::hex << write_address);
   transaction.set_address(write_address);
   write_address += sizeof(uint32_t);
-  if (write_address >= RAM_SIZE * 1024)
-    write_address = (RAM_SIZE * 1024) / 2;
+  if (write_address >= Config::instance().ramSize() * 1024)
+    write_address = (Config::instance().ramSize() * 1024) / 2;
 }
 
 void chiplet::InterconnectProtocol::process_bus_transaction(
@@ -235,14 +235,15 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
-  if (tx_buffer.size() == INTERCONNECT_PROTOCOL_BUFFER_SIZE) {
+  if (tx_buffer.size() == Config::instance().interconnectProtocolBufferSize()) {
     SC_LOG_WARN(this, transaction, "Tx buffer full -> waiting...");
     wait(tx_buffer_out_event);
   }
 
   // add bus transfer delay
-  delay +=
-      get_bus_transfer_fw_delay(*this, transaction, BUS_CLK_CYCLE, BUS_WIDTH);
+  delay += get_bus_transfer_fw_delay(*this, transaction,
+                                     Config::instance().busClkCycle(),
+                                     Config::instance().busWidth());
 
   // set source id
   ChipletExtension *ext;
@@ -276,15 +277,15 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_interconnect(
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
-  if (rx_buffer.size() == INTERCONNECT_PROTOCOL_BUFFER_SIZE) {
+  if (rx_buffer.size() == Config::instance().interconnectProtocolBufferSize()) {
     SC_LOG_WARN(this, transaction, "Rx buffer full -> waiting...");
     wait(rx_buffer_out_event);
   }
 
   // add interconnect to protocol layer transfer delay
   delay += get_protocol2interconnect_transfer_delay(
-      *this, transaction, INTERCONNECT_PROTOCOL_CLK_CYCLE,
-      INTERCONNECT_PROTOCOL_WIDTH);
+      *this, transaction, Config::instance().interconnectProtocolClkCycle(),
+      Config::instance().interconnectProtocolWidth());
 
   // put transaction in rx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");
@@ -307,8 +308,9 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_bus(
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction, "Received response from Bus");
 
-    delay +=
-        get_bus_transfer_bw_delay(*this, transaction, BUS_CLK_CYCLE, BUS_WIDTH);
+    delay += get_bus_transfer_bw_delay(*this, transaction,
+                                       Config::instance().busClkCycle(),
+                                       Config::instance().busWidth());
 
     rx_transaction_done.notify(delay);
 
