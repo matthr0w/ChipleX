@@ -31,7 +31,11 @@ void fpga::Generator::gen_thread() {
   std::bernoulli_distribution write_dist(0.5);
   std::uniform_int_distribution<uint32_t> data_dist;
 
-  std::uniform_int_distribution<uint32_t> destination_dist(0, num_chiplets);
+  // possible destinations: connected chiplets + FPGA (id == 0)
+  std::vector<unsigned int> destinations = connections;
+  destinations.push_back(0);
+  std::uniform_int_distribution<size_t> index_dist(0, destinations.size() - 1);
+
   std::uniform_int_distribution<uint32_t> address_onchip_dist(
       0, Config::instance().ramSize() * 1024);
   std::uniform_int_distribution<uint32_t> address_offchip_dist(
@@ -42,7 +46,7 @@ void fpga::Generator::gen_thread() {
     wait(delay_dist(gen), SC_NS);
 
     // random destination id
-    int destination_id = destination_dist(gen);
+    int destination_id = destinations[index_dist(gen)];
 
     // read or write
     bool do_write = write_dist(gen);
