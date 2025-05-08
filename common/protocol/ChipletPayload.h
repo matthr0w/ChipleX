@@ -14,7 +14,7 @@ public:
   ~ChipletPayload() {
     // data buffer
     if (this->get_data_ptr()) {
-      delete this->get_data_ptr();
+      delete[] this->get_data_ptr();
     }
 
     // extension

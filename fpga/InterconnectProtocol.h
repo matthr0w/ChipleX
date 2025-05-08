@@ -16,7 +16,8 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket_tagged<InterconnectProtocol> *interconnect_target_sockets;
+  simple_target_socket_tagged<InterconnectProtocol>
+      *interconnect_target_sockets;
   simple_initiator_socket_tagged<InterconnectProtocol>
       *interconnect_initiator_sockets;
 
@@ -34,11 +35,14 @@ private:
   void process_tx_buffer();
   void process_rx_buffer();
 
-  void set_write_address(tlm_generic_payload & transaction);
-
   void process_bus_transaction(tlm_generic_payload & transaction);
   void send_to_interconnect(tlm_generic_payload & transaction);
   void send_irq(tlm_generic_payload & transaction);
+
+  uint16_t calculate_crc16(const uint8_t *data, size_t length);
+  bool prepend_crc(tlm_generic_payload & transaction);
+  bool remove_crc(tlm_generic_payload & transaction);
+  void set_write_address(tlm_generic_payload & transaction);
 
   std::deque<tlm_generic_payload *> tx_buffer;
   std::deque<tlm_generic_payload *> rx_buffer;

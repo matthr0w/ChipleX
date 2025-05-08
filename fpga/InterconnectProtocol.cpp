@@ -52,7 +52,11 @@ void fpga::InterconnectProtocol::process_tx_buffer() {
 
       transaction->get_extension(ext);
 
-      // entry point for protocol methods
+      // calculate crc
+      if (!prepend_crc(*transaction)) {
+        SC_LOG_ERROR(this, static_cast<ChipletPayload &>(*transaction),
+                     "CRC calculation failed!");
+      };
 
       send_to_interconnect(*transaction);
 
@@ -122,22 +126,16 @@ void fpga::InterconnectProtocol::process_rx_buffer() {
   }
 }
 
-void fpga::InterconnectProtocol::set_write_address(
-    tlm_generic_payload &transaction) {
-  SC_LOG_DEBUG(this, transaction,
-               "Setting write address to: " << std::hex << write_address);
-  transaction.set_address(write_address);
-  write_address += sizeof(uint32_t);
-  if (write_address >= Config::instance().ramSize() * 1024) {
-    write_address = (Config::instance().ramSize() * 1024) / 2;
-  }
-}
-
 void fpga::InterconnectProtocol::process_bus_transaction(
     tlm_generic_payload &transaction) {
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
   tlm_sync_enum tlm_resp;
+
+  // remove crc
+  if (!remove_crc(transaction)) {
+    SC_LOG_ERROR(this, transaction, "CRC removal failed!");
+  };
 
   SC_LOG_DEBUG(this, transaction, "Protocol->Bus transmission started");
 
@@ -147,6 +145,11 @@ void fpga::InterconnectProtocol::process_bus_transaction(
   }
 
   wait(rx_transaction_done);
+
+  // calculate crc
+  if (!prepend_crc(transaction)) {
+    SC_LOG_ERROR(this, transaction, "CRC calculation failed!");
+  };
 
   SC_LOG_DEBUG(this, transaction, "Protocol->Bus transmission finished");
 }
@@ -177,6 +180,8 @@ void fpga::InterconnectProtocol::send_to_interconnect(
   if (tlm_resp == TLM_COMPLETED) {
     wait(delay);
   }
+
+  delete transaction_copy;
 
   SC_LOG_DEBUG(this, *transaction_copy,
                "Protocol->Interconnect" << ext->destination_id
@@ -213,6 +218,85 @@ void fpga::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
   delete irq;
 
   SC_LOG_WARN(this, transaction, "Sending IRQ to Generator done");
+}
+
+// -------------------------------------------------------
+// protocol functions
+// -------------------------------------------------------
+// TODO: add delays
+uint16_t fpga::InterconnectProtocol::calculate_crc16(const uint8_t *data,
+                                                     size_t length) {
+  // https://github.com/jpralves/crc16/blob/master/crc16.cpp
+  uint16_t crc = 0xFFFF;
+
+  for (size_t i = 0; i < length; ++i) {
+    crc ^= static_cast<uint16_t>(data[i]) << 8;
+    for (int j = 0; j < 8; ++j) {
+      if (crc & 0x8000)
+        crc = (crc << 1) ^ 0x1021;
+      else
+        crc <<= 1;
+    }
+  }
+  return crc;
+}
+
+bool fpga::InterconnectProtocol::prepend_crc(
+    tlm::tlm_generic_payload &transaction) {
+  unsigned char *data = transaction.get_data_ptr();
+  unsigned int length = transaction.get_data_length();
+
+  uint16_t crc = calculate_crc16(data, length);
+
+  // allocate new buffer
+  unsigned int new_length = length + 2;
+  unsigned char *new_data = new unsigned char[new_length];
+
+  new_data[0] = crc >> 8;
+  new_data[1] = crc & 0xFF;
+  std::memcpy(new_data + 2, data, length);
+
+  transaction.set_data_ptr(new_data);
+  transaction.set_data_length(new_length);
+
+  return true;
+}
+
+bool fpga::InterconnectProtocol::remove_crc(
+    tlm::tlm_generic_payload &transaction) {
+  unsigned char *data = transaction.get_data_ptr();
+  unsigned int length = transaction.get_data_length();
+
+  uint16_t received_crc = (data[0] << 8) | data[1];
+  unsigned char *actual_data = data + 2;
+  unsigned int actual_length = length - 2;
+
+  uint16_t computed_crc = calculate_crc16(actual_data, actual_length);
+  if (received_crc != computed_crc) {
+    SC_LOG_ERROR(this, transaction, "CRC mismatch!");
+    return false;
+  }
+
+  unsigned char *stripped_data = new unsigned char[actual_length];
+  std::memcpy(stripped_data, actual_data, actual_length);
+
+  delete[] data;
+
+  transaction.set_data_ptr(stripped_data);
+  transaction.set_data_length(actual_length);
+
+  return true;
+}
+
+void fpga::InterconnectProtocol::set_write_address(
+    tlm_generic_payload &transaction) {
+  SC_LOG_DEBUG(this, transaction,
+               "Setting write address to: " << std::hex << write_address);
+  transaction.set_address(write_address);
+  write_address += sizeof(uint32_t);
+  if (write_address >= Config::instance().ramSize() * 1024) {
+    write_address = (Config::instance().ramSize() * 1024) / 2;
+  }
 }
 
 // -------------------------------------------------------
