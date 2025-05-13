@@ -9,13 +9,13 @@
 #include "common/RoutingTable.h"
 
 #include "include/globals.h"
-#include "include/logging.h"
 
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-bool print_debug_msgs = false;
+LogLevel log_level = LogLevel::SILENT;
+
 unsigned int num_chiplets = 2;
 std::vector<unsigned int> connections = {1, 2};
 
@@ -27,8 +27,10 @@ void print_help(const char *progname) {
          "1000)\n"
       << "  --chiplets=<n>       Set number of chiplets (minimum: 2, default: "
          "2)\n"
-      << "  --connections=1,2,3  Set FPGA connection targets (1,2,...,n)\n"
-      << "  --debug              Enable debug messages\n"
+      << "  --connections=1,2,3  Set FPGA connection targets: 1,2,...,n "
+         "(default: 1,2)\n"
+      << "  --logging=level      Set logging level: INFO, WARN, ERROR, DEBUG, "
+         "SILENT (default: SILENT)\n"
       << "  --help               Show this help message\n";
 }
 
@@ -89,8 +91,26 @@ int sc_main(int argc, char *argv[]) {
         std::cerr << "Invalid connection list format\n";
         return 1;
       }
-    } else if (arg == "--debug") {
-      print_debug_msgs = true;
+    } else if (arg.rfind("--logging=", 0) == 0) {
+      std::string level = arg.substr(10);
+
+      std::transform(level.begin(), level.end(), level.begin(), ::tolower);
+
+      if (level == "info") {
+        log_level = LogLevel::INFO;
+      } else if (level == "warn") {
+        log_level = LogLevel::WARN;
+      } else if (level == "error") {
+        log_level = LogLevel::ERROR;
+      } else if (level == "debug") {
+        log_level = LogLevel::DEBUG;
+      } else if (level == "silent") {
+        log_level = LogLevel::SILENT;
+      } else {
+        std::cerr << "Unknown logging level: " << level << "\n";
+        print_help(argv[0]);
+        return 1;
+      }
     } else {
       std::cerr << "Unknown argument: " << arg << "\n";
       print_help(argv[0]);

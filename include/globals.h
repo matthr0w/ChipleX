@@ -1,5 +1,16 @@
+#pragma once
+
 #include <vector>
 
-extern bool print_debug_msgs;
+enum class LogLevel {
+  DEBUG = 0,
+  INFO = 1,
+  WARN = 2,
+  ERROR = 3,
+  SILENT = 4
+};
+
+extern LogLevel log_level;
+
 extern unsigned int num_chiplets;
 extern std::vector<unsigned int> connections;
