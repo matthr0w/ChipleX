@@ -182,10 +182,10 @@ void chiplet::InterconnectProtocol::send_to_interconnect(
     wait(delay);
   }
 
-  delete transaction_copy;
-
   SC_LOG_DEBUG(this, *transaction_copy,
                "Protocol->Interconnect" << route << " transmission finished");
+
+  delete transaction_copy;
 }
 
 void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
@@ -218,10 +218,10 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
     wait(delay);
   }
 
-  delete irq;
-
   SC_LOG_WARN(this, transaction,
               "Sending IRQ to Core" << ext->core_id << " done");
+
+  delete irq;
 }
 
 // -------------------------------------------------------

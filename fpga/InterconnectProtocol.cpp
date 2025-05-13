@@ -181,11 +181,11 @@ void fpga::InterconnectProtocol::send_to_interconnect(
     wait(delay);
   }
 
-  delete transaction_copy;
-
   SC_LOG_DEBUG(this, *transaction_copy,
                "Protocol->Interconnect" << ext->destination_id
                                         << " transmission finished");
+
+  delete transaction_copy;
 }
 
 void fpga::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
@@ -215,9 +215,9 @@ void fpga::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
     wait(delay);
   }
 
-  delete irq;
-
   SC_LOG_WARN(this, transaction, "Sending IRQ to Generator done");
+
+  delete irq;
 }
 
 // -------------------------------------------------------
