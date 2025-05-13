@@ -88,7 +88,7 @@ void fpga::Interconnect::process_rx_buffer() {
 tlm_sync_enum
 fpga::Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
                                              tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, transaction, "Received request from Protocol Layer");
+  SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received request from Protocol Layer");
 
   output_buffer_levels();
 
@@ -121,7 +121,7 @@ fpga::Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
 
 tlm_sync_enum fpga::Interconnect::nb_transport_fw_interconnect(
     tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, transaction, "Received request from Interconnect");
+  SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received request from Interconnect");
 
   output_buffer_levels();
 
@@ -157,7 +157,7 @@ tlm_sync_enum
 fpga::Interconnect::nb_transport_bw_protocol(tlm_generic_payload &transaction,
                                              tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
-    SC_LOG_DEBUG(this, transaction, "Received response from Protocol Layer");
+    SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received response from Protocol Layer");
 
     rx_transaction_done.notify(delay);
 
@@ -171,7 +171,7 @@ fpga::Interconnect::nb_transport_bw_protocol(tlm_generic_payload &transaction,
 tlm_sync_enum fpga::Interconnect::nb_transport_bw_interconnect(
     tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
-    SC_LOG_DEBUG(this, transaction, "Received response from Interconnect");
+    SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received response from Interconnect");
 
     phase = END_RESP;
     return TLM_COMPLETED;

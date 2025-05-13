@@ -44,17 +44,13 @@ void fpga::Bus::process_transaction_fw() {
     transaction = peq_fw.get_next_transaction();
     transaction->get_extension(ext);
 
-    SC_LOG_DEBUG(this, *transaction,
-                 "Processing forward transaction for "
-                     << modules[current_owner]);
-
     phase = BEGIN_REQ;
     delay = SC_ZERO_TIME;
 
     if (ext->destination_id != fpga_id) {
       SC_LOG_DEBUG(this, *transaction,
-                   "Forwarding BEGIN_REQ for " << modules[current_owner]
-                                               << " to Interconnect");
+                   "PROTOCOL: Forwarding BEGIN_REQ for "
+                       << modules[current_owner] << " to Interconnect");
       tlm_resp = interconnect_initiator_socket->nb_transport_fw(*transaction,
                                                                 phase, delay);
 
@@ -63,8 +59,8 @@ void fpga::Bus::process_transaction_fw() {
       }
     } else {
       SC_LOG_DEBUG(this, *transaction,
-                   "Forwarding BEGIN_REQ for " << modules[current_owner]
-                                               << " to RAM");
+                   "PROTOCOL: Forwarding BEGIN_REQ for "
+                       << modules[current_owner] << " to RAM");
 
       // if read operation, source becomes destination now
       if (transaction->get_command() == TLM_READ_COMMAND) {
@@ -98,7 +94,8 @@ void fpga::Bus::process_transaction_bw() {
     delay = SC_ZERO_TIME;
 
     SC_LOG_DEBUG(this, *transaction,
-                 "Backwarding BEGIN_RESP to " << modules[current_owner]);
+                 "PROTOCOL: Backwarding BEGIN_RESP to "
+                     << modules[current_owner]);
 
     // begin response
     if (current_owner == 1) {
@@ -167,11 +164,12 @@ void fpga::Bus::process_queue() {
 tlm_sync_enum fpga::Bus::nb_transport_fw(int id,
                                          tlm_generic_payload &transaction,
                                          tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, transaction, "Received request from " << modules[id]);
+  SC_LOG_DEBUG(this, transaction,
+               "PROTOCOL: Received request from " << modules[id]);
 
   if (phase != BEGIN_REQ) {
     SC_LOG_ERROR(this, transaction,
-                 "Protocol Error: Request from " << modules[id] << " with "
+                 "PROTOCOL ERROR: Request from " << modules[id] << " with "
                                                  << phase);
     exit(1);
   }
@@ -218,11 +216,12 @@ tlm_sync_enum fpga::Bus::nb_transport_fw(int id,
 tlm_sync_enum fpga::Bus::nb_transport_bw(int id,
                                          tlm_generic_payload &transaction,
                                          tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, transaction, "Received response from " << modules[id]);
+  SC_LOG_DEBUG(this, transaction,
+               "PROTOCOL: Received response from " << modules[id]);
 
   if (phase != BEGIN_RESP) {
     SC_LOG_ERROR(this, transaction,
-                 "Protocol Error: Response from " << modules[id] << " with "
+                 "PROTOCOL ERROR: Response from " << modules[id] << " with "
                                                   << phase);
     exit(1);
   }

@@ -67,7 +67,7 @@ tlm_sync_enum fpga::RAM::nb_transport_fw(tlm_generic_payload &transaction,
                                          tlm_phase &phase, sc_time &delay) {
   if (phase != BEGIN_REQ) {
     SC_LOG_ERROR(this, transaction,
-                 "Protocol Error: Request from Bus with Phase != BEGIN_REQ");
+                 "PROTOCOL ERROR: Request from Bus with " << phase);
     exit(1);
   }
 

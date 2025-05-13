@@ -298,7 +298,7 @@ get_fpga2chiplet_transfer_delay(sc_module &module,
 
   delay = address_cycle_delay + data_cycles_delay + extension_cycles_delay;
 
-  SC_LOG_DELAY(&module, transaction, "Chiplet to Chiplet Transfer", delay);
+  SC_LOG_DELAY(&module, transaction, "FPGA to Chiplet Transfer", delay);
   return delay;
 }
 

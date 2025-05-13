@@ -168,10 +168,10 @@ void chiplet::InterconnectProtocol::send_to_interconnect(
 
   int route = RoutingTable::get_route(chiplet_id, ext->destination_id);
 
-  SC_LOG_WARN(this, *transaction_copy,
-              "Chiplet ID " << chiplet_id << " Destination "
-                            << ext->destination_id << " Route to Interconnect"
-                            << route);
+  SC_LOG_DEBUG(this, *transaction_copy,
+               "ROUTING: Chiplet ID " << chiplet_id << " Destination "
+                                      << ext->destination_id
+                                      << " Route to Interconnect" << route);
 
   SC_LOG_DEBUG(this, *transaction_copy,
                "Protocol->Interconnect" << route << " transmission started");
@@ -206,7 +206,7 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
   irq->set_core_id(ext->core_id);
   irq->set_destination_id(ext->destination_id);
 
-  SC_LOG_WARN(this, transaction, "Sending IRQ to Core" << ext->core_id);
+  SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core" << ext->core_id);
 
   if (ext->core_id == 0) {
     tlm_resp = core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
@@ -218,8 +218,8 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
     wait(delay);
   }
 
-  SC_LOG_WARN(this, transaction,
-              "Sending IRQ to Core" << ext->core_id << " done");
+  SC_LOG_DEBUG(this, transaction,
+               "Sending IRQ to Core" << ext->core_id << " done");
 
   delete irq;
 }
@@ -308,7 +308,7 @@ void chiplet::InterconnectProtocol::set_write_address(
 // -------------------------------------------------------
 tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
     tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, transaction, "Received request from Bus");
+  SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received request from Bus");
 
   output_buffer_levels();
 
@@ -350,7 +350,8 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
 tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_interconnect(
     int id, tlm_generic_payload &transaction, tlm_phase &phase,
     sc_time &delay) {
-  SC_LOG_DEBUG(this, transaction, "Received request from Interconnect" << id);
+  SC_LOG_DEBUG(this, transaction,
+               "PROTOCOL: Received request from Interconnect" << id);
 
   output_buffer_levels();
 
@@ -385,7 +386,7 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_interconnect(
 tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_bus(
     tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
-    SC_LOG_DEBUG(this, transaction, "Received response from Bus");
+    SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received response from Bus");
 
     delay += get_bus_transfer_bw_delay(*this, transaction,
                                        Config::instance().busClkCycle(),
@@ -405,7 +406,7 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_interconnect(
     sc_time &delay) {
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction,
-                 "Received response from Interconnect" << id);
+                 "PROTOCOL: Received response from Interconnect" << id);
 
     phase = END_RESP;
     return TLM_COMPLETED;
