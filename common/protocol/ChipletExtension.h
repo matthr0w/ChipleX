@@ -24,4 +24,9 @@ struct ChipletExtension : tlm::tlm_extension<ChipletExtension> {
     core_id = other.core_id;
     destination_id = other.destination_id;
   }
+
+  unsigned get_size_bytes() const {
+    return sizeof(request_id) + sizeof(source_id) + sizeof(core_id) +
+           sizeof(destination_id);
+  }
 };

@@ -29,6 +29,8 @@ private:
 
   std::deque<tlm_generic_payload *> tx_buffer;
   std::deque<tlm_generic_payload *> rx_buffer;
+  unsigned tx_buffer_used_bytes;
+  unsigned rx_buffer_used_bytes;
 
   // -------------------------------------------------------
   // events
@@ -54,8 +56,5 @@ private:
 
   tlm_sync_enum nb_transport_bw_interconnect(
       tlm_generic_payload & transaction, tlm_phase & phase, sc_time & delay);
-
-  // helper functions
-  void output_buffer_levels();
 };
 }; // namespace chiplet

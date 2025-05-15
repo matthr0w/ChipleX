@@ -29,6 +29,8 @@ void chiplet::Config::loadFromFile(const std::string &filename) {
 
   interconnect_protocol_width =
       config["interconnect_protocol"]["width"].as<unsigned int>();
+  interconnect_protocol_flit_size =
+      config["interconnect_protocol"]["flit_size"].as<unsigned int>();
   interconnect_protocol_buffer_size =
       config["interconnect_protocol"]["buffer_size"].as<unsigned int>();
   interconnect_protocol_clk_cycle =
@@ -62,6 +64,8 @@ void chiplet::Config::validateConfig(const YAML::Node &config) {
   check(config["interconnect_protocol"], "interconnect_protocol");
   check(config["interconnect_protocol"]["width"],
         "interconnect_protocol.width");
+  check(config["interconnect_protocol"]["flit_size"],
+        "interconnect_protocol.flit_size");
   check(config["interconnect_protocol"]["buffer_size"],
         "interconnect_protocol.buffer_size");
   check(config["interconnect_protocol"]["clk_cycle"],
@@ -88,11 +92,13 @@ void chiplet::Config::printConfig() const {
 
   std::cout << "Interconnect Protocol:\n";
   std::cout << "  Width: " << interconnect_protocol_width << " bytes\n";
-  std::cout << "  Buffer Size: " << interconnect_protocol_buffer_size << " packets\n";
+  std::cout << "  Flit Size: " << interconnect_protocol_flit_size << " bytes\n";
+  std::cout << "  Buffer Size: " << interconnect_protocol_buffer_size
+            << " bytes\n";
   std::cout << "  Clock Cycle: " << interconnect_protocol_clk_cycle << "\n";
 
   std::cout << "Interconnect:\n";
   std::cout << "  Width: " << interconnect_width << " bytes\n";
-  std::cout << "  Buffer Size: " << interconnect_buffer_size << " packets\n";
+  std::cout << "  Buffer Size: " << interconnect_buffer_size << " bytes\n";
   std::cout << "  Clock Cycle: " << interconnect_clk_cycle << "\n";
 }

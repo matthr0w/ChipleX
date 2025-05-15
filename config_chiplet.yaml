@@ -11,10 +11,11 @@ ram:
 
 interconnect_protocol:
   width: 4 # bytes
-  buffer_size: 3 # packets
+  flit_size: 64 # bytes
+  buffer_size: 256 # bytes
   clk_cycle: 5.0 # ns
 
 interconnect:
   width: 1 # bytes
-  buffer_size: 3 # packets
+  buffer_size: 128 # bytes
   clk_cycle: 5.0 # ns

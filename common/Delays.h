@@ -19,7 +19,9 @@ inline sc_time get_data_cycles_delay(tlm_generic_payload &transaction,
 
 inline sc_time get_extension_cycles_delay(tlm_generic_payload &transaction,
                                           unsigned int width, sc_time cycle) {
-  unsigned int extension_size = sizeof(ChipletExtension);
+  ChipletExtension *ext;
+  transaction.get_extension(ext);
+  unsigned int extension_size = ext->get_size_bytes();
   unsigned int num_cycles = (extension_size + width - 1) / width;
   return num_cycles * cycle;
 }
@@ -247,10 +249,10 @@ get_chiplet2chiplet_transfer_delay(sc_module &module,
   return delay;
 }
 
-inline sc_time
-get_fpga2chiplet_transfer_delay(sc_module &module,
-                                   tlm_generic_payload &transaction,
-                                   sc_time clc_cycle, unsigned int width) {
+inline sc_time get_fpga2chiplet_transfer_delay(sc_module &module,
+                                               tlm_generic_payload &transaction,
+                                               sc_time clc_cycle,
+                                               unsigned int width) {
   // FPGA to Chiplet Transfer Delay
   // -----------------------------------------------
   // read operation pending:

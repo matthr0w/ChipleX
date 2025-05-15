@@ -13,7 +13,8 @@ chiplet::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
       bus_target_socket("bus_target_socket"),
       bus_initiator_socket("bus_initiator_socket"),
       core0_irq_initiator_socket("core0_irq_initiator_socket"),
-      core1_irq_initiator_socket("core1_irq_initiator_socket") {
+      core1_irq_initiator_socket("core1_irq_initiator_socket"),
+      tx_buffer_used_bytes(0), rx_buffer_used_bytes(0) {
 
   bus_target_socket.register_nb_transport_fw(
       this, &chiplet::InterconnectProtocol::nb_transport_fw_bus);
@@ -53,15 +54,13 @@ void chiplet::InterconnectProtocol::process_tx_buffer() {
 
       transaction->get_extension(ext);
 
-      // calculate crc
-      if (!prepend_crc(*transaction)) {
-        SC_LOG_ERROR(this, static_cast<ChipletPayload &>(*transaction),
-                     "CRC calculation failed!");
-      };
+      // TODO: add protocol delay
 
       send_to_interconnect(*transaction);
 
       // remove from tx buffer
+      tx_buffer_used_bytes -=
+          static_cast<ChipletPayload &>(*transaction).get_size_bytes();
       tx_buffer.pop_front();
       tx_buffer_out_event.notify();
 
@@ -119,6 +118,8 @@ void chiplet::InterconnectProtocol::process_rx_buffer() {
       }
 
       // remove from rx buffer
+      rx_buffer_used_bytes -=
+          static_cast<ChipletPayload &>(*transaction).get_size_bytes();
       rx_buffer.pop_front();
       rx_buffer_out_event.notify();
 
@@ -133,11 +134,6 @@ void chiplet::InterconnectProtocol::process_bus_transaction(
   sc_time delay = SC_ZERO_TIME;
   tlm_sync_enum tlm_resp;
 
-  // remove crc
-  if (!remove_crc(transaction)) {
-    SC_LOG_ERROR(this, transaction, "CRC removal failed!");
-  };
-
   SC_LOG_DEBUG(this, transaction, "Protocol->Bus transmission started");
 
   tlm_resp = bus_initiator_socket->nb_transport_fw(transaction, phase, delay);
@@ -146,11 +142,6 @@ void chiplet::InterconnectProtocol::process_bus_transaction(
   }
 
   wait(rx_transaction_done);
-
-  // calculate crc
-  if (!prepend_crc(transaction)) {
-    SC_LOG_ERROR(this, transaction, "CRC calculation failed!");
-  };
 
   SC_LOG_DEBUG(this, transaction, "Protocol->Bus transmission finished");
 }
@@ -227,71 +218,6 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
 // -------------------------------------------------------
 // protocol functions
 // -------------------------------------------------------
-// TODO: add delays
-uint16_t chiplet::InterconnectProtocol::calculate_crc16(const uint8_t *data,
-                                                        size_t length) {
-  // https://github.com/jpralves/crc16/blob/master/crc16.cpp
-  uint16_t crc = 0xFFFF;
-
-  for (size_t i = 0; i < length; ++i) {
-    crc ^= static_cast<uint16_t>(data[i]) << 8;
-    for (int j = 0; j < 8; ++j) {
-      if (crc & 0x8000)
-        crc = (crc << 1) ^ 0x1021;
-      else
-        crc <<= 1;
-    }
-  }
-  return crc;
-}
-
-bool chiplet::InterconnectProtocol::prepend_crc(
-    tlm::tlm_generic_payload &transaction) {
-  unsigned char *data = transaction.get_data_ptr();
-  unsigned int length = transaction.get_data_length();
-
-  uint16_t crc = calculate_crc16(data, length);
-
-  // allocate new buffer
-  unsigned int new_length = length + 2;
-  unsigned char *new_data = new unsigned char[new_length];
-
-  new_data[0] = crc >> 8;
-  new_data[1] = crc & 0xFF;
-  std::memcpy(new_data + 2, data, length);
-
-  transaction.set_data_ptr(new_data);
-  transaction.set_data_length(new_length);
-
-  return true;
-}
-
-bool chiplet::InterconnectProtocol::remove_crc(
-    tlm::tlm_generic_payload &transaction) {
-  unsigned char *data = transaction.get_data_ptr();
-  unsigned int length = transaction.get_data_length();
-
-  uint16_t received_crc = (data[0] << 8) | data[1];
-  unsigned char *actual_data = data + 2;
-  unsigned int actual_length = length - 2;
-
-  uint16_t computed_crc = calculate_crc16(actual_data, actual_length);
-  if (received_crc != computed_crc) {
-    SC_LOG_ERROR(this, transaction, "CRC mismatch!");
-    return false;
-  }
-
-  unsigned char *stripped_data = new unsigned char[actual_length];
-  std::memcpy(stripped_data, actual_data, actual_length);
-
-  delete[] data;
-
-  transaction.set_data_ptr(stripped_data);
-  transaction.set_data_length(actual_length);
-
-  return true;
-}
-
 void chiplet::InterconnectProtocol::set_write_address(
     tlm_generic_payload &transaction) {
   SC_LOG_DEBUG(this, transaction,
@@ -310,11 +236,15 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
     tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received request from Bus");
 
-  output_buffer_levels();
+  SC_LOG_DEBUG(this, transaction,
+               "Tx buffer bytes: "
+                   << tx_buffer_used_bytes << "/"
+                   << Config::instance().interconnectProtocolBufferSize());
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
-  if (tx_buffer.size() == Config::instance().interconnectProtocolBufferSize()) {
+  if (tx_buffer_used_bytes + transaction_copy->get_size_bytes() >
+      Config::instance().interconnectProtocolBufferSize()) {
     SC_LOG_WARN(this, transaction, "Tx buffer full -> waiting...");
     wait(tx_buffer_out_event);
   }
@@ -334,8 +264,14 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
 
   // put transaction in tx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Tx buffer");
+  tx_buffer_used_bytes += transaction_copy->get_size_bytes();
   tx_buffer.push_back(transaction_copy);
   tx_buffer_in_event.notify(delay);
+
+  SC_LOG_DEBUG(this, transaction,
+               "Tx buffer bytes: "
+                   << tx_buffer_used_bytes << "/"
+                   << Config::instance().interconnectProtocolBufferSize());
 
   // begin response to bus
   tlm_phase resp_phase = BEGIN_RESP;
@@ -353,11 +289,15 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_interconnect(
   SC_LOG_DEBUG(this, transaction,
                "PROTOCOL: Received request from Interconnect" << id);
 
-  output_buffer_levels();
+  SC_LOG_DEBUG(this, transaction,
+               "Rx buffer bytes: "
+                   << rx_buffer_used_bytes << "/"
+                   << Config::instance().interconnectProtocolBufferSize());
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
-  if (rx_buffer.size() == Config::instance().interconnectProtocolBufferSize()) {
+  if (rx_buffer_used_bytes + transaction_copy->get_size_bytes() >
+      Config::instance().interconnectProtocolBufferSize()) {
     SC_LOG_WARN(this, transaction, "Rx buffer full -> waiting...");
     wait(rx_buffer_out_event);
   }
@@ -369,8 +309,14 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_interconnect(
 
   // put transaction in rx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");
+  rx_buffer_used_bytes += transaction_copy->get_size_bytes();
   rx_buffer.push_back(transaction_copy);
   rx_buffer_in_event.notify(delay);
+
+  SC_LOG_DEBUG(this, transaction,
+               "Rx buffer bytes: "
+                   << rx_buffer_used_bytes << "/"
+                   << Config::instance().interconnectProtocolBufferSize());
 
   // begin response to interconnect
   tlm_phase resp_phase = BEGIN_RESP;
@@ -413,11 +359,4 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_interconnect(
   }
 
   return TLM_ACCEPTED;
-}
-
-// helper functions
-void chiplet::InterconnectProtocol::output_buffer_levels() {
-  SC_LOG_DEBUG_NO_TX(this, "Buffer Levels");
-  SC_LOG_DEBUG_NO_TX(this, "Tx buffer: " << tx_buffer.size());
-  SC_LOG_DEBUG_NO_TX(this, "Rx buffer: " << rx_buffer.size());
 }

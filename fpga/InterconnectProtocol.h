@@ -39,13 +39,12 @@ private:
   void send_to_interconnect(tlm_generic_payload & transaction);
   void send_irq(tlm_generic_payload & transaction);
 
-  uint16_t calculate_crc16(const uint8_t *data, size_t length);
-  bool prepend_crc(tlm_generic_payload & transaction);
-  bool remove_crc(tlm_generic_payload & transaction);
   void set_write_address(tlm_generic_payload & transaction);
 
   std::deque<tlm_generic_payload *> tx_buffer;
   std::deque<tlm_generic_payload *> rx_buffer;
+  unsigned tx_buffer_used_bytes;
+  unsigned rx_buffer_used_bytes;
 
   // -------------------------------------------------------
   // events
@@ -73,8 +72,5 @@ private:
   tlm_sync_enum nb_transport_bw_interconnect(int id,
                                              tlm_generic_payload &transaction,
                                              tlm_phase &phase, sc_time &delay);
-
-  // helper functions
-  void output_buffer_levels();
 };
 }; // namespace fpga

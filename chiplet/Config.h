@@ -28,6 +28,9 @@ public:
   unsigned int interconnectProtocolWidth() const {
     return interconnect_protocol_width;
   }
+  unsigned int interconnectProtocolFlitSize() const {
+    return interconnect_protocol_flit_size;
+  }
   unsigned int interconnectProtocolBufferSize() const {
     return interconnect_protocol_buffer_size;
   }
@@ -57,6 +60,7 @@ private:
   sc_time ram_access_delay;
 
   unsigned int interconnect_protocol_width;
+  unsigned int interconnect_protocol_flit_size;
   unsigned int interconnect_protocol_buffer_size;
   sc_time interconnect_protocol_clk_cycle;
 
