@@ -12,8 +12,9 @@ class Config {
 public:
   static Config &instance();
 
-  void loadFromFile(const std::string &filename);
-  void printConfig() const;
+  void load(const std::string &filename);
+  void override(const std::string &filename);
+  void print() const;
 
   // accessors
   unsigned int busWidth() const { return bus_width; }
@@ -47,7 +48,7 @@ public:
 private:
   Config() = default;
 
-  void validateConfig(const YAML::Node &config);
+  void validate(const YAML::Node &config);
 
   // internals
   unsigned int bus_width;

@@ -9,7 +9,9 @@
 using namespace sc_core;
 using namespace tlm;
 
+// -------------------------------------------------------
 // helper functions
+// -------------------------------------------------------
 inline sc_time get_data_cycles_delay(tlm_generic_payload &transaction,
                                      unsigned int width, sc_time cycle) {
   unsigned int data_size = transaction.get_data_length();
@@ -27,7 +29,7 @@ inline sc_time get_extension_cycles_delay(tlm_generic_payload &transaction,
 }
 
 // -------------------------------------------------------
-// delays
+// Bus
 // -------------------------------------------------------
 inline sc_time get_bus_arbitration_delay(sc_module &module,
                                          tlm_generic_payload &transaction,
@@ -118,6 +120,9 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
   return delay;
 }
 
+// -------------------------------------------------------
+// RAM
+// -------------------------------------------------------
 inline sc_time get_mem_access_delay(sc_module &module,
                                     tlm_generic_payload &transaction,
                                     sc_time clc_cycle, sc_time access_delay,
@@ -138,6 +143,9 @@ inline sc_time get_mem_access_delay(sc_module &module,
   return delay;
 }
 
+// -------------------------------------------------------
+// Interconnect Protocol Layer
+// -------------------------------------------------------
 inline sc_time get_protocol2interconnect_transfer_delay(
     sc_module &module, tlm_generic_payload &transaction, sc_time clc_cycle,
     unsigned int width) {
@@ -194,6 +202,27 @@ inline sc_time get_protocol2interconnect_transfer_delay(
   return delay;
 }
 
+inline sc_time get_irq_transfer_delay(sc_module &module,
+                                      tlm_generic_payload &transaction,
+                                      sc_time clc_cycle) {
+  // IRQ Transfer Delay
+  // -----------------------------------------------
+  //      + address cycle delay
+  //      + irq cycle delay
+
+  sc_time delay;
+  sc_time address_cycle_delay = clc_cycle;
+  sc_time irq_cycle_delay = clc_cycle;
+
+  delay = address_cycle_delay + irq_cycle_delay;
+
+  SC_LOG_DELAY(&module, transaction, "IRQ Transfer", delay);
+  return delay;
+}
+
+// -------------------------------------------------------
+// Interconnect Physical Layer
+// -------------------------------------------------------
 inline sc_time
 get_chiplet2chiplet_transfer_delay(sc_module &module,
                                    tlm_generic_payload &transaction,
@@ -301,23 +330,5 @@ inline sc_time get_fpga2chiplet_transfer_delay(sc_module &module,
   delay = address_cycle_delay + data_cycles_delay + extension_cycles_delay;
 
   SC_LOG_DELAY(&module, transaction, "FPGA to Chiplet Transfer", delay);
-  return delay;
-}
-
-inline sc_time get_irq_transfer_delay(sc_module &module,
-                                      tlm_generic_payload &transaction,
-                                      sc_time clc_cycle) {
-  // IRQ Transfer Delay
-  // -----------------------------------------------
-  //      + address cycle delay
-  //      + irq cycle delay
-
-  sc_time delay;
-  sc_time address_cycle_delay = clc_cycle;
-  sc_time irq_cycle_delay = clc_cycle;
-
-  delay = address_cycle_delay + irq_cycle_delay;
-
-  SC_LOG_DELAY(&module, transaction, "IRQ Transfer", delay);
   return delay;
 }

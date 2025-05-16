@@ -7,13 +7,13 @@ chiplet::Config &chiplet::Config::instance() {
   return instance;
 }
 
-void chiplet::Config::loadFromFile(const std::string &filename) {
+void chiplet::Config::load(const std::string &filename) {
   YAML::Node config = YAML::LoadFile(filename);
 
   try {
-    validateConfig(config);
+    validate(config);
   } catch (const std::exception &e) {
-    std::cerr << "[ERROR] " << e.what() << std::endl;
+    std::cerr << e.what() << std::endl;
     throw;
   }
 
@@ -43,7 +43,7 @@ void chiplet::Config::loadFromFile(const std::string &filename) {
       sc_time(config["interconnect"]["clk_cycle"].as<double>(), SC_NS);
 }
 
-void chiplet::Config::validateConfig(const YAML::Node &config) {
+void chiplet::Config::validate(const YAML::Node &config) {
   auto check = [](const YAML::Node &node, const std::string &keyPath) {
     if (!node || node.IsNull()) {
       throw std::runtime_error("Missing config section: " + keyPath);
@@ -77,28 +77,80 @@ void chiplet::Config::validateConfig(const YAML::Node &config) {
   check(config["interconnect"]["clk_cycle"], "interconnect.clk_cycle");
 }
 
-void chiplet::Config::printConfig() const {
-  std::cout << "\n=== Chiplet Configuration ===\n";
-  std::cout << "Bus:\n";
-  std::cout << "  Width: " << bus_width << " bytes\n";
-  std::cout << "  Clock Cycle: " << bus_clk_cycle << "\n";
-  std::cout << "  Arbitration Delay: " << bus_arbitration_delay << "\n";
+void chiplet::Config::override(const std::string &filename) {
+  YAML::Node config = YAML::LoadFile(filename);
 
-  std::cout << "RAM:\n";
-  std::cout << "  Size: " << ram_size << " KB\n";
-  std::cout << "  Width: " << ram_width << " bytes\n";
-  std::cout << "  Clock Cycle: " << ram_clk_cycle << "\n";
-  std::cout << "  Access Delay: " << ram_access_delay << "\n";
+  if (config["bus"]) {
+    if (config["bus"]["width"])
+      bus_width = config["bus"]["width"].as<unsigned int>();
+    if (config["bus"]["clk_cycle"])
+      bus_clk_cycle = sc_time(config["bus"]["clk_cycle"].as<double>(), SC_NS);
+    if (config["bus"]["arbitration_delay"])
+      bus_arbitration_delay =
+          sc_time(config["bus"]["arbitration_delay"].as<double>(), SC_NS);
+  }
 
-  std::cout << "Interconnect Protocol:\n";
-  std::cout << "  Width: " << interconnect_protocol_width << " bytes\n";
-  std::cout << "  Flit Size: " << interconnect_protocol_flit_size << " bytes\n";
-  std::cout << "  Buffer Size: " << interconnect_protocol_buffer_size
-            << " bytes\n";
-  std::cout << "  Clock Cycle: " << interconnect_protocol_clk_cycle << "\n";
+  if (config["ram"]) {
+    if (config["ram"]["size"])
+      ram_size = config["ram"]["size"].as<unsigned int>();
+    if (config["ram"]["width"])
+      ram_width = config["ram"]["width"].as<unsigned int>();
+    if (config["ram"]["clk_cycle"])
+      ram_clk_cycle = sc_time(config["ram"]["clk_cycle"].as<double>(), SC_NS);
+    if (config["ram"]["access_delay"])
+      ram_access_delay =
+          sc_time(config["ram"]["access_delay"].as<double>(), SC_NS);
+  }
 
-  std::cout << "Interconnect:\n";
-  std::cout << "  Width: " << interconnect_width << " bytes\n";
-  std::cout << "  Buffer Size: " << interconnect_buffer_size << " bytes\n";
-  std::cout << "  Clock Cycle: " << interconnect_clk_cycle << "\n";
+  if (config["interconnect_protocol"]) {
+    if (config["interconnect_protocol"]["width"])
+      interconnect_protocol_width =
+          config["interconnect_protocol"]["width"].as<unsigned int>();
+    if (config["interconnect_protocol"]["flit_size"])
+      interconnect_protocol_flit_size =
+          config["interconnect_protocol"]["flit_size"].as<unsigned int>();
+    if (config["interconnect_protocol"]["buffer_size"])
+      interconnect_protocol_buffer_size =
+          config["interconnect_protocol"]["buffer_size"].as<unsigned int>();
+    if (config["interconnect_protocol"]["clk_cycle"])
+      interconnect_protocol_clk_cycle = sc_time(
+          config["interconnect_protocol"]["clk_cycle"].as<double>(), SC_NS);
+  }
+
+  if (config["interconnect"]) {
+    if (config["interconnect"]["width"])
+      interconnect_width = config["interconnect"]["width"].as<unsigned int>();
+    if (config["interconnect"]["buffer_size"])
+      interconnect_buffer_size =
+          config["interconnect"]["buffer_size"].as<unsigned int>();
+    if (config["interconnect"]["clk_cycle"])
+      interconnect_clk_cycle =
+          sc_time(config["interconnect"]["clk_cycle"].as<double>(), SC_NS);
+  }
+}
+
+void chiplet::Config::print() const {
+  std::cout << "=== Chiplet Configuration ===\n"
+            << "Bus:\n"
+            << "  Width: " << bus_width << " bytes\n"
+            << "  Clock Cycle: " << bus_clk_cycle << "\n"
+            << "  Arbitration Delay: " << bus_arbitration_delay << "\n"
+
+            << "RAM:\n"
+            << "  Size: " << ram_size << " KB\n"
+            << "  Width: " << ram_width << " bytes\n"
+            << "  Clock Cycle: " << ram_clk_cycle << "\n"
+            << "  Access Delay: " << ram_access_delay << "\n"
+
+            << "Interconnect Protocol:\n"
+            << "  Width: " << interconnect_protocol_width << " bytes\n"
+            << "  Flit Size: " << interconnect_protocol_flit_size << " bytes\n"
+            << "  Buffer Size: " << interconnect_protocol_buffer_size
+            << " bytes\n"
+            << "  Clock Cycle: " << interconnect_protocol_clk_cycle << "\n"
+
+            << "Interconnect:\n"
+            << "  Width: " << interconnect_width << " bytes\n"
+            << "  Buffer Size: " << interconnect_buffer_size << " bytes\n"
+            << "  Clock Cycle: " << interconnect_clk_cycle << "\n";
 }
