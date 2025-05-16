@@ -13,7 +13,7 @@
     if (log_level <= LogLevel::INFO) {                                         \
       const auto *ext = (transaction).get_extension<ChipletExtension>();       \
       std::ostringstream _sc_stream, _sc_idstream;                             \
-      _sc_stream << std::left << std::setw(9) << sc_time_stamp()               \
+      _sc_stream << std::left << std::setw(15) << sc_time_stamp()              \
                  << " | \033[0m[INFO]\033[0m   | " << std::setw(30)            \
                  << (module)->name() << " | ";                                 \
       if (ext) {                                                               \
@@ -33,7 +33,7 @@
     if (log_level <= LogLevel::WARN) {                                         \
       const auto *ext = (transaction).get_extension<ChipletExtension>();       \
       std::ostringstream _sc_stream, _sc_idstream;                             \
-      _sc_stream << std::left << std::setw(9) << sc_time_stamp()               \
+      _sc_stream << std::left << std::setw(15) << sc_time_stamp()              \
                  << " | \033[33m[WARN]\033[0m   | " << std::setw(30)           \
                  << (module)->name() << " | ";                                 \
       if (ext) {                                                               \
@@ -53,7 +53,7 @@
     if (log_level <= LogLevel::ERROR) {                                        \
       const auto *ext = (transaction).get_extension<ChipletExtension>();       \
       std::ostringstream _sc_stream, _sc_idstream;                             \
-      _sc_stream << std::left << std::setw(9) << sc_time_stamp()               \
+      _sc_stream << std::left << std::setw(15) << sc_time_stamp()              \
                  << " | \033[31m[ERROR]\033[0m  | " << std::setw(30)           \
                  << (module)->name() << " | ";                                 \
       if (ext) {                                                               \
@@ -73,7 +73,7 @@
     if (log_level <= LogLevel::DEBUG) {                                        \
       const auto *ext = (transaction).get_extension<ChipletExtension>();       \
       std::ostringstream _sc_stream, _sc_idstream;                             \
-      _sc_stream << std::left << std::setw(9) << sc_time_stamp()               \
+      _sc_stream << std::left << std::setw(15) << sc_time_stamp()              \
                  << " | \033[34m[DEBUG]\033[0m  | " << std::setw(30)           \
                  << (module)->name() << " | ";                                 \
                                                                                \
@@ -94,7 +94,7 @@
   do {                                                                         \
     if (log_level <= LogLevel::DEBUG) {                                        \
       std::ostringstream _sc_stream;                                           \
-      _sc_stream << std::left << std::setw(9) << sc_time_stamp()               \
+      _sc_stream << std::left << std::setw(15) << sc_time_stamp()              \
                  << " | \033[34m[DEBUG]\033[0m  | " << std::setw(30)           \
                  << (module)->name() << " | " << __VA_ARGS__;                  \
       std::cout << _sc_stream.str() << std::endl;                              \
@@ -106,7 +106,7 @@
     if (log_level <= LogLevel::DEBUG) {                                        \
       const auto *ext = (transaction).get_extension<ChipletExtension>();       \
       std::ostringstream _sc_stream, _sc_idstream;                             \
-      _sc_stream << std::left << std::setw(9) << sc_time_stamp()               \
+      _sc_stream << std::left << std::setw(15) << sc_time_stamp()              \
                  << " | \033[32m[DELAY]\033[0m  | " << std::setw(30)           \
                  << (module)->name() << " | ";                                 \
       if (ext) {                                                               \

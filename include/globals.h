@@ -1,5 +1,6 @@
 #pragma once
 
+#include <random>
 #include <systemc>
 #include <vector>
 
@@ -16,6 +17,13 @@ extern sc_time sim_duration;
 extern unsigned int num_chiplets;
 
 extern ConnectionType connection_type;
+const char *to_string(ConnectionType type);
 extern std::vector<unsigned int> connections;
 
-const char *to_string(ConnectionType type);
+extern double chiplet_distance_um;
+extern double fpga_distance_mm;
+extern double wire_ps_per_mm;
+
+extern double bit_error_rate;
+extern std::mt19937 bit_error_gen;
+extern std::uniform_real_distribution<> bit_error_dist;

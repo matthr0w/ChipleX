@@ -32,8 +32,17 @@ public:
   unsigned int interconnectProtocolFlitSize() const {
     return interconnect_protocol_flit_size;
   }
+  unsigned int interconnectProtocolHeaderSize() const {
+    return interconnect_protocol_header_size;
+  }
   unsigned int interconnectProtocolBufferSize() const {
     return interconnect_protocol_buffer_size;
+  }
+  sc_time interconnectProtocolPreDelay() const {
+    return interconnect_protocol_pre_delay;
+  }
+  sc_time interconnectProtocolPostDelay() const {
+    return interconnect_protocol_post_delay;
   }
   sc_time interconnectProtocolClkCycle() const {
     return interconnect_protocol_clk_cycle;
@@ -62,7 +71,10 @@ private:
 
   unsigned int interconnect_protocol_width;
   unsigned int interconnect_protocol_flit_size;
+  unsigned int interconnect_protocol_header_size;
   unsigned int interconnect_protocol_buffer_size;
+  sc_time interconnect_protocol_pre_delay;
+  sc_time interconnect_protocol_post_delay;
   sc_time interconnect_protocol_clk_cycle;
 
   unsigned int interconnect_width;

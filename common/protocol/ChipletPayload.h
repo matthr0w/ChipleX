@@ -64,44 +64,6 @@ public:
     return ext;
   }
 
-  unsigned get_size_bytes() const {
-    unsigned size = 0;
-
-    // address
-    size += sizeof(uint32_t);
-
-    // data buffer
-    size += this->get_data_length();
-
-    // extension
-    ChipletExtension *ext = nullptr;
-    this->get_extension(ext);
-    if (ext) {
-      size += ext->get_size_bytes();
-    }
-
-    return size;
-  }
-
-  unsigned get_protocol_size_bytes() const {
-    unsigned size = get_size_bytes();
-
-    // crc
-    size += 2;
-
-    return size;
-  }
-
-  unsigned get_flit_count(unsigned flit_size_bytes) const {
-    unsigned total = get_protocol_size_bytes();
-    return (total + flit_size_bytes - 1) / flit_size_bytes;
-  }
-
-  unsigned get_flit_bytes(unsigned flit_size_bytes) const {
-    unsigned flit_count = get_flit_count(flit_size_bytes);
-    return flit_count * flit_size_bytes;
-  }
-
   void set_request_id(int id) { ensure_extension()->request_id = id; }
   void set_source_id(int id) { ensure_extension()->source_id = id; }
   void set_core_id(int id) { ensure_extension()->core_id = id; }

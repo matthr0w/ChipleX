@@ -8,17 +8,23 @@ void Parser::print_help(const char *progname) {
   std::cout
       << "Usage: " << progname << " [options]\n"
       << "Options:\n"
-      << "  --time=<ns>             Set simulation time in nanoseconds "
+      << "  --time=<ns>               Set simulation time in nanoseconds "
          "(default: 1000)\n"
-      << "  --chiplets=<n>          Set number of chiplets (minimum: 2, "
+      << "  --chiplets=<n>            Set number of chiplets (minimum: 2, "
          "default: 2)\n"
-      << "  --connectiontype=<type> Set interconnect type: Custom, UCIe, PCIe, "
+      << "  --connection-type=<type>  Set interconnect type: Custom, "
+         "UCIe, PCIe, "
          "SPI (default: Custom)\n"
-      << "  --connections=1,2,3     Set FPGA connection targets: "
+      << "  --connections=1,2,3       Set FPGA connection targets: "
          "1,2,...,n (default: 1,2)\n"
-      << "  --logging=level         Set logging level: INFO, WARN, "
+      << "  --chiplet-distance=<um>   Set distance between chiplets in "
+         "micrometers (default: 100)\n"
+      << "  --fpga-distance=<mm>      Set distance between FPGA and chiplets "
+         "in millimeters (default: 5000)\n"
+      << "  --ber=<prob>              Set bit error rate (default: 1e-12)\n"
+      << "  --logging=level           Set logging level: INFO, WARN, "
          "ERROR, DEBUG, SILENT (default: SILENT)\n"
-      << "  --help                  Show this help message\n";
+      << "  --help                    Show this help message\n";
 }
 
 void Parser::print_args() {
@@ -30,6 +36,10 @@ void Parser::print_args() {
   for (auto c : connections) {
     std::cout << c << " ";
   }
+  std::cout << "\n"
+            << "Chiplet distance: " << chiplet_distance_um << " um\n"
+            << "FPGA distance: " << fpga_distance_mm << " mm\n"
+            << "Bit error rate: " << bit_error_rate << "\n";
 }
 
 bool Parser::parse_connection_list(const std::string &arg) {
@@ -99,11 +109,32 @@ int Parser::parse(int argc, char *argv[]) {
         std::cerr << "Invalid connection list format\n";
         return 1;
       }
-    } else if (arg.rfind("--connectiontype=", 0) == 0) {
-      std::string value = arg.substr(17);
+    } else if (arg.rfind("--connection-type=", 0) == 0) {
+      std::string value = arg.substr(18);
       connection_type = parse_connection_type(value);
       if (connection_type == ConnectionType::Unknown) {
         std::cerr << "Unknown interconnect type: " << value << "\n";
+        return 1;
+      }
+    } else if (arg.rfind("--chiplet-distance=", 0) == 0) {
+      try {
+        chiplet_distance_um = std::stod(arg.substr(19));
+      } catch (...) {
+        std::cerr << "Invalid value for --chiplet-distance\n";
+        return 1;
+      }
+    } else if (arg.rfind("--fpga-distance=", 0) == 0) {
+      try {
+        fpga_distance_mm = std::stod(arg.substr(16));
+      } catch (...) {
+        std::cerr << "Invalid value for --fpga-distance\n";
+        return 1;
+      }
+    } else if (arg.rfind("--ber=", 0) == 0) {
+      try {
+        bit_error_rate = std::stod(arg.substr(6));
+      } catch (...) {
+        std::cerr << "Invalid value for --ber\n";
         return 1;
       }
     } else if (arg.rfind("--logging=", 0) == 0) {

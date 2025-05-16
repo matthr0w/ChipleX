@@ -12,7 +12,10 @@ ram:
 interconnect_protocol:
   width: 4 # bytes
   flit_size: 64 # bytes
+  header_size: 0 # bytes
   buffer_size: 256 # bytes
+  pre_delay: 0 # ns
+  post_delay: 0 # ns
   clk_cycle: 5.0 # ns
 
 interconnect:

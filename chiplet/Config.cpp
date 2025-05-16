@@ -31,8 +31,14 @@ void chiplet::Config::load(const std::string &filename) {
       config["interconnect_protocol"]["width"].as<unsigned int>();
   interconnect_protocol_flit_size =
       config["interconnect_protocol"]["flit_size"].as<unsigned int>();
+  interconnect_protocol_header_size =
+      config["interconnect_protocol"]["header_size"].as<unsigned int>();
   interconnect_protocol_buffer_size =
       config["interconnect_protocol"]["buffer_size"].as<unsigned int>();
+  interconnect_protocol_pre_delay =
+      sc_time(config["interconnect_protocol"]["pre_delay"].as<double>(), SC_NS);
+  interconnect_protocol_post_delay = sc_time(
+      config["interconnect_protocol"]["post_delay"].as<double>(), SC_NS);
   interconnect_protocol_clk_cycle =
       sc_time(config["interconnect_protocol"]["clk_cycle"].as<double>(), SC_NS);
 
@@ -66,8 +72,14 @@ void chiplet::Config::validate(const YAML::Node &config) {
         "interconnect_protocol.width");
   check(config["interconnect_protocol"]["flit_size"],
         "interconnect_protocol.flit_size");
+  check(config["interconnect_protocol"]["header_size"],
+        "interconnect_protocol.header_size");
   check(config["interconnect_protocol"]["buffer_size"],
         "interconnect_protocol.buffer_size");
+  check(config["interconnect_protocol"]["pre_delay"],
+        "interconnect_protocol.pre_delay");
+  check(config["interconnect_protocol"]["post_delay"],
+        "interconnect_protocol.post_delay");
   check(config["interconnect_protocol"]["clk_cycle"],
         "interconnect_protocol.clk_cycle");
 
@@ -109,9 +121,18 @@ void chiplet::Config::override(const std::string &filename) {
     if (config["interconnect_protocol"]["flit_size"])
       interconnect_protocol_flit_size =
           config["interconnect_protocol"]["flit_size"].as<unsigned int>();
+    if (config["interconnect_protocol"]["header_size"])
+      interconnect_protocol_header_size =
+          config["interconnect_protocol"]["header_size"].as<unsigned int>();
     if (config["interconnect_protocol"]["buffer_size"])
       interconnect_protocol_buffer_size =
           config["interconnect_protocol"]["buffer_size"].as<unsigned int>();
+    if (config["interconnect_protocol"]["pre_delay"])
+      interconnect_protocol_pre_delay = sc_time(
+          config["interconnect_protocol"]["pre_delay"].as<double>(), SC_NS);
+    if (config["interconnect_protocol"]["post_delay"])
+      interconnect_protocol_post_delay = sc_time(
+          config["interconnect_protocol"]["post_delay"].as<double>(), SC_NS);
     if (config["interconnect_protocol"]["clk_cycle"])
       interconnect_protocol_clk_cycle = sc_time(
           config["interconnect_protocol"]["clk_cycle"].as<double>(), SC_NS);
@@ -145,8 +166,12 @@ void chiplet::Config::print() const {
             << "Interconnect Protocol:\n"
             << "  Width: " << interconnect_protocol_width << " bytes\n"
             << "  Flit Size: " << interconnect_protocol_flit_size << " bytes\n"
+            << "  Header Size: " << interconnect_protocol_header_size
+            << " bytes\n"
             << "  Buffer Size: " << interconnect_protocol_buffer_size
             << " bytes\n"
+            << "  Pre Delay: " << interconnect_protocol_pre_delay << "\n"
+            << "  Post Delay: " << interconnect_protocol_post_delay << "\n"
             << "  Clock Cycle: " << interconnect_protocol_clk_cycle << "\n"
 
             << "Interconnect:\n"

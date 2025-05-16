@@ -2,6 +2,7 @@
 #include "Config.h"
 
 #include "common/Delays.h"
+#include "common/Flits.h"
 #include "common/protocol/ChipletPayload.h"
 
 #include "include/logging.h"
@@ -36,6 +37,10 @@ void fpga::Interconnect::process_tx_buffer() {
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
 
+      unsigned int transaction_flit_size = get_flit_bytes(
+          *transaction, Config::instance().interconnectProtocolFlitSize(),
+          Config::instance().interconnectProtocolHeaderSize());
+
       SC_LOG_DEBUG(this, *transaction, "Tx->Rx transmission started");
       tlm_sync_enum tlm_resp = interconnect_initiator_socket->nb_transport_fw(
           *transaction, phase, delay);
@@ -47,10 +52,7 @@ void fpga::Interconnect::process_tx_buffer() {
       }
 
       // remove from tx buffer
-      tx_buffer_used_bytes -=
-          static_cast<ChipletPayload &>(*transaction)
-              .get_flit_bytes(
-                  Config::instance().interconnectProtocolFlitSize());
+      tx_buffer_used_bytes -= transaction_flit_size;
       tx_buffer.pop_front();
       tx_buffer_out_event.notify();
 
@@ -68,6 +70,10 @@ void fpga::Interconnect::process_rx_buffer() {
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
 
+      unsigned int transaction_flit_size = get_flit_bytes(
+          *transaction, Config::instance().interconnectProtocolFlitSize(),
+          Config::instance().interconnectProtocolHeaderSize());
+
       SC_LOG_DEBUG(this, *transaction, "Rx->Protocol transmission started");
       tlm_sync_enum tlm_resp = protocol_initiator_socket->nb_transport_fw(
           *transaction, phase, delay);
@@ -79,10 +85,7 @@ void fpga::Interconnect::process_rx_buffer() {
       }
 
       // remove from rx buffer
-      rx_buffer_used_bytes -=
-          static_cast<ChipletPayload &>(*transaction)
-              .get_flit_bytes(
-                  Config::instance().interconnectProtocolFlitSize());
+      rx_buffer_used_bytes -= transaction_flit_size;
       rx_buffer.pop_front();
       rx_buffer_out_event.notify();
 
@@ -107,23 +110,29 @@ fpga::Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
-  if (tx_buffer_used_bytes +
-          transaction_copy->get_flit_bytes(
-              Config::instance().interconnectProtocolFlitSize()) >
+  unsigned int transaction_flit_size = get_flit_bytes(
+      *transaction_copy, Config::instance().interconnectProtocolFlitSize(),
+      Config::instance().interconnectProtocolHeaderSize());
+
+  if (tx_buffer_used_bytes + transaction_flit_size >
       Config::instance().interconnectBufferSize()) {
     SC_LOG_WARN(this, transaction, "Tx buffer full -> waiting...");
     wait(tx_buffer_out_event);
   }
 
   // add protocol layer to interconnect transfer delay
+  // clock cycle: interconnect protocol layer
+  // width: interconnect protocol layer
   delay += get_protocol2interconnect_transfer_delay(
       *this, transaction, Config::instance().interconnectProtocolClkCycle(),
-      Config::instance().interconnectProtocolWidth());
+      Config::instance().interconnectProtocolPreDelay(),
+      Config::instance().interconnectProtocolWidth(),
+      Config::instance().interconnectProtocolFlitSize(),
+      Config::instance().interconnectProtocolHeaderSize());
 
   // put transaction in tx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Tx buffer");
-  tx_buffer_used_bytes += transaction_copy->get_flit_bytes(
-      Config::instance().interconnectProtocolFlitSize());
+  tx_buffer_used_bytes += transaction_flit_size;
   tx_buffer.push_back(transaction_copy);
   tx_buffer_in_event.notify(delay);
 
@@ -154,9 +163,11 @@ tlm_sync_enum fpga::Interconnect::nb_transport_fw_interconnect(
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
-  if (rx_buffer_used_bytes +
-          transaction_copy->get_flit_bytes(
-              Config::instance().interconnectProtocolFlitSize()) >
+  unsigned int transaction_flit_size = get_flit_bytes(
+      *transaction_copy, Config::instance().interconnectProtocolFlitSize(),
+      Config::instance().interconnectProtocolHeaderSize());
+
+  if (rx_buffer_used_bytes + transaction_flit_size >
       Config::instance().interconnectBufferSize()) {
     SC_LOG_WARN(this, transaction, "Rx buffer full -> waiting...");
     wait(rx_buffer_out_event);
@@ -165,12 +176,14 @@ tlm_sync_enum fpga::Interconnect::nb_transport_fw_interconnect(
   // add fpga to chiplet transfer delay
   delay += get_fpga2chiplet_transfer_delay(
       *this, transaction, Config::instance().interconnectClkCycle(),
-      Config::instance().interconnectWidth());
+      Config::instance().interconnectProtocolPostDelay(),
+      Config::instance().interconnectWidth(),
+      Config::instance().interconnectProtocolFlitSize(),
+      Config::instance().interconnectProtocolHeaderSize());
 
   // put transaction in rx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");
-  rx_buffer_used_bytes += transaction_copy->get_flit_bytes(
-      Config::instance().interconnectProtocolFlitSize());
+  rx_buffer_used_bytes += transaction_flit_size;
   rx_buffer.push_back(transaction_copy);
   rx_buffer_in_event.notify(delay);
 
