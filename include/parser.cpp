@@ -29,17 +29,17 @@ void Parser::print_help(const char *progname) {
 
 void Parser::print_args() {
   std::cout << "=== Simulation Configuration ===\n"
-            << "Simulation time: " << sim_duration << "\n"
-            << "Number of chiplets: " << num_chiplets << "\n"
-            << "Interconnect type: " << to_string(connection_type) << "\n"
-            << "FPGA connection targets: ";
+            << "Simulation Time: " << sim_duration << "\n"
+            << "Number of Chiplets: " << num_chiplets << "\n"
+            << "Interconnect Type: " << to_string(connection_type) << "\n"
+            << "FPGA Connection Targets: ";
   for (auto c : connections) {
     std::cout << c << " ";
   }
   std::cout << "\n"
-            << "Chiplet distance: " << chiplet_distance_um << " um\n"
-            << "FPGA distance: " << fpga_distance_mm << " mm\n"
-            << "Bit error rate: " << bit_error_rate << "\n";
+            << "Chiplet Distance: " << chiplet_distance_um << " um\n"
+            << "FPGA Distance: " << fpga_distance_mm << " mm\n"
+            << "Bit Error Rate: " << bit_error_rate << "\n";
 }
 
 bool Parser::parse_connection_list(const std::string &arg) {

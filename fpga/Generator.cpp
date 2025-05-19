@@ -3,6 +3,8 @@
 
 #include <random>
 
+#include "chiplet/Config.h"
+
 #include "common/Delays.h"
 #include "common/protocol/ChipletExtension.h"
 #include "common/protocol/ChipletPayload.h"
@@ -24,47 +26,8 @@ fpga::Generator::Generator(sc_module_name name, unsigned int fpga_id)
 }
 
 void fpga::Generator::gen_thread() {
-  // random number distributions
-  thread_local std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<int> delay_dist(1000, 2000);
-
-  std::bernoulli_distribution write_dist(0.5);
-  std::uniform_int_distribution<uint32_t> data_dist;
-
-  std::uniform_int_distribution<uint32_t> destination_dist(0, num_chiplets);
-
-  std::uniform_int_distribution<uint32_t> address_onchip_dist(
-      0, Config::instance().ramSize() * 1024);
-  std::uniform_int_distribution<uint32_t> address_offchip_dist(
-      0, 16 * 1024); // TODO: config
-
-  while (true) {
-    // random delay between requests
-    wait(delay_dist(gen), SC_NS);
-
-    // random destination id
-    int destination_id = destination_dist(gen);
-
-    // read or write
-    bool do_write = write_dist(gen);
-
-    // random RAM address
-    uint32_t address;
-    if (destination_id == fpga_id) {
-      address = address_onchip_dist(gen);
-    } else {
-      address = address_offchip_dist(gen);
-    }
-
-    // random 4 bytes
-    uint32_t *data = new uint32_t(data_dist(gen));
-    unsigned int data_size = sizeof(uint32_t);
-
-    send_request(do_write ? TLM_WRITE_COMMAND : TLM_READ_COMMAND, request,
-                 destination_id, address,
-                 reinterpret_cast<unsigned char *>(data), data_size);
-
-    request += 1;
+  if (gen_fn) {
+    gen_fn(*this);
   }
 }
 
@@ -85,16 +48,70 @@ void fpga::Generator::handle_interrupt() {
 
     SC_LOG_INFO(this, *transaction, "Received IRQ from request " << request_id);
 
-    uint32_t address = transaction->get_address();
-
-    // 4 zero bytes
-    uint32_t *data = new uint32_t(0);
-    unsigned int data_size = 4;
-
-    send_request(TLM_READ_COMMAND, request_id, fpga_id, address,
-                 reinterpret_cast<unsigned char *>(data), data_size);
+    if (interrupt_fn) {
+      interrupt_fn(*this, transaction);
+    }
 
     delete transaction;
+  }
+}
+
+void fpga::Generator::send_random(unsigned int delay, double write_prob,
+                                  unsigned int destination_min,
+                                  unsigned int destination_max,
+                                  size_t data_size) {
+  if (destination_max > num_chiplets) {
+    destination_max = num_chiplets;
+  }
+
+  // address space separation
+  size_t total_bytes_fpga = fpga::Config::instance().ramSize() * 1024;
+  size_t half_bytes_fpga = total_bytes_fpga / 2;
+  size_t total_bytes_chiplet = chiplet::Config::instance().ramSize() * 1024;
+  size_t half_bytes_chiplet = total_bytes_chiplet / 2;
+
+  // random number distributions
+  thread_local std::mt19937 gen(std::random_device{}());
+
+  std::bernoulli_distribution write_dist(write_prob);
+
+  std::uniform_int_distribution<uint32_t> destination_dist(destination_min,
+                                                           destination_max);
+
+  std::uniform_int_distribution<uint32_t> address_onchip_dist(
+      0, half_bytes_fpga - 1);
+  std::uniform_int_distribution<uint32_t> address_offchip_dist(
+      half_bytes_chiplet, total_bytes_chiplet - 1);
+
+  std::uniform_int_distribution<unsigned short> byte_dist(0, 255);
+  while (true) {
+    wait(delay, SC_NS);
+
+    // read or write
+    bool do_write = write_dist(gen);
+
+    // random destination id
+    uint32_t destination_id = destination_dist(gen);
+
+    // random RAM address
+    uint32_t address;
+
+    if (destination_id == 0) {
+      address = address_onchip_dist(gen);
+    } else {
+      address = address_offchip_dist(gen);
+    }
+
+    // random data buffer
+    unsigned char *data = new unsigned char[data_size];
+    for (size_t i = 0; i < data_size; ++i) {
+      data[i] = static_cast<unsigned char>(byte_dist(gen));
+    }
+
+    send_request(do_write ? TLM_WRITE_COMMAND : TLM_READ_COMMAND, request,
+                 destination_id, address, data, data_size);
+
+    request += 1;
   }
 }
 
@@ -122,9 +139,7 @@ void fpga::Generator::send_request(tlm_command command, int request_id,
                 "Sending request: READ from 0x" << std::hex << address);
   } else if (command == TLM_WRITE_COMMAND) {
     SC_LOG_INFO(this, *transaction,
-                "Sending request: WRITE to 0x"
-                    << std::hex << address << " with data 0x"
-                    << *reinterpret_cast<uint32_t *>(data));
+                "Sending request: WRITE to 0x" << std::hex << address);
   }
 
   phase = BEGIN_REQ;

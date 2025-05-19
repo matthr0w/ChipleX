@@ -20,16 +20,23 @@ public:
 
   Generator(sc_module_name name, unsigned int fpga_id);
 
+  std::function<void(Generator &)> gen_fn;
+  std::function<void(Generator &, tlm_generic_payload *)> interrupt_fn;
+
+  void gen_thread();
+
+  void send_random(unsigned int delay, double write_prob,
+                   unsigned int destination_min, unsigned int destination_max,
+                   size_t data_size);
+  void send_request(tlm_command command, int request_id, int destination_id,
+                    uint32_t address, unsigned char *data,
+                    unsigned int data_size);
+
 private:
   const unsigned int fpga_id;
 
   sc_mutex request_mutex;
   unsigned int request;
-
-  void gen_thread();
-  void send_request(tlm_command command, int request_id,
-                    int destination_id, uint32_t address, unsigned char *data,
-                    unsigned int data_size);
 
   // -------------------------------------------------------
   // events
@@ -46,10 +53,8 @@ private:
   // transport functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw_irq(tlm_generic_payload & transaction,
-                                         tlm_phase & phase,
-                                         sc_time & delay);
+                                    tlm_phase & phase, sc_time & delay);
   tlm_sync_enum nb_transport_bw(tlm_generic_payload & transaction,
-                                     tlm_phase & phase,
-                                     sc_time & delay);
+                                tlm_phase & phase, sc_time & delay);
 };
 }; // namespace fpga
