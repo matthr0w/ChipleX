@@ -55,21 +55,30 @@ using CoreKey = std::pair<int, int>;
 //       (0 = FPGA, 1 = Chiplet1, ...)
 //    - `data_size`: Number of bytes per request
 //
-// 2. void send_request(tlm_command command,
-//                      int request_id,
-//                      int destination_id,
-//                      uint32_t address,
-//                      unsigned char* data,
-//                      unsigned int data_size);
+// 2. ChipletPayload* send_request(tlm_command command,
+//                                 int request_id,
+//                                 int destination_id,
+//                                 uint32_t address,
+//                                 unsigned char* data,
+//                                 unsigned int data_size);
 //
-//    Sends a single read/write request over the bus.
+//    Sends a single read/write request over the bus and returns a response
+//    payload.
 //    - `request_id`: Used to identify the request later in the interrupt
-//    handler (you may start at 0 and increment as needed)
+//       handler (you may start at 0 and increment as needed).
 //    - `destination_id`: Target module ID
 //       (0 = FPGA, 1 = Chiplet1, ...)
-//    - `data`: Must be allocated on the heap (`new`).
-//       DO NOT delete it manually. Memory will be cleaned up by the system.
-//    - `data_size`: Number of bytes of the request
+//    - `data`: Must be allocated on the heap using `new`.
+//       - for `WRITE_COMMAND`: the buffer contents will be sent to the target.
+//       - for `READ_COMMAND`: an empty buffer of the appropriate size must be
+//         passed. DO NOT delete the buffer manually. It will be managed and
+//         freed internally.
+//    - `data_size`: Number of bytes in the request buffer
+//
+//    Returns:
+//    - A pointer to a newly allocated response of `ChipletPayload`
+//    - You are responsible for deleting the returned payload when done:
+//      `delete response;`
 //
 //    Note:
 //    `send_request` is blocking and only returns when the transaction is
@@ -129,8 +138,9 @@ using CoreKey = std::pair<int, int>;
 //  {[](chiplet::Core &core) {
 //     SC_LOG_DEBUG_NO_TX(&core, "Starting Core Logic");
 //     uint32_t *data = new uint32_t(0xABCD);
-//     core.send_request(TLM_WRITE_COMMAND, 0, 0, 0x1000,
+//     auto response = core.send_request(TLM_WRITE_COMMAND, 0, 0, 0x1000,
 //                       reinterpret_cast<unsigned char *>(data), 4);
+//     delete response;
 //   },
 //   [](chiplet::Core &core, tlm_generic_payload *transaction) {
 //     auto *ext = transaction->get_extension<ChipletExtension>();
@@ -140,7 +150,7 @@ using CoreKey = std::pair<int, int>;
 //     }
 //   }}},
 //
-// `send_request` Examples:
+// `send_random` Examples:
 // // Send 64 bytes every 200ns randomly to modules 0–2
 // // (FPGA, Chiplet1, Chiplet2) with 50% write probability:
 // module.send_random(200, 0.5, 0, 2, 64);

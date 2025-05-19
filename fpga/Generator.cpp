@@ -108,17 +108,20 @@ void fpga::Generator::send_random(unsigned int delay, double write_prob,
       data[i] = static_cast<unsigned char>(byte_dist(gen));
     }
 
-    send_request(do_write ? TLM_WRITE_COMMAND : TLM_READ_COMMAND, request,
-                 destination_id, address, data, data_size);
+    auto response =
+        send_request(do_write ? TLM_WRITE_COMMAND : TLM_READ_COMMAND, request,
+                     destination_id, address, data, data_size);
+
+    delete response;
 
     request += 1;
   }
 }
 
-void fpga::Generator::send_request(tlm_command command, int request_id,
-                                   int destination_id, uint32_t address,
-                                   unsigned char *data,
-                                   unsigned int data_size) {
+ChipletPayload *
+fpga::Generator::send_request(tlm_command command, int request_id,
+                              int destination_id, uint32_t address,
+                              unsigned char *data, unsigned int data_size) {
   std::scoped_lock lock(request_mutex);
 
   auto *transaction = new ChipletPayload();
@@ -156,9 +159,13 @@ void fpga::Generator::send_request(tlm_command command, int request_id,
 
   wait(transaction_done);
 
+  auto *response = transaction->clone();
+
   SC_LOG_INFO(this, *transaction, "Transaction successful");
 
   delete transaction;
+
+  return response;
 }
 
 // -------------------------------------------------------
