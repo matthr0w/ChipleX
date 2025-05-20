@@ -1,16 +1,16 @@
 bus:
-  width: 4 # bytes
+  width: 32 # bits
   clk_cycle: 5.0 # ns
   arbitration_delay: 5.0 # ns
 
 ram:
   size: 64 # KB
-  width: 1 # bytes
+  width: 32 # bits
   clk_cycle: 3.0 # ns
   access_delay: 20.0 # ns
 
 interconnect_protocol:
-  width: 4 # bytes
+  width: 32 # bits
   flit_size: 64 # bytes
   header_size: 0 # bytes
   buffer_size: 256 # bytes
@@ -19,6 +19,6 @@ interconnect_protocol:
   clk_cycle: 5.0 # ns
 
 interconnect:
-  width: 1 # bytes
+  width: 8 # bits
   buffer_size: 128 # bytes
   clk_cycle: 10.0 # ns

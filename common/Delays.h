@@ -17,7 +17,7 @@ using namespace tlm;
 inline sc_time get_data_cycles_delay(tlm_generic_payload &transaction,
                                      unsigned int width, sc_time cycle) {
   unsigned int data_size = transaction.get_data_length();
-  unsigned int num_cycles = (data_size + width - 1) / width;
+  unsigned int num_cycles = (data_size * 8 + width - 1) / width;
   return num_cycles * cycle;
 }
 
@@ -26,7 +26,7 @@ inline sc_time get_extension_cycles_delay(tlm_generic_payload &transaction,
   ChipletExtension *ext;
   transaction.get_extension(ext);
   unsigned int extension_size = ext->get_size_bytes();
-  unsigned int num_cycles = (extension_size + width - 1) / width;
+  unsigned int num_cycles = (extension_size * 8 + width - 1) / width;
   return num_cycles * cycle;
 }
 
@@ -163,7 +163,7 @@ inline sc_time get_protocol2interconnect_transfer_delay(
   unsigned int transaction_flit_size =
       get_flit_bytes(transaction, flit_size, header_size);
 
-  unsigned int num_cycles = (transaction_flit_size + width - 1) / width;
+  unsigned int num_cycles = (transaction_flit_size * 8 + width - 1) / width;
 
   flit_cycles_delay = num_cycles * clk_cycle;
 
@@ -188,7 +188,7 @@ inline sc_time get_interconnect2protocol_transfer_delay(
   unsigned int transaction_flit_size =
       get_flit_bytes(transaction, flit_size, header_size);
 
-  unsigned int num_cycles = (transaction_flit_size + width - 1) / width;
+  unsigned int num_cycles = (transaction_flit_size * 8 + width - 1) / width;
 
   flit_cycles_delay = num_cycles * clk_cycle;
 
@@ -237,7 +237,7 @@ inline sc_time get_chiplet2chiplet_transfer_delay(
   unsigned int transaction_flit_size =
       get_flit_bytes(transaction, flit_size, header_size);
 
-  unsigned int num_cycles = (transaction_flit_size + width - 1) / width;
+  unsigned int num_cycles = (transaction_flit_size * 8 + width - 1) / width;
 
   flit_cycles_delay = num_cycles * clk_cycle;
 
@@ -292,7 +292,7 @@ inline sc_time get_fpga2chiplet_transfer_delay(
   unsigned int transaction_flit_size =
       get_flit_bytes(transaction, flit_size, header_size);
 
-  unsigned int num_cycles = (transaction_flit_size + width - 1) / width;
+  unsigned int num_cycles = (transaction_flit_size * 8 + width - 1) / width;
 
   flit_cycles_delay = num_cycles * clk_cycle;
 

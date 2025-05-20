@@ -153,18 +153,18 @@ void fpga::Config::override(const std::string &filename) {
 void fpga::Config::print() const {
   std::cout << "=== FPGA Configuration ===\n"
             << "Bus:\n"
-            << "  Width: " << bus_width << " bytes\n"
+            << "  Width: " << bus_width << " bits\n"
             << "  Clock Cycle: " << bus_clk_cycle << "\n"
             << "  Arbitration Delay: " << bus_arbitration_delay << "\n"
 
             << "RAM:\n"
             << "  Size: " << ram_size << " KB\n"
-            << "  Width: " << ram_width << " bytes\n"
+            << "  Width: " << ram_width << " bits\n"
             << "  Clock Cycle: " << ram_clk_cycle << "\n"
             << "  Access Delay: " << ram_access_delay << "\n"
 
             << "Interconnect Protocol:\n"
-            << "  Width: " << interconnect_protocol_width << " bytes\n"
+            << "  Width: " << interconnect_protocol_width << " bits\n"
             << "  Flit Size: " << interconnect_protocol_flit_size << " bytes\n"
             << "  Header Size: " << interconnect_protocol_header_size
             << " bytes\n"
@@ -175,7 +175,7 @@ void fpga::Config::print() const {
             << "  Clock Cycle: " << interconnect_protocol_clk_cycle << "\n"
 
             << "Interconnect:\n"
-            << "  Width: " << interconnect_width << " bytes\n"
+            << "  Width: " << interconnect_width << " bits\n"
             << "  Buffer Size: " << interconnect_buffer_size << " bytes\n"
             << "  Clock Cycle: " << interconnect_clk_cycle << "\n";
 }
