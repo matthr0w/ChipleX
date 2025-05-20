@@ -6,6 +6,8 @@
 #include "fpga/Config.h"
 #include "fpga/FPGA.h"
 
+#include "configs/UserCode.h"
+
 #include "common/RoutingTable.h"
 
 #include "include/globals.h"
@@ -78,6 +80,24 @@ int sc_main(int argc, char *argv[]) {
 
   // create FPGA
   FPGA fpga("FPGA");
+
+  // assign user code
+  // chiplets
+  for (unsigned int i = 0; i < num_chiplets; ++i) {
+    auto it_core0 = core_code.find({i + 1, 0});
+    if (it_core0 != core_code.end()) {
+      chiplets[i]->core0.thread_fn = it_core0->second.first;
+      chiplets[i]->core0.interrupt_fn = it_core0->second.second;
+    }
+    auto it_core1 = core_code.find({i + 1, 1});
+    if (it_core1 != core_code.end()) {
+      chiplets[i]->core1.thread_fn = it_core1->second.first;
+      chiplets[i]->core1.interrupt_fn = it_core1->second.second;
+    }
+  }
+  // FPGA
+  fpga.generator.gen_fn = generator_code.first;
+  fpga.generator.interrupt_fn = generator_code.second;
 
   // connect chiplets in a ring topology
   for (unsigned int i = 0; i < num_chiplets; ++i) {

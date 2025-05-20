@@ -20,6 +20,8 @@ private:
   const unsigned int chiplet_id;
 
 public:
+  chiplet::Core core0;
+  chiplet::Core core1;
   std::vector<chiplet::Interconnect *> interconnects;
 
   SC_CTOR(Chiplet);
@@ -27,8 +29,6 @@ public:
 
 private:
   chiplet::Bus bus;
-  chiplet::Core core0;
-  chiplet::Core core1;
   chiplet::InterconnectProtocol interconnectprotocol;
   chiplet::RAM ram;
 

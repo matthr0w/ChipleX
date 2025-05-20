@@ -16,6 +16,7 @@ using namespace tlm_utils;
 
 SC_MODULE(FPGA) {
 public:
+  fpga::Generator generator;
   std::vector<fpga::Interconnect *> interconnects;
 
   SC_CTOR(FPGA);
@@ -23,7 +24,6 @@ public:
 
 private:
   fpga::Bus bus;
-  fpga::Generator generator;
   fpga::InterconnectProtocol interconnectprotocol;
   fpga::RAM ram;
 

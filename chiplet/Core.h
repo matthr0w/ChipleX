@@ -5,6 +5,8 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "common/protocol/ChipletPayload.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -20,17 +22,24 @@ public:
 
   Core(sc_module_name name, unsigned int chiplet_id, unsigned int core_id);
 
+  std::function<void(Core &)> thread_fn;
+  std::function<void(Core &, tlm_generic_payload *)> interrupt_fn;
+
+  void core_thread();
+
+  void send_random(unsigned int delay, double write_prob,
+                   unsigned int destination_min, unsigned int destination_max,
+                   size_t data_size);
+  ChipletPayload *send_request(tlm_command command, int request_id,
+                               int destination_id, uint32_t address,
+                               unsigned char *data, unsigned int data_size);
+
 private:
   const unsigned int chiplet_id;
   const unsigned int core_id;
 
   sc_mutex request_mutex;
   unsigned int request;
-
-  void core_thread();
-  void send_request(tlm_command command, int request_id, int destination_id,
-                    uint32_t address, unsigned char *data,
-                    unsigned int data_size);
 
   // -------------------------------------------------------
   // events
