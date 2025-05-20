@@ -307,14 +307,9 @@ tlm_sync_enum fpga::InterconnectProtocol::nb_transport_fw_interconnect(
     wait(rx_buffer_out_event);
   }
 
-  // add interconnect to protocol layer transfer delay
-  // clock cycle: interconnect
-  // width: interconnect protocol layer
-  delay += get_interconnect2protocol_transfer_delay(
-      *this, transaction, Config::instance().interconnectClkCycle(),
-      Config::instance().interconnectProtocolWidth(),
-      Config::instance().interconnectProtocolFlitSize(),
-      Config::instance().interconnectProtocolHeaderSize());
+  // add interconnect to protocol layer process delay
+  delay += get_interconnect2protocol_process_delay(
+      *this, transaction, Config::instance().interconnectProtocolPostDelay());
 
   // put transaction in rx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");

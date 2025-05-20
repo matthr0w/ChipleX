@@ -120,15 +120,9 @@ fpga::Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
     wait(tx_buffer_out_event);
   }
 
-  // add protocol layer to interconnect transfer delay
-  // clock cycle: interconnect protocol layer
-  // width: interconnect protocol layer
-  delay += get_protocol2interconnect_transfer_delay(
-      *this, transaction, Config::instance().interconnectProtocolClkCycle(),
-      Config::instance().interconnectProtocolPreDelay(),
-      Config::instance().interconnectProtocolWidth(),
-      Config::instance().interconnectProtocolFlitSize(),
-      Config::instance().interconnectProtocolHeaderSize());
+  // add protocol layer to interconnect process delay
+  delay += get_protocol2interconnect_process_delay(
+      *this, transaction, Config::instance().interconnectProtocolPreDelay());
 
   // put transaction in tx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Tx buffer");
@@ -175,9 +169,7 @@ tlm_sync_enum fpga::Interconnect::nb_transport_fw_interconnect(
 
   // add fpga to chiplet transfer delay
   delay += get_fpga2chiplet_transfer_delay(
-      *this, transaction, Config::instance().interconnectClkCycle(),
-      Config::instance().interconnectProtocolPostDelay(),
-      Config::instance().interconnectWidth(),
+      *this, transaction, Config::instance().interconnectBandwidth(),
       Config::instance().interconnectProtocolFlitSize(),
       Config::instance().interconnectProtocolHeaderSize());
 

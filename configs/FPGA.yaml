@@ -10,15 +10,13 @@ ram:
   access_delay: 20.0 # ns
 
 interconnect_protocol:
-  width: 32 # bits
+  buffer_size: 512 # bytes
   flit_size: 64 # bytes
   header_size: 0 # bytes
-  buffer_size: 256 # bytes
   pre_delay: 0 # ns
   post_delay: 0 # ns
-  clk_cycle: 5.0 # ns
-
+  irq_delay: 2.0 # ns
+  
 interconnect:
-  width: 8 # bits
-  buffer_size: 128 # bytes
-  clk_cycle: 10.0 # ns
+  buffer_size: 512 # bytes
+  bandwidth: 1.0 # Gb/s

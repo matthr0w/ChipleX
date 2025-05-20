@@ -30,6 +30,11 @@ inline sc_time get_extension_cycles_delay(tlm_generic_payload &transaction,
   return num_cycles * cycle;
 }
 
+inline sc_time get_bandwidth_transfer_delay(unsigned int size_bytes,
+                                            double bandwidth) {
+  return sc_time(static_cast<double>(size_bytes) * 8.0 / bandwidth, SC_NS);
+}
+
 // -------------------------------------------------------
 // Bus
 // -------------------------------------------------------
@@ -148,51 +153,34 @@ inline sc_time get_mem_access_delay(sc_module &module,
 // -------------------------------------------------------
 // Interconnect Protocol Layer
 // -------------------------------------------------------
-inline sc_time get_protocol2interconnect_transfer_delay(
-    sc_module &module, tlm_generic_payload &transaction, sc_time clk_cycle,
-    sc_time preprocess_delay, unsigned int width, unsigned int flit_size,
-    unsigned int header_size) {
+inline sc_time
+get_protocol2interconnect_process_delay(sc_module &module,
+                                        tlm_generic_payload &transaction,
+                                        sc_time preprocess_delay) {
   // Protocol Layer to Interconnect Transfer Delay
   // -----------------------------------------------
   //      + fixed preprocess delay
-  //      + flit cycles delay
 
   sc_time delay = SC_ZERO_TIME;
-  sc_time flit_cycles_delay = SC_ZERO_TIME;
 
-  unsigned int transaction_flit_size =
-      get_flit_bytes(transaction, flit_size, header_size);
-
-  unsigned int num_cycles = (transaction_flit_size * 8 + width - 1) / width;
-
-  flit_cycles_delay = num_cycles * clk_cycle;
-
-  delay = preprocess_delay + flit_cycles_delay;
+  delay = preprocess_delay;
 
   SC_LOG_DELAY(&module, transaction, "Protocol Layer to Interconnect Transfer",
                delay);
   return delay;
 }
 
-inline sc_time get_interconnect2protocol_transfer_delay(
-    sc_module &module, tlm_generic_payload &transaction, sc_time clk_cycle,
-    unsigned int width, unsigned int flit_size, unsigned int header_size) {
+inline sc_time
+get_interconnect2protocol_process_delay(sc_module &module,
+                                         tlm_generic_payload &transaction,
+                                         sc_time postprocess_delay) {
   // Interconnect to Protocol Layer Transfer Delay
   // -----------------------------------------------
-  //      - no extra delay (already in chiplet2chiplet)
-  //      + flit cycles delay
+  //      + fixed postprocess delay
 
   sc_time delay = SC_ZERO_TIME;
-  sc_time flit_cycles_delay = SC_ZERO_TIME;
 
-  unsigned int transaction_flit_size =
-      get_flit_bytes(transaction, flit_size, header_size);
-
-  unsigned int num_cycles = (transaction_flit_size * 8 + width - 1) / width;
-
-  flit_cycles_delay = num_cycles * clk_cycle;
-
-  delay = flit_cycles_delay;
+  delay = postprocess_delay;
 
   SC_LOG_DELAY(&module, transaction, "Interconnect to Protocol Layer Transfer",
                delay);
@@ -201,17 +189,14 @@ inline sc_time get_interconnect2protocol_transfer_delay(
 
 inline sc_time get_irq_transfer_delay(sc_module &module,
                                       tlm_generic_payload &transaction,
-                                      sc_time clk_cycle) {
+                                      sc_time irq_delay) {
   // IRQ Transfer Delay
   // -----------------------------------------------
-  //      + address cycle delay
-  //      + irq cycle delay
+  //      + fixed irq delay
 
   sc_time delay;
-  sc_time address_cycle_delay = clk_cycle;
-  sc_time irq_cycle_delay = clk_cycle;
 
-  delay = address_cycle_delay + irq_cycle_delay;
+  delay = irq_delay;
 
   SC_LOG_DELAY(&module, transaction, "IRQ Transfer", delay);
   return delay;
@@ -221,31 +206,28 @@ inline sc_time get_irq_transfer_delay(sc_module &module,
 // Interconnect Physical Layer
 // -------------------------------------------------------
 inline sc_time get_chiplet2chiplet_transfer_delay(
-    sc_module &module, tlm_generic_payload &transaction, sc_time clk_cycle,
-    sc_time postprocess_delay, unsigned int width, unsigned int flit_size,
-    unsigned int header_size) {
+    sc_module &module, tlm_generic_payload &transaction, double bandwidth,
+    unsigned int flit_size, unsigned int header_size) {
   // Chiplet to Chiplet Transfer Delay
   // -----------------------------------------------
-  //      + flit cycles delay
+  //      + flit transfer delay
   //      + wire propagation delay
-  //      + fixed postprocess delay
 
   sc_time delay = SC_ZERO_TIME;
-  sc_time flit_cycles_delay = SC_ZERO_TIME;
+  sc_time flit_transfer_delay = SC_ZERO_TIME;
   sc_time wire_propagation_delay = SC_ZERO_TIME;
 
   unsigned int transaction_flit_size =
       get_flit_bytes(transaction, flit_size, header_size);
 
-  unsigned int num_cycles = (transaction_flit_size * 8 + width - 1) / width;
-
-  flit_cycles_delay = num_cycles * clk_cycle;
+  flit_transfer_delay =
+      get_bandwidth_transfer_delay(transaction_flit_size, bandwidth);
 
   // wire propagation delay based on distance
   wire_propagation_delay =
       sc_time(chiplet_distance_um * wire_ps_per_mm / 1000, SC_PS);
 
-  delay = flit_cycles_delay + wire_propagation_delay + postprocess_delay;
+  delay = flit_transfer_delay + wire_propagation_delay;
 
   bool bad_transfer = false;
   double prob_bad_transfer =
@@ -275,31 +257,30 @@ inline sc_time get_chiplet2chiplet_transfer_delay(
   return delay;
 }
 
-inline sc_time get_fpga2chiplet_transfer_delay(
-    sc_module &module, tlm_generic_payload &transaction, sc_time clk_cycle,
-    sc_time postprocess_delay, unsigned int width, unsigned int flit_size,
-    unsigned int header_size) {
+inline sc_time get_fpga2chiplet_transfer_delay(sc_module &module,
+                                               tlm_generic_payload &transaction,
+                                               double bandwidth,
+                                               unsigned int flit_size,
+                                               unsigned int header_size) {
   // FPGA to Chiplet Transfer Delay
   // -----------------------------------------------
   //      + flit cycles delay
   //      + wire propagation delay
-  //      + fixed postprocess delay
 
   sc_time delay = SC_ZERO_TIME;
-  sc_time flit_cycles_delay = SC_ZERO_TIME;
+  sc_time flit_transfer_delay = SC_ZERO_TIME;
   sc_time wire_propagation_delay = SC_ZERO_TIME;
 
   unsigned int transaction_flit_size =
       get_flit_bytes(transaction, flit_size, header_size);
 
-  unsigned int num_cycles = (transaction_flit_size * 8 + width - 1) / width;
-
-  flit_cycles_delay = num_cycles * clk_cycle;
+  flit_transfer_delay =
+      get_bandwidth_transfer_delay(transaction_flit_size, bandwidth);
 
   // wire propagation delay based on distance
   wire_propagation_delay = sc_time(fpga_distance_mm * wire_ps_per_mm, SC_PS);
 
-  delay = flit_cycles_delay + wire_propagation_delay + postprocess_delay;
+  delay = flit_transfer_delay + wire_propagation_delay;
 
   bool bad_transfer = false;
   double prob_bad_transfer =

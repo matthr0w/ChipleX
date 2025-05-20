@@ -177,7 +177,7 @@ fpga::Generator::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                      sc_core::sc_time &delay) {
   if (phase == BEGIN_REQ) {
     delay += get_irq_transfer_delay(
-        *this, transaction, Config::instance().interconnectProtocolClkCycle());
+        *this, transaction, Config::instance().interconnectProtocolIRQDelay());
 
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();

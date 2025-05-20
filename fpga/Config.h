@@ -26,8 +26,8 @@ public:
   sc_time ramClkCycle() const { return ram_clk_cycle; }
   sc_time ramAccessDelay() const { return ram_access_delay; }
 
-  unsigned int interconnectProtocolWidth() const {
-    return interconnect_protocol_width;
+  unsigned int interconnectProtocolBufferSize() const {
+    return interconnect_protocol_buffer_size;
   }
   unsigned int interconnectProtocolFlitSize() const {
     return interconnect_protocol_flit_size;
@@ -35,24 +35,20 @@ public:
   unsigned int interconnectProtocolHeaderSize() const {
     return interconnect_protocol_header_size;
   }
-  unsigned int interconnectProtocolBufferSize() const {
-    return interconnect_protocol_buffer_size;
-  }
   sc_time interconnectProtocolPreDelay() const {
     return interconnect_protocol_pre_delay;
   }
   sc_time interconnectProtocolPostDelay() const {
     return interconnect_protocol_post_delay;
   }
-  sc_time interconnectProtocolClkCycle() const {
-    return interconnect_protocol_clk_cycle;
+  sc_time interconnectProtocolIRQDelay() const {
+    return interconnect_protocol_irq_delay;
   }
 
-  unsigned int interconnectWidth() const { return interconnect_width; }
   unsigned int interconnectBufferSize() const {
     return interconnect_buffer_size;
   }
-  sc_time interconnectClkCycle() const { return interconnect_clk_cycle; }
+  double interconnectBandwidth() const { return interconnect_bandwidth; }
 
 private:
   Config() = default;
@@ -69,16 +65,14 @@ private:
   sc_time ram_clk_cycle;
   sc_time ram_access_delay;
 
-  unsigned int interconnect_protocol_width;
+  unsigned int interconnect_protocol_buffer_size;
   unsigned int interconnect_protocol_flit_size;
   unsigned int interconnect_protocol_header_size;
-  unsigned int interconnect_protocol_buffer_size;
   sc_time interconnect_protocol_pre_delay;
   sc_time interconnect_protocol_post_delay;
-  sc_time interconnect_protocol_clk_cycle;
+  sc_time interconnect_protocol_irq_delay;
 
-  unsigned int interconnect_width;
   unsigned int interconnect_buffer_size;
-  sc_time interconnect_clk_cycle;
+  double interconnect_bandwidth;
 };
 } // namespace fpga

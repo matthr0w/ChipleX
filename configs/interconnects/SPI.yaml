@@ -1,13 +1,11 @@
 interconnect_protocol:
-  width: 4 # bytes
-  flit_size: 1 # bytes
+  buffer_size: 512 # bytes
+  flit_size: 8 # bytes
   header_size: 0 # bytes
-  buffer_size: 32 # bytes
-  pre_delay: 1.0 # ns
-  post_delay: 1.0 # ns
-  clk_cycle: 5.0 # ns
-
+  pre_delay: 0.5 # ns
+  post_delay: 0.1 # ns
+  irq_delay: 2.0 # ns
+  
 interconnect:
-  width: 1 # bytes
-  buffer_size: 32 # bytes
-  clk_cycle: 5.0 # ns
+  buffer_size: 512 # bytes
+  bandwidth: 0.05 # Gb/s
