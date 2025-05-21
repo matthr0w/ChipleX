@@ -6,6 +6,8 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "include/configs.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -29,6 +31,10 @@ public:
   ~InterconnectProtocol();
 
 private:
+  const Config &fpga_config = ConfigRegistry::instance().get("FPGA");
+  const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
+
   const unsigned int fpga_id;
   uint32_t write_address;
 

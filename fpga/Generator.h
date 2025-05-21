@@ -7,6 +7,8 @@
 
 #include "common/protocol/ChipletPayload.h"
 
+#include "include/configs.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -35,6 +37,11 @@ public:
                                unsigned char *data, unsigned int data_size);
 
 private:
+  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
+  const Config &fpga_config = ConfigRegistry::instance().get("FPGA");
+  const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
+
   const unsigned int fpga_id;
 
   sc_mutex request_mutex;

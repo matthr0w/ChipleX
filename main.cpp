@@ -2,14 +2,13 @@
 #include <vector>
 
 #include "chiplet/Chiplet.h"
-#include "chiplet/Config.h"
-#include "fpga/Config.h"
 #include "fpga/FPGA.h"
 
 #include "configs/UserCode.h"
 
 #include "common/RoutingTable.h"
 
+#include "include/configs.h"
 #include "include/globals.h"
 #include "include/parser.h"
 
@@ -19,51 +18,50 @@ using namespace tlm_utils;
 
 int sc_main(int argc, char *argv[]) {
   std::cout << "\n";
-
   Parser parser;
   int result = parser.parse(argc, argv);
   if (result != -1) {
     return result;
   }
+  parser.print_args();
+  std::cout << "\n";
 
   // load chiplet config
   try {
-    chiplet::Config::instance().load("configs/Chiplet.yaml");
-  } catch (...) {
-    std::cerr << "Failed to load Chiplet configuration. Exiting.\n";
+    ConfigRegistry::instance().add("Chiplet", "configs/Chiplet.yaml",
+                                   ConfigRegistry::chiplet_specification);
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to load chiplet configuration.\n";
+    std::cerr << e.what() << std::endl;
     return 1;
   }
 
   // load FPGA config
   try {
-    fpga::Config::instance().load("configs/FPGA.yaml");
-  } catch (...) {
-    std::cerr << "Failed to load FPGA configuration. Exiting.\n";
+    ConfigRegistry::instance().add("FPGA", "configs/FPGA.yaml",
+                                   ConfigRegistry::fpga_specification);
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to load FPGA configuration.\n";
+    std::cerr << e.what() << std::endl;
     return 1;
   }
 
   // load connection config
-  if (connection_type != ConnectionType::Custom) {
-    try {
-      chiplet::Config::instance().override(
-          std::string("configs/interconnects/") + to_string(connection_type) +
-          std::string(".yaml"));
-      // custom FPGA interconnect
-      // fpga::Config::instance().override(std::string("configs/interconnects/")
-      // + to_string(connection_type) + std::string(".yaml"));
-    } catch (...) {
-      std::cerr << "Failed to load interconnect configuration. Exiting.\n";
-      return 1;
-    }
+  try {
+    std::string filepath = std::string("configs/interconnects/") +
+                           to_string(connection_type) + std::string(".yaml");
+    std::set<std::string> interconnect_specification =
+        ConfigRegistry::interconnect_specifications
+            .find(to_string(connection_type))
+            ->second;
+    ConfigRegistry::instance().add("Interconnect", filepath,
+                                   interconnect_specification);
+  } catch (const std::exception &e) {
+    std::cerr << "Failed to load " << to_string(connection_type)
+              << " configuration.\n";
+    std::cerr << e.what() << std::endl;
+    return 1;
   }
-
-  // print configurations
-  chiplet::Config::instance().print();
-  std::cout << "\n";
-  fpga::Config::instance().print();
-  std::cout << "\n";
-  parser.print_args();
-  std::cout << "\n\n";
 
   // initialize routing table
   RoutingTable::initialize(num_chiplets);

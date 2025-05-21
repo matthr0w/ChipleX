@@ -6,6 +6,8 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "include/configs.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -24,6 +26,9 @@ public:
   SC_CTOR(Interconnect);
 
 private:
+  const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
+
   void process_tx_buffer();
   void process_rx_buffer();
 

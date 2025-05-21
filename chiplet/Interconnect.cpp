@@ -1,5 +1,4 @@
 #include "Interconnect.h"
-#include "Config.h"
 
 #include "common/Delays.h"
 #include "common/Flits.h"
@@ -13,7 +12,6 @@ chiplet::Interconnect::Interconnect(sc_module_name name)
       interconnect_target_socket("interconnect_target_socket"),
       interconnect_initiator_socket("interconnect_initiator_socket"),
       tx_buffer_used_bytes(0), rx_buffer_used_bytes(0) {
-
   protocol_target_socket.register_nb_transport_fw(
       this, &chiplet::Interconnect::nb_transport_fw_protocol);
   protocol_initiator_socket.register_nb_transport_bw(
@@ -37,9 +35,12 @@ void chiplet::Interconnect::process_tx_buffer() {
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
 
-      unsigned int transaction_flit_size = get_flit_bytes(
-          *transaction, Config::instance().interconnectProtocolFlitSize(),
-          Config::instance().interconnectProtocolHeaderSize());
+      unsigned int transaction_flit_size =
+          get_flit_bytes(*transaction,
+                         interconnect_config.get<unsigned int>(
+                             "interconnect_protocol.flit_size"),
+                         interconnect_config.get<unsigned int>(
+                             "interconnect_protocol.header_size"));
 
       SC_LOG_DEBUG(this, *transaction, "Tx->Rx transmission started");
       tlm_sync_enum tlm_resp = interconnect_initiator_socket->nb_transport_fw(
@@ -70,9 +71,12 @@ void chiplet::Interconnect::process_rx_buffer() {
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
 
-      unsigned int transaction_flit_size = get_flit_bytes(
-          *transaction, Config::instance().interconnectProtocolFlitSize(),
-          Config::instance().interconnectProtocolHeaderSize());
+      unsigned int transaction_flit_size =
+          get_flit_bytes(*transaction,
+                         interconnect_config.get<unsigned int>(
+                             "interconnect_protocol.flit_size"),
+                         interconnect_config.get<unsigned int>(
+                             "interconnect_protocol.header_size"));
 
       SC_LOG_DEBUG(this, *transaction, "Rx->Protocol transmission started");
       tlm_sync_enum tlm_resp = protocol_initiator_socket->nb_transport_fw(
@@ -103,25 +107,28 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_protocol(
                "PROTOCOL: Received request from Protocol Layer");
 
   SC_LOG_DEBUG(this, transaction,
-               "Tx buffer bytes: "
-                   << tx_buffer_used_bytes << "/"
-                   << Config::instance().interconnectBufferSize());
+               "Tx buffer bytes: " << tx_buffer_used_bytes << "/"
+                                   << interconnect_config.get<unsigned int>(
+                                          "interconnect.buffer_size"));
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
   unsigned int transaction_flit_size = get_flit_bytes(
-      *transaction_copy, Config::instance().interconnectProtocolFlitSize(),
-      Config::instance().interconnectProtocolHeaderSize());
+      *transaction_copy,
+      interconnect_config.get<unsigned int>("interconnect_protocol.flit_size"),
+      interconnect_config.get<unsigned int>(
+          "interconnect_protocol.header_size"));
 
   if (tx_buffer_used_bytes + transaction_flit_size >
-      Config::instance().interconnectBufferSize()) {
+      interconnect_config.get<unsigned int>("interconnect.buffer_size")) {
     SC_LOG_WARN(this, transaction, "Tx buffer full -> waiting...");
     wait(tx_buffer_out_event);
   }
 
   // add protocol layer to interconnect process delay
   delay += get_protocol2interconnect_process_delay(
-      *this, transaction, Config::instance().interconnectProtocolPreDelay());
+      *this, transaction,
+      interconnect_config.get<sc_time>("interconnect_protocol.pre_delay"));
 
   // put transaction in tx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Tx buffer");
@@ -130,9 +137,9 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_protocol(
   tx_buffer_in_event.notify(delay);
 
   SC_LOG_DEBUG(this, transaction,
-               "Tx buffer bytes: "
-                   << tx_buffer_used_bytes << "/"
-                   << Config::instance().interconnectBufferSize());
+               "Tx buffer bytes: " << tx_buffer_used_bytes << "/"
+                                   << interconnect_config.get<unsigned int>(
+                                          "interconnect.buffer_size"));
 
   // begin response to protocol layer
   tlm_phase resp_phase = BEGIN_RESP;
@@ -150,27 +157,31 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_interconnect(
                "PROTOCOL: Received request from Interconnect");
 
   SC_LOG_DEBUG(this, transaction,
-               "Rx buffer bytes: "
-                   << rx_buffer_used_bytes << "/"
-                   << Config::instance().interconnectBufferSize());
+               "Rx buffer bytes: " << rx_buffer_used_bytes << "/"
+                                   << interconnect_config.get<unsigned int>(
+                                          "interconnect.buffer_size"));
 
   auto *transaction_copy = static_cast<ChipletPayload *>(&transaction)->clone();
 
   unsigned int transaction_flit_size = get_flit_bytes(
-      *transaction_copy, Config::instance().interconnectProtocolFlitSize(),
-      Config::instance().interconnectProtocolHeaderSize());
+      *transaction_copy,
+      interconnect_config.get<unsigned int>("interconnect_protocol.flit_size"),
+      interconnect_config.get<unsigned int>(
+          "interconnect_protocol.header_size"));
 
   if (rx_buffer_used_bytes + transaction_flit_size >
-      Config::instance().interconnectBufferSize()) {
+      interconnect_config.get<unsigned int>("interconnect.buffer_size")) {
     SC_LOG_WARN(this, transaction, "Rx buffer full -> waiting...");
     wait(rx_buffer_out_event);
   }
 
   // add chiplet to chiplet transfer delay
   delay += get_chiplet2chiplet_transfer_delay(
-      *this, transaction, Config::instance().interconnectBandwidth(),
-      Config::instance().interconnectProtocolFlitSize(),
-      Config::instance().interconnectProtocolHeaderSize());
+      *this, transaction,
+      interconnect_config.get<double>("interconnect.bandwidth"),
+      interconnect_config.get<unsigned int>("interconnect_protocol.flit_size"),
+      interconnect_config.get<unsigned int>(
+          "interconnect_protocol.header_size"));
 
   // put transaction in rx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");
@@ -179,9 +190,9 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_interconnect(
   rx_buffer_in_event.notify(delay);
 
   SC_LOG_DEBUG(this, transaction,
-               "Rx buffer bytes: "
-                   << rx_buffer_used_bytes << "/"
-                   << Config::instance().interconnectBufferSize());
+               "Rx buffer bytes: " << rx_buffer_used_bytes << "/"
+                                   << interconnect_config.get<unsigned int>(
+                                          "interconnect.buffer_size"));
 
   // begin response to interconnect
   tlm_phase resp_phase = BEGIN_RESP;

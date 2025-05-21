@@ -4,11 +4,10 @@
 #include <map>
 #include <utility>
 
-#include "chiplet/Config.h"
 #include "chiplet/Core.h"
-#include "fpga/Config.h"
 #include "fpga/Generator.h"
 
+#include "include/configs.h"
 #include "include/globals.h"
 #include "include/logging.h"
 
@@ -99,8 +98,15 @@ using CoreKey = std::pair<int, int>;
 // -----------------------------
 //
 // - Global constants:                 see `globals.h`
-// - FPGA configuration parameters:    `fpga::Config::instance().PARAMETER()`
-// - Chiplet configuration parameters: `chiplet::Config::instance().PARAMETER()`
+// - FPGA configuration parameters:
+//     Config &config = ConfigRegistry::instance().get("FPGA");
+//     type param = config.get<type>("YAML.PATH")
+// - Chiplet configuration parameters:
+//     Config &config = ConfigRegistry::instance().get("Chiplet");
+//     type param = config.get<type>("YAML.PATH")
+// - Interconnect configuration parameters:
+//     Config &config = ConfigRegistry::instance().get("Interconnect");
+//     type param = config.get<type>("YAML.PATH")
 //
 // -----------------------------
 //  Logging:

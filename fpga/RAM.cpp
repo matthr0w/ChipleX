@@ -1,5 +1,4 @@
 #include "RAM.h"
-#include "Config.h"
 
 #include "common/Delays.h"
 
@@ -9,8 +8,9 @@ using namespace sc_core;
 using namespace tlm;
 
 fpga::RAM::RAM(sc_module_name name)
-    : sc_module(name), socket("socket"),
-      mem(Config::instance().ramSize() * 1024, 0), peq("peq") {
+    : sc_module(name), socket("socket"), peq("peq") {
+  std::vector<uint8_t> mem(fpga_config.get<unsigned int>("ram.size") * 1024, 0);
+
   socket.register_nb_transport_fw(this, &fpga::RAM::nb_transport_fw);
 
   SC_THREAD(process_transaction);
@@ -45,9 +45,10 @@ void fpga::RAM::process_transaction() {
     }
 
     // RAM access delay
-    wait(get_mem_access_delay(
-        *this, *transaction, Config::instance().ramClkCycle(),
-        Config::instance().ramAccessDelay(), Config::instance().ramWidth()));
+    wait(get_mem_access_delay(*this, *transaction,
+                              fpga_config.get<sc_time>("ram.clk_cycle"),
+                              fpga_config.get<sc_time>("ram.access_delay"),
+                              fpga_config.get<unsigned int>("ram.width")));
 
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
@@ -71,9 +72,9 @@ tlm_sync_enum fpga::RAM::nb_transport_fw(tlm_generic_payload &transaction,
     exit(1);
   }
 
-  delay += get_bus_transfer_fw_delay(*this, transaction,
-                                     Config::instance().busClkCycle(),
-                                     Config::instance().busWidth());
+  delay += get_bus_transfer_fw_delay(
+      *this, transaction, fpga_config.get<sc_time>("bus.clk_cycle"),
+      fpga_config.get<unsigned int>("bus.width"));
 
   peq.notify(transaction, delay);
 

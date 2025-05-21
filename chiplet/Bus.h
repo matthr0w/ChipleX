@@ -6,6 +6,8 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "include/configs.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -25,6 +27,8 @@ public:
   Bus(sc_module_name name, unsigned int chiplet_id);
 
 private:
+  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
+
   const unsigned int chiplet_id;
   unsigned int current_owner;
 

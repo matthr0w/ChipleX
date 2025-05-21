@@ -6,6 +6,8 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "include/configs.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -30,6 +32,10 @@ public:
   ~InterconnectProtocol();
 
 private:
+  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
+  const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
+
   const unsigned int chiplet_id;
   uint32_t write_address;
 

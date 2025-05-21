@@ -1,5 +1,4 @@
 #include "Bus.h"
-#include "Config.h"
 
 #include "common/Delays.h"
 #include "common/protocol/ChipletExtension.h"
@@ -142,8 +141,9 @@ void chiplet::Bus::process_queue() {
   next_transaction = next_request.transaction;
   next_transaction->get_extension(ext);
 
-  delay = get_bus_arbitration_delay(*this, *next_transaction,
-                                    Config::instance().busArbitrationDelay());
+  delay = get_bus_arbitration_delay(
+      *this, *next_transaction,
+      chiplet_config.get<sc_time>("bus.arbitration_delay"));
 
   SC_LOG_INFO(this, *next_transaction,
               "Granting bus access to " << modules[current_owner]
@@ -198,8 +198,9 @@ tlm_sync_enum chiplet::Bus::nb_transport_fw(int id,
 
     current_owner = id;
 
-    delay = get_bus_arbitration_delay(*this, transaction,
-                                      Config::instance().busArbitrationDelay());
+    delay = get_bus_arbitration_delay(
+        *this, transaction,
+        chiplet_config.get<sc_time>("bus.arbitration_delay"));
 
     peq_fw.notify(transaction, delay);
 
@@ -235,8 +236,8 @@ tlm_sync_enum chiplet::Bus::nb_transport_bw(int id,
     exit(1);
   }
 
-  delay += get_bus_arbitration_delay(*this, transaction,
-                                     Config::instance().busArbitrationDelay());
+  delay += get_bus_arbitration_delay(
+      *this, transaction, chiplet_config.get<sc_time>("bus.arbitration_delay"));
 
   peq_bw.notify(transaction, delay);
 

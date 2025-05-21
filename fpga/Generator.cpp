@@ -1,9 +1,6 @@
 #include "Generator.h"
-#include "Config.h"
 
 #include <random>
-
-#include "chiplet/Config.h"
 
 #include "common/Delays.h"
 #include "common/protocol/ChipletExtension.h"
@@ -60,9 +57,10 @@ void fpga::Generator::send_random(unsigned int delay, double write_prob,
   }
 
   // address space separation
-  size_t total_bytes_fpga = fpga::Config::instance().ramSize() * 1024;
+  size_t total_bytes_fpga = fpga_config.get<unsigned int>("ram.size") * 1024;
   size_t half_bytes_fpga = total_bytes_fpga / 2;
-  size_t total_bytes_chiplet = chiplet::Config::instance().ramSize() * 1024;
+  size_t total_bytes_chiplet =
+      chiplet_config.get<unsigned int>("ram.size") * 1024;
   size_t half_bytes_chiplet = total_bytes_chiplet / 2;
 
   // random number distributions
@@ -172,7 +170,8 @@ fpga::Generator::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                      sc_core::sc_time &delay) {
   if (phase == BEGIN_REQ) {
     delay += get_irq_transfer_delay(
-        *this, transaction, Config::instance().interconnectProtocolIRQDelay());
+        *this, transaction,
+        interconnect_config.get<sc_time>("interconnect_protocol.irq_delay"));
 
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();
@@ -195,9 +194,9 @@ tlm_sync_enum fpga::Generator::nb_transport_bw(tlm_generic_payload &transaction,
     transaction.get_extension(ext);
 
     if (ext->source_id == -1) {
-      delay += get_bus_transfer_bw_delay(*this, transaction,
-                                         Config::instance().busClkCycle(),
-                                         Config::instance().busWidth());
+      delay += get_bus_transfer_bw_delay(
+          *this, transaction, fpga_config.get<sc_time>("bus.clk_cycle"),
+          fpga_config.get<unsigned int>("bus.width"));
     } else {
       // request to interconnect
       // no direct data response -> no extra delay
