@@ -44,11 +44,6 @@ void chiplet::Core::handle_interrupt() {
 
     transaction = irq_peq.get_next_transaction();
 
-    transaction->get_extension(ext);
-    int request_id = ext->request_id;
-
-    SC_LOG_INFO(this, *transaction, "Received IRQ from request " << request_id);
-
     if (interrupt_fn) {
       interrupt_fn(*this, transaction);
     }

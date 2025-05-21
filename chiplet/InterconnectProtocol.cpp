@@ -92,14 +92,15 @@ void chiplet::InterconnectProtocol::process_rx_buffer() {
       // at source and read operation:
       //    transaction was an off-chip read request
       //    -> set to write operation, set write address, send to RAM via bus
-      //    -> send irq to core
+      //    -> send IRQ to core
       // at destination and read operation:
       //    transaction is an off-chip read request
       //    -> send to RAM via bus
       //    -> send back to source via interconnects
       // at destination and write operation:
       //    transaction is an off-chip write request
-      //    -> set write address, and send to RAM via bus
+      //    -> set write address, send to RAM via bus
+      //    -> send IRQ to core
       // not at source or destination
       //    transaction is not at the destination
       //    -> send to destination via interconnects
@@ -108,7 +109,7 @@ void chiplet::InterconnectProtocol::process_rx_buffer() {
         transaction->set_command(TLM_WRITE_COMMAND);
         set_write_address(*transaction);
         process_bus_transaction(*transaction);
-        send_irq(*transaction);
+        send_irq(*transaction, TLM_READ_COMMAND);
       } else if (at_destination) {
         if (read_op) {
           process_bus_transaction(*transaction);
@@ -116,6 +117,7 @@ void chiplet::InterconnectProtocol::process_rx_buffer() {
         } else if (write_op) {
           set_write_address(*transaction);
           process_bus_transaction(*transaction);
+          send_irq(*transaction, TLM_WRITE_COMMAND);
         }
       } else {
         send_to_interconnect(*transaction);
@@ -182,7 +184,8 @@ void chiplet::InterconnectProtocol::send_to_interconnect(
   delete transaction_copy;
 }
 
-void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
+void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
+                                             tlm_command command) {
   auto *irq = new ChipletPayload();
   ChipletExtension *ext;
   tlm_phase phase = BEGIN_REQ;
@@ -191,7 +194,7 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
 
   transaction.get_extension(ext);
 
-  irq->set_command(TLM_IGNORE_COMMAND);
+  irq->set_command(command);
   irq->set_address(transaction.get_address());
   irq->set_data_length(transaction.get_data_length());
 
@@ -200,20 +203,27 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
   irq->set_core_id(ext->core_id);
   irq->set_destination_id(ext->destination_id);
 
-  SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core" << ext->core_id);
-
-  if (ext->core_id == 0) {
+  if (command == TLM_READ_COMMAND) {
+    // send read IRQs to request core
+    SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core" << ext->core_id);
+    if (ext->core_id == 0) {
+      tlm_resp =
+          core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
+    } else if (ext->core_id == 1) {
+      tlm_resp =
+          core1_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
+    }
+  } else {
+    // send write IRQs to Core0
+    SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core0");
     tlm_resp = core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
-  } else if (ext->core_id == 1) {
-    tlm_resp = core1_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
   }
 
   if (tlm_resp == TLM_COMPLETED) {
     wait(delay);
   }
 
-  SC_LOG_DEBUG(this, transaction,
-               "Sending IRQ to Core" << ext->core_id << " done");
+  SC_LOG_DEBUG(this, transaction, "Sending IRQ to core done");
 
   delete irq;
 }

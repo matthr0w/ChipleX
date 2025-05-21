@@ -91,14 +91,15 @@ void fpga::InterconnectProtocol::process_rx_buffer() {
       // at source and read operation:
       //    transaction was an off-chip read request
       //    -> set to write operation, set write address, send to RAM via bus
-      //    -> send irq to core
+      //    -> send IRQ to core
       // at destination and read operation:
       //    transaction is an off-chip read request
       //    -> send to RAM via bus
       //    -> send back to source via interconnects
       // at destination and write operation:
       //    transaction is an off-chip write request
-      //    -> set write address, and send to RAM via bus
+      //    -> set write address, send to RAM via bus
+      //    -> send IRQ to core
       // not at source or destination
       //    transaction is not at the destination
       //    -> send to destination via interconnects
@@ -107,7 +108,7 @@ void fpga::InterconnectProtocol::process_rx_buffer() {
         transaction->set_command(TLM_WRITE_COMMAND);
         set_write_address(*transaction);
         process_bus_transaction(*transaction);
-        send_irq(*transaction);
+        send_irq(*transaction, TLM_READ_COMMAND);
       } else if (at_destination) {
         if (read_op) {
           process_bus_transaction(*transaction);
@@ -115,6 +116,7 @@ void fpga::InterconnectProtocol::process_rx_buffer() {
         } else if (write_op) {
           set_write_address(*transaction);
           process_bus_transaction(*transaction);
+          send_irq(*transaction, TLM_WRITE_COMMAND);
         }
       } else {
         send_to_interconnect(*transaction);
@@ -183,7 +185,8 @@ void fpga::InterconnectProtocol::send_to_interconnect(
   delete transaction_copy;
 }
 
-void fpga::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
+void fpga::InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
+                                          tlm_command command) {
   auto *irq = new ChipletPayload();
   ChipletExtension *ext;
   tlm_phase phase = BEGIN_REQ;
@@ -192,7 +195,7 @@ void fpga::InterconnectProtocol::send_irq(tlm_generic_payload &transaction) {
 
   transaction.get_extension(ext);
 
-  irq->set_command(TLM_IGNORE_COMMAND);
+  irq->set_command(command);
   irq->set_address(transaction.get_address());
   irq->set_data_length(transaction.get_data_length());
 

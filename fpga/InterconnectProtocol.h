@@ -37,7 +37,7 @@ private:
 
   void process_bus_transaction(tlm_generic_payload & transaction);
   void send_to_interconnect(tlm_generic_payload & transaction);
-  void send_irq(tlm_generic_payload & transaction);
+  void send_irq(tlm_generic_payload & transaction, tlm_command command);
 
   void set_write_address(tlm_generic_payload & transaction);
 
