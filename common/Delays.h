@@ -157,7 +157,7 @@ inline sc_time
 get_protocol2interconnect_process_delay(sc_module &module,
                                         tlm_generic_payload &transaction,
                                         sc_time preprocess_delay) {
-  // Protocol Layer to Interconnect Transfer Delay
+  // Protocol Layer to Interconnect Process Delay
   // -----------------------------------------------
   //      + fixed preprocess delay
 
@@ -165,16 +165,16 @@ get_protocol2interconnect_process_delay(sc_module &module,
 
   delay = preprocess_delay;
 
-  SC_LOG_DELAY(&module, transaction, "Protocol Layer to Interconnect Transfer",
+  SC_LOG_DELAY(&module, transaction, "Protocol Layer to Interconnect Process",
                delay);
   return delay;
 }
 
 inline sc_time
 get_interconnect2protocol_process_delay(sc_module &module,
-                                         tlm_generic_payload &transaction,
-                                         sc_time postprocess_delay) {
-  // Interconnect to Protocol Layer Transfer Delay
+                                        tlm_generic_payload &transaction,
+                                        sc_time postprocess_delay) {
+  // Interconnect to Protocol Layer Process Delay
   // -----------------------------------------------
   //      + fixed postprocess delay
 
@@ -182,7 +182,7 @@ get_interconnect2protocol_process_delay(sc_module &module,
 
   delay = postprocess_delay;
 
-  SC_LOG_DELAY(&module, transaction, "Interconnect to Protocol Layer Transfer",
+  SC_LOG_DELAY(&module, transaction, "Interconnect to Protocol Layer Process",
                delay);
   return delay;
 }
@@ -194,7 +194,7 @@ inline sc_time get_irq_transfer_delay(sc_module &module,
   // -----------------------------------------------
   //      + fixed irq delay
 
-  sc_time delay;
+  sc_time delay = SC_ZERO_TIME;
 
   delay = irq_delay;
 
@@ -205,10 +205,12 @@ inline sc_time get_irq_transfer_delay(sc_module &module,
 // -------------------------------------------------------
 // Interconnect Physical Layer
 // -------------------------------------------------------
-inline sc_time get_chiplet2chiplet_transfer_delay(
-    sc_module &module, tlm_generic_payload &transaction, double bandwidth,
-    unsigned int flit_size, unsigned int header_size) {
-  // Chiplet to Chiplet Transfer Delay
+inline sc_time get_die2die_transfer_delay(sc_module &module,
+                                          tlm_generic_payload &transaction,
+                                          double bandwidth, double distance,
+                                          unsigned int flit_size,
+                                          unsigned int header_size) {
+  // Die to Die Transfer Delay
   // -----------------------------------------------
   //      + flit transfer delay
   //      + wire propagation delay
@@ -224,8 +226,7 @@ inline sc_time get_chiplet2chiplet_transfer_delay(
       get_bandwidth_transfer_delay(transaction_flit_size, bandwidth);
 
   // wire propagation delay based on distance
-  wire_propagation_delay =
-      sc_time(chiplet_distance_um * wire_ps_per_mm / 1000, SC_PS);
+  wire_propagation_delay = sc_time(distance * wire_ps_per_mm, SC_PS);
 
   delay = flit_transfer_delay + wire_propagation_delay;
 
@@ -253,59 +254,6 @@ inline sc_time get_chiplet2chiplet_transfer_delay(
     break;
   }
 
-  SC_LOG_DELAY(&module, transaction, "Chiplet to Chiplet Transfer", delay);
-  return delay;
-}
-
-inline sc_time get_fpga2chiplet_transfer_delay(sc_module &module,
-                                               tlm_generic_payload &transaction,
-                                               double bandwidth,
-                                               unsigned int flit_size,
-                                               unsigned int header_size) {
-  // FPGA to Chiplet Transfer Delay
-  // -----------------------------------------------
-  //      + flit cycles delay
-  //      + wire propagation delay
-
-  sc_time delay = SC_ZERO_TIME;
-  sc_time flit_transfer_delay = SC_ZERO_TIME;
-  sc_time wire_propagation_delay = SC_ZERO_TIME;
-
-  unsigned int transaction_flit_size =
-      get_flit_bytes(transaction, flit_size, header_size);
-
-  flit_transfer_delay =
-      get_bandwidth_transfer_delay(transaction_flit_size, bandwidth);
-
-  // wire propagation delay based on distance
-  wire_propagation_delay = sc_time(fpga_distance_mm * wire_ps_per_mm, SC_PS);
-
-  delay = flit_transfer_delay + wire_propagation_delay;
-
-  bool bad_transfer = false;
-  double prob_bad_transfer =
-      1.0 - std::pow(1.0 - bit_error_rate, transaction_flit_size * 8);
-
-  if (bit_error_dist(bit_error_gen) < prob_bad_transfer) {
-    SC_LOG_ERROR(&module, transaction, "Bit error");
-    bad_transfer = true;
-  }
-
-  // connection type specific delays
-  switch (connection_type) {
-  case ConnectionType::UCIe: {
-    // UCIe retry mechanism
-    // if bit error happens -> retry transfer -> double delay
-    if (bad_transfer) {
-      delay *= 2;
-    }
-
-    break;
-  }
-  default:
-    break;
-  }
-
-  SC_LOG_DELAY(&module, transaction, "FPGA to Chiplet Transfer", delay);
+  SC_LOG_DELAY(&module, transaction, "Die to Die Transfer", delay);
   return delay;
 }

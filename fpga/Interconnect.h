@@ -23,11 +23,14 @@ public:
   simple_target_socket<Interconnect> interconnect_target_socket;
   simple_initiator_socket<Interconnect> interconnect_initiator_socket;
 
-  SC_CTOR(Interconnect);
+  Interconnect(sc_module_name name, double bandwidth, double distance);
 
 private:
   const Config &interconnect_config =
       ConfigRegistry::instance().get("Interconnect");
+
+  double bandwidth;
+  double distance;
 
   void process_tx_buffer();
   void process_rx_buffer();

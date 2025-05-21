@@ -8,17 +8,11 @@
 #include "InterconnectProtocol.h"
 #include "RAM.h"
 
-#include "include/globals.h"
-
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
 SC_MODULE(Chiplet) {
-private:
-  static unsigned int instance;
-  const unsigned int chiplet_id;
-
 public:
   chiplet::Core core0;
   chiplet::Core core1;
@@ -28,6 +22,12 @@ public:
   ~Chiplet();
 
 private:
+  const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
+
+  static unsigned int instance;
+  const unsigned int chiplet_id;
+
   chiplet::Bus bus;
   chiplet::InterconnectProtocol interconnectprotocol;
   chiplet::RAM ram;

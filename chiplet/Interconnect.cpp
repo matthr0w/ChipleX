@@ -6,8 +6,10 @@
 
 #include "include/logging.h"
 
-chiplet::Interconnect::Interconnect(sc_module_name name)
-    : sc_module(name), protocol_target_socket("protocol_target_socket"),
+chiplet::Interconnect::Interconnect(sc_module_name name, double bandwidth,
+                                    double distance)
+    : sc_module(name), bandwidth(bandwidth), distance(distance),
+      protocol_target_socket("protocol_target_socket"),
       protocol_initiator_socket("protocol_initiator_socket"),
       interconnect_target_socket("interconnect_target_socket"),
       interconnect_initiator_socket("interconnect_initiator_socket"),
@@ -175,10 +177,9 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_interconnect(
     wait(rx_buffer_out_event);
   }
 
-  // add chiplet to chiplet transfer delay
-  delay += get_chiplet2chiplet_transfer_delay(
-      *this, transaction,
-      interconnect_config.get<double>("interconnect.bandwidth"),
+  // add die to die transfer delay
+  delay += get_die2die_transfer_delay(
+      *this, transaction, bandwidth, distance,
       interconnect_config.get<unsigned int>("interconnect_protocol.flit_size"),
       interconnect_config.get<unsigned int>(
           "interconnect_protocol.header_size"));

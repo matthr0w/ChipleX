@@ -8,8 +8,6 @@
 #include "InterconnectProtocol.h"
 #include "RAM.h"
 
-#include "include/globals.h"
-
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -23,6 +21,9 @@ public:
   ~FPGA();
 
 private:
+  const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
+
   fpga::Bus bus;
   fpga::InterconnectProtocol interconnectprotocol;
   fpga::RAM ram;

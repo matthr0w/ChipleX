@@ -16,28 +16,28 @@ const std::map<std::string, std::set<std::string>>
           "interconnect_protocol.header_size",
           "interconnect_protocol.pre_delay", "interconnect_protocol.post_delay",
           "interconnect_protocol.irq_delay", "interconnect.buffer_size",
-          "interconnect.bandwidth"}},
+          "interconnect.bandwidth_chiplets", "interconnect.bandwidth_fpga"}},
         {"PCIe",
          {"interconnect_protocol.buffer_size",
           "interconnect_protocol.flit_size",
           "interconnect_protocol.header_size",
           "interconnect_protocol.pre_delay", "interconnect_protocol.post_delay",
           "interconnect_protocol.irq_delay", "interconnect.buffer_size",
-          "interconnect.bandwidth"}},
+          "interconnect.bandwidth_chiplets", "interconnect.bandwidth_fpga"}},
         {"UCIe",
          {"interconnect_protocol.buffer_size",
           "interconnect_protocol.flit_size",
           "interconnect_protocol.header_size",
           "interconnect_protocol.pre_delay", "interconnect_protocol.post_delay",
           "interconnect_protocol.irq_delay", "interconnect.buffer_size",
-          "interconnect.bandwidth"}},
+          "interconnect.bandwidth_chiplets", "interconnect.bandwidth_fpga"}},
         {"SPI",
          {"interconnect_protocol.buffer_size",
           "interconnect_protocol.flit_size",
           "interconnect_protocol.header_size",
           "interconnect_protocol.pre_delay", "interconnect_protocol.post_delay",
           "interconnect_protocol.irq_delay", "interconnect.buffer_size",
-          "interconnect.bandwidth"}}};
+          "interconnect.bandwidth_chiplets", "interconnect.bandwidth_fpga"}}};
 
 std::vector<std::string> split_key(const std::string &key) {
   std::vector<std::string> parts;

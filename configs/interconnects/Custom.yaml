@@ -8,4 +8,5 @@ interconnect_protocol:
   
 interconnect:
   buffer_size: 512 # bytes
-  bandwidth: 10.0 # Gb/s
+  bandwidth_chiplets: 10.0 # Gb/s
+  bandwidth_fpga: 5.0 # Gb/s

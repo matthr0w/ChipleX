@@ -1,5 +1,7 @@
 #include "Chiplet.h"
 
+#include "include/globals.h"
+
 unsigned int Chiplet::instance = 1;
 
 Chiplet::Chiplet(sc_module_name name)
@@ -9,7 +11,18 @@ Chiplet::Chiplet(sc_module_name name)
       interconnectprotocol("InterconnectProtocol", chiplet_id) {
   for (unsigned int i = 0; i < 3; ++i) {
     std::string name = "Interconnect" + std::to_string(i);
-    interconnects.push_back(new chiplet::Interconnect(name.c_str()));
+
+    if (i == 0) { // to FPGA interconnect
+      interconnects.push_back(new chiplet::Interconnect(
+          name.c_str(),
+          interconnect_config.get<double>("interconnect.bandwidth_fpga"),
+          fpga_distance_mm));
+    } else {
+      interconnects.push_back(new chiplet::Interconnect(
+          name.c_str(),
+          interconnect_config.get<double>("interconnect.bandwidth_chiplets"),
+          chiplet_distance_um / 1000));
+    }
   }
 
   initialize();

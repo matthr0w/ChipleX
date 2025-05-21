@@ -1,5 +1,7 @@
 #include "FPGA.h"
 
+#include "include/globals.h"
+
 using namespace sc_core;
 using namespace tlm;
 
@@ -10,7 +12,10 @@ FPGA::FPGA(sc_module_name name)
     std::string name =
         "Interconnect" +
         std::to_string(i + 1); // interconnect names follow chiplet ids
-    interconnects.push_back(new fpga::Interconnect(name.c_str()));
+    interconnects.push_back(new fpga::Interconnect(
+        name.c_str(),
+        interconnect_config.get<double>("interconnect.bandwidth_fpga"),
+        fpga_distance_mm));
   }
 
   initialize();
