@@ -8,10 +8,8 @@ using namespace sc_core;
 using namespace tlm;
 
 chiplet::RAM::RAM(sc_module_name name)
-    : sc_module(name), socket("socket"), peq("peq") {
-  std::vector<uint8_t> mem(chiplet_config.get<unsigned int>("ram.size") * 1024,
-                           0);
-
+    : sc_module(name), socket("socket"), peq("peq"),
+      mem(chiplet_config.get<unsigned int>("ram.size") * 1024, 0) {
   socket.register_nb_transport_fw(this, &chiplet::RAM::nb_transport_fw);
 
   SC_THREAD(process_transaction);

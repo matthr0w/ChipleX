@@ -179,11 +179,11 @@ tlm_sync_enum fpga::Interconnect::nb_transport_fw_interconnect(
   }
 
   // add die to die transfer delay
-  delay += get_die2die_transfer_delay(
-      *this, transaction, bandwidth, distance,
-      interconnect_config.get<unsigned int>("interconnect_protocol.flit_size"),
-      interconnect_config.get<unsigned int>(
-          "interconnect_protocol.header_size"));
+  // delay += get_die2die_transfer_delay(
+  //     *this, transaction, bandwidth, distance,
+  //     interconnect_config.get<unsigned int>("interconnect_protocol.flit_size"),
+  //     interconnect_config.get<unsigned int>(
+  //         "interconnect_protocol.header_size"));
 
   // put transaction in rx buffer
   SC_LOG_DEBUG(this, transaction, "Write transaction in Rx buffer");

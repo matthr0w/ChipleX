@@ -183,10 +183,65 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
     {{1, 0},
      {[](chiplet::Core &core) {
         SC_LOG_DEBUG_NO_TX(&core, "Hello from Chiplet1 Core0!");
-        core.send_random(200, 0.5, 0, 2, 64);
+
+        const size_t buffer_size = 256;
+        unsigned char *buffer = new unsigned char[buffer_size];
+
+        for (size_t i = 0; i < buffer_size; ++i) {
+          buffer[i] = static_cast<unsigned char>(i % 256);
+        }
+
+        std::cout << "Request contents (" << buffer_size
+                  << " bytes):" << std::endl;
+        for (size_t i = 0; i < buffer_size; ++i) {
+          std::cout << std::hex << std::setw(2) << std::setfill('0')
+                    << static_cast<int>(buffer[i]) << ' ' << std::dec;
+          if ((i + 1) % 16 == 0)
+            std::cout << std::endl;
+        }
+        if (buffer_size % 16 != 0)
+          std::cout << std::endl;
+
+        auto response = core.send_request(TLM_WRITE_COMMAND, 0, 2, 0x1000,
+                                          buffer, buffer_size);
+        delete response;
       },
       [](chiplet::Core &core, tlm_generic_payload *transaction) {
         SC_LOG_DEBUG_NO_TX(&core,
                            "Hello from Chiplet1 Core0 Interrupt Handler!");
+      }}},
+    // Chiplet2 Core0
+    {{2, 0},
+     {[](chiplet::Core &core) {
+        SC_LOG_DEBUG_NO_TX(&core, "Hello from Chiplet2 Core0!");
+      },
+      [](chiplet::Core &core, tlm_generic_payload *transaction) {
+        SC_LOG_DEBUG_NO_TX(&core,
+                           "Hello from Chiplet2 Core0 Interrupt Handler!");
+
+        SC_LOG_DEBUG_NO_TX(
+            &core, "Base Address: " << std::hex << transaction->get_address());
+        SC_LOG_DEBUG_NO_TX(&core,
+                           "Data Size: " << transaction->get_data_length());
+
+        const size_t buffer_size = transaction->get_data_length();
+        unsigned char *buffer = new unsigned char[buffer_size]();
+
+        auto response =
+            core.send_request(TLM_READ_COMMAND, 0, 2,
+                              transaction->get_address(), buffer, buffer_size);
+
+        std::cout << "Response contents (" << buffer_size
+                  << " bytes):" << std::endl;
+        for (size_t i = 0; i < buffer_size; ++i) {
+          std::cout << std::hex << std::setw(2) << std::setfill('0')
+                    << static_cast<int>(response->get_data_ptr()[i]) << ' ';
+          if ((i + 1) % 16 == 0)
+            std::cout << std::endl;
+        }
+        if (buffer_size % 16 != 0)
+          std::cout << std::endl;
+
+        delete response;
       }}},
 };

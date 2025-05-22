@@ -7,10 +7,6 @@
 using namespace sc_core;
 using namespace tlm;
 
-inline bool is_request(const ChipletExtension *ext) {
-  return ext && (ext->destination_id != ext->source_id);
-}
-
 inline unsigned get_payload_bytes(tlm_generic_payload &transaction) {
   unsigned size = 0;
 
@@ -18,7 +14,7 @@ inline unsigned get_payload_bytes(tlm_generic_payload &transaction) {
   transaction.get_extension(ext);
 
   // address only in requests
-  if (is_request(ext)) {
+  if (ext && (ext->destination_id != ext->source_id)) {
     size += sizeof(uint32_t);
   }
 

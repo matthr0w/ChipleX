@@ -29,6 +29,19 @@ private:
   const Config &interconnect_config =
       ConfigRegistry::instance().get("Interconnect");
 
+  const unsigned int buffer_size =
+      interconnect_config.get<unsigned int>("interconnect.buffer_size");
+  const unsigned int flit_size =
+      interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
+  const unsigned int header_size = interconnect_config.get<unsigned int>(
+      "interconnect_protocol.header_size");
+  const sc_time pre_delay =
+      interconnect_config.get<sc_time>("interconnect_protocol.pre_delay");
+  const sc_time post_delay =
+      interconnect_config.get<sc_time>("interconnect_protocol.post_delay");
+  const sc_time irq_delay =
+      interconnect_config.get<sc_time>("interconnect_protocol.irq_delay");
+
   double bandwidth;
   double distance;
 
@@ -41,10 +54,18 @@ private:
   unsigned rx_buffer_used_bytes;
 
   // -------------------------------------------------------
+  // peqs
+  // -------------------------------------------------------
+  peq_with_get<tlm_generic_payload> peq_protocol;
+  void process_protocol_transaction();
+  peq_with_get<tlm_generic_payload> peq_die;
+  void process_die_transaction();
+
+  // -------------------------------------------------------
   // events
   // -------------------------------------------------------
-  sc_event tx_transaction_done;
-  sc_event rx_transaction_done;
+  sc_event protocol_transaction_done;
+  sc_event die_transaction_done;
   sc_event tx_buffer_in_event;
   sc_event tx_buffer_out_event;
   sc_event rx_buffer_in_event;

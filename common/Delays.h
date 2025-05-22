@@ -2,7 +2,6 @@
 
 #include <systemc>
 
-#include "Flits.h"
 #include "protocol/ChipletExtension.h"
 
 #include "include/globals.h"
@@ -208,8 +207,7 @@ inline sc_time get_irq_transfer_delay(sc_module &module,
 inline sc_time get_die2die_transfer_delay(sc_module &module,
                                           tlm_generic_payload &transaction,
                                           double bandwidth, double distance,
-                                          unsigned int flit_size,
-                                          unsigned int header_size) {
+                                          unsigned int flit_size) {
   // Die to Die Transfer Delay
   // -----------------------------------------------
   //      + flit transfer delay
@@ -219,11 +217,7 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
   sc_time flit_transfer_delay = SC_ZERO_TIME;
   sc_time wire_propagation_delay = SC_ZERO_TIME;
 
-  unsigned int transaction_flit_size =
-      get_flit_bytes(transaction, flit_size, header_size);
-
-  flit_transfer_delay =
-      get_bandwidth_transfer_delay(transaction_flit_size, bandwidth);
+  flit_transfer_delay = get_bandwidth_transfer_delay(flit_size, bandwidth);
 
   // wire propagation delay based on distance
   wire_propagation_delay = sc_time(distance * wire_ps_per_mm, SC_PS);
@@ -232,7 +226,7 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
 
   bool bad_transfer = false;
   double prob_bad_transfer =
-      1.0 - std::pow(1.0 - bit_error_rate, transaction_flit_size * 8);
+      1.0 - std::pow(1.0 - bit_error_rate, flit_size * 8);
 
   if (bit_error_dist(bit_error_gen) < prob_bad_transfer) {
     SC_LOG_ERROR(&module, transaction, "Bit error");
