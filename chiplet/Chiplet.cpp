@@ -14,14 +14,10 @@ Chiplet::Chiplet(sc_module_name name)
 
     if (i == 0) { // to FPGA interconnect
       interconnects.push_back(new chiplet::Interconnect(
-          name.c_str(),
-          interconnect_config.get<double>("interconnect.bandwidth_fpga"),
-          fpga_distance_mm));
+          name.c_str(), bandwidth_fpga, fpga_distance_mm));
     } else {
       interconnects.push_back(new chiplet::Interconnect(
-          name.c_str(),
-          interconnect_config.get<double>("interconnect.bandwidth_chiplets"),
-          chiplet_distance_um / 1000));
+          name.c_str(), bandwidth_chiplet, chiplet_distance_um / 1000));
     }
   }
 

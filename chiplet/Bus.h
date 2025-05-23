@@ -27,9 +27,8 @@ public:
   Bus(sc_module_name name, unsigned int chiplet_id);
 
 private:
-  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
-
   const unsigned int chiplet_id;
+
   unsigned int current_owner;
 
   const std::array<std::string, 5> modules = {"Unassigned", "Core0", "Core1",
@@ -45,6 +44,14 @@ private:
   void process_transaction_fw();
   void process_transaction_bw();
   void process_queue();
+
+  // -------------------------------------------------------
+  // config
+  // -------------------------------------------------------
+  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
+
+  const sc_time bus_arbitration_delay =
+      chiplet_config.get<sc_time>("bus.arbitration_delay");
 
   // -------------------------------------------------------
   // peqs

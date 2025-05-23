@@ -33,10 +33,32 @@ public:
   ~InterconnectProtocol();
 
 private:
+  const unsigned int chiplet_id;
+
+  uint32_t write_address;
+  void set_write_address(tlm_generic_payload & transaction);
+
+  std::map<tlm::tlm_generic_payload *, int> transaction_id_map;
+
+  void send_flits(tlm_generic_payload & transaction);
+  void send_to_phy(tlm_generic_payload & transaction);
+  void send_to_bus(tlm_generic_payload & transaction);
+  void send_irq(tlm_generic_payload & transaction, tlm_command command);
+
+  unsigned int get_available_data_bytes_per_flit(tlm_generic_payload &
+                                                 transaction);
+  unsigned int get_required_flit_count(tlm_generic_payload & transaction);
+
+  // -------------------------------------------------------
+  // config
+  // -------------------------------------------------------
   const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
   const Config &interconnect_config =
       ConfigRegistry::instance().get("Interconnect");
 
+  const unsigned int bus_width = chiplet_config.get<unsigned int>("bus.width");
+  const sc_time bus_clk_cycle = chiplet_config.get<sc_time>("bus.clk_cycle");
+  const unsigned int ram_size = chiplet_config.get<unsigned int>("ram.size");
   const unsigned int flit_size =
       interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
   const unsigned int header_size = interconnect_config.get<unsigned int>(
@@ -47,24 +69,6 @@ private:
       interconnect_config.get<sc_time>("interconnect_protocol.post_delay");
   const sc_time irq_delay =
       interconnect_config.get<sc_time>("interconnect_protocol.irq_delay");
-
-  const unsigned int chiplet_id;
-  uint32_t write_address;
-
-  std::map<tlm::tlm_generic_payload*, int> transaction_id_map;
-
-  void send_to_phy(tlm_generic_payload & transaction);
-  void send_to_bus(tlm_generic_payload & transaction);
-  void send_irq(tlm_generic_payload & transaction, tlm_command command);
-
-  void send_flits(tlm_generic_payload & transaction);
-  void set_write_address(tlm_generic_payload & transaction);
-
-  //
-  bool is_request(const ChipletExtension *ext);
-  unsigned int get_required_flit_count(tlm_generic_payload & transaction);
-  unsigned int get_available_data_bytes_per_flit(tlm_generic_payload &
-                                                 transaction);
 
   // -------------------------------------------------------
   // peqs

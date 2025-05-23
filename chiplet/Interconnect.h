@@ -26,6 +26,20 @@ public:
   Interconnect(sc_module_name name, double bandwidth, double distance);
 
 private:
+  double bandwidth;
+  double distance;
+
+  void process_tx_buffer();
+  void process_rx_buffer();
+
+  std::deque<tlm_generic_payload *> tx_buffer;
+  std::deque<tlm_generic_payload *> rx_buffer;
+  unsigned tx_buffer_used_bytes;
+  unsigned rx_buffer_used_bytes;
+
+  // -------------------------------------------------------
+  // config
+  // -------------------------------------------------------
   const Config &interconnect_config =
       ConfigRegistry::instance().get("Interconnect");
 
@@ -42,30 +56,19 @@ private:
   const sc_time irq_delay =
       interconnect_config.get<sc_time>("interconnect_protocol.irq_delay");
 
-  double bandwidth;
-  double distance;
-
-  void process_tx_buffer();
-  void process_rx_buffer();
-
-  std::deque<tlm_generic_payload *> tx_buffer;
-  std::deque<tlm_generic_payload *> rx_buffer;
-  unsigned tx_buffer_used_bytes;
-  unsigned rx_buffer_used_bytes;
-
   // -------------------------------------------------------
   // peqs
   // -------------------------------------------------------
   peq_with_get<tlm_generic_payload> peq_protocol;
   void process_protocol_transaction();
-  peq_with_get<tlm_generic_payload> peq_die;
-  void process_die_transaction();
+  peq_with_get<tlm_generic_payload> peq_interconnect;
+  void process_interconnect_transaction();
 
   // -------------------------------------------------------
   // events
   // -------------------------------------------------------
   sc_event protocol_transaction_done;
-  sc_event die_transaction_done;
+  sc_event interconnect_transaction_done;
   sc_event tx_buffer_in_event;
   sc_event tx_buffer_out_event;
   sc_event rx_buffer_in_event;

@@ -101,7 +101,7 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
   // write operation:
   //      - no address cycle delay
   //      - no data cycles delay
-  //      + extension cycles delay
+  //      - extension cycles delay
 
   sc_time delay = SC_ZERO_TIME;
   sc_time address_cycle_delay = SC_ZERO_TIME;
@@ -116,8 +116,7 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
   } else if (transaction.get_command() == TLM_WRITE_COMMAND) {
     address_cycle_delay = SC_ZERO_TIME;
     data_cycles_delay = SC_ZERO_TIME;
-    extension_cycles_delay =
-        get_extension_cycles_delay(transaction, width, clk_cycle);
+    extension_cycles_delay = SC_ZERO_TIME;
   }
 
   delay = address_cycle_delay + data_cycles_delay + extension_cycles_delay;

@@ -37,11 +37,6 @@ public:
                                unsigned char *data, unsigned int data_size);
 
 private:
-  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
-  const Config &fpga_config = ConfigRegistry::instance().get("FPGA");
-  const Config &interconnect_config =
-      ConfigRegistry::instance().get("Interconnect");
-
   const unsigned int chiplet_id;
   const unsigned int core_id;
 
@@ -49,15 +44,31 @@ private:
   unsigned int request;
 
   // -------------------------------------------------------
-  // events
+  // config
   // -------------------------------------------------------
-  sc_event transaction_done;
+  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
+  const Config &fpga_config = ConfigRegistry::instance().get("FPGA");
+  const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
+
+  const unsigned int bus_width = chiplet_config.get<unsigned int>("bus.width");
+  const sc_time bus_clk_cycle = chiplet_config.get<sc_time>("bus.clk_cycle");
+  const unsigned int chiplet_ram_size =
+      chiplet_config.get<unsigned int>("ram.size");
+  const unsigned int fpga_ram_size = fpga_config.get<unsigned int>("ram.size");
+  const sc_time irq_delay =
+      interconnect_config.get<sc_time>("interconnect_protocol.irq_delay");
 
   // -------------------------------------------------------
   // peqs
   // -------------------------------------------------------
   peq_with_get<tlm_generic_payload> irq_peq;
   void handle_interrupt();
+
+  // -------------------------------------------------------
+  // events
+  // -------------------------------------------------------
+  sc_event transaction_done;
 
   // -------------------------------------------------------
   // transport functions

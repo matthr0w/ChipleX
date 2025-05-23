@@ -12,8 +12,8 @@ chiplet::Interconnect::Interconnect(sc_module_name name, double bandwidth,
       protocol_initiator_socket("protocol_initiator_socket"),
       interconnect_target_socket("interconnect_target_socket"),
       interconnect_initiator_socket("interconnect_initiator_socket"),
-      peq_protocol("peq_protocol"), peq_die("peq_die"), tx_buffer_used_bytes(0),
-      rx_buffer_used_bytes(0) {
+      peq_protocol("peq_protocol"), peq_interconnect("peq_interconnect"),
+      tx_buffer_used_bytes(0), rx_buffer_used_bytes(0) {
   protocol_target_socket.register_nb_transport_fw(
       this, &chiplet::Interconnect::nb_transport_fw_protocol);
   protocol_initiator_socket.register_nb_transport_bw(
@@ -26,8 +26,8 @@ chiplet::Interconnect::Interconnect(sc_module_name name, double bandwidth,
 
   SC_THREAD(process_protocol_transaction);
   sensitive << peq_protocol.get_event();
-  SC_THREAD(process_die_transaction);
-  sensitive << peq_die.get_event();
+  SC_THREAD(process_interconnect_transaction);
+  sensitive << peq_interconnect.get_event();
 
   SC_THREAD(process_tx_buffer);
   SC_THREAD(process_rx_buffer);
@@ -64,7 +64,7 @@ void chiplet::Interconnect::process_protocol_transaction() {
   }
 }
 
-void chiplet::Interconnect::process_die_transaction() {
+void chiplet::Interconnect::process_interconnect_transaction() {
   tlm_generic_payload *transaction;
   tlm_phase phase;
   sc_time delay;
@@ -73,7 +73,7 @@ void chiplet::Interconnect::process_die_transaction() {
   while (true) {
     wait();
 
-    transaction = peq_die.get_next_transaction();
+    transaction = peq_interconnect.get_next_transaction();
 
     // put transaction in rx buffer
     auto *transaction_copy =
@@ -82,7 +82,7 @@ void chiplet::Interconnect::process_die_transaction() {
     rx_buffer.push_back(transaction_copy);
     rx_buffer_in_event.notify();
 
-    // begin response die
+    // begin response to interconnect
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
 
@@ -103,15 +103,16 @@ void chiplet::Interconnect::process_tx_buffer() {
       tlm_generic_payload *transaction = tx_buffer.front();
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
+      tlm_sync_enum tlm_resp;
 
-      tlm_sync_enum tlm_resp = interconnect_initiator_socket->nb_transport_fw(
-          *transaction, phase, delay);
+      tlm_resp = interconnect_initiator_socket->nb_transport_fw(*transaction,
+                                                                phase, delay);
 
       if (tlm_resp == TLM_UPDATED) {
         wait(delay);
       }
 
-      wait(die_transaction_done);
+      wait(interconnect_transaction_done);
 
       // remove from tx buffer
       tx_buffer_used_bytes -= flit_size;
@@ -131,9 +132,10 @@ void chiplet::Interconnect::process_rx_buffer() {
       tlm_generic_payload *transaction = rx_buffer.front();
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
+      tlm_sync_enum tlm_resp;
 
-      tlm_sync_enum tlm_resp = protocol_initiator_socket->nb_transport_fw(
-          *transaction, phase, delay);
+      tlm_resp = protocol_initiator_socket->nb_transport_fw(*transaction, phase,
+                                                            delay);
 
       if (tlm_resp == TLM_UPDATED) {
         wait(delay);
@@ -188,7 +190,7 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_interconnect(
   delay += get_die2die_transfer_delay(*this, transaction, bandwidth, distance,
                                       flit_size);
 
-  peq_die.notify(transaction, delay);
+  peq_interconnect.notify(transaction, delay);
 
   phase = END_REQ;
   return TLM_UPDATED;
@@ -215,7 +217,7 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_bw_interconnect(
     SC_LOG_DEBUG(this, transaction,
                  "PROTOCOL: Received response from Interconnect");
 
-    die_transaction_done.notify(SC_ZERO_TIME);
+    interconnect_transaction_done.notify(SC_ZERO_TIME);
 
     phase = END_RESP;
     return TLM_COMPLETED;

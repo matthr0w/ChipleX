@@ -32,7 +32,7 @@ chiplet::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
         this, &chiplet::InterconnectProtocol::nb_transport_bw_interconnect, i);
   }
 
-  write_address = (chiplet_config.get<unsigned int>("ram.size") * 1024) / 2;
+  write_address = (ram_size * 1024) / 2;
 
   SC_THREAD(process_bus_transaction);
   sensitive << peq_bus.get_event();
@@ -56,9 +56,9 @@ void chiplet::InterconnectProtocol::process_bus_transaction() {
     wait();
 
     transaction = peq_bus.get_next_transaction();
+    transaction->get_extension(ext);
 
     // set source id
-    transaction->get_extension(ext);
     if (ext->source_id == -1) {
       static_cast<ChipletPayload *>(transaction)->set_source_id(chiplet_id);
     }
@@ -120,8 +120,9 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
       transaction->set_command(TLM_WRITE_COMMAND);
       set_write_address(*transaction);
       send_to_bus(*transaction);
-      if (flit_id == flit_count - 1)
+      if (flit_id == flit_count - 1) { // send IRQ on last flit
         send_irq(*transaction, TLM_READ_COMMAND);
+      }
     } else if (at_destination) {
       if (read_op) {
         send_to_bus(*transaction);
@@ -129,8 +130,9 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
       } else if (write_op) {
         set_write_address(*transaction);
         send_to_bus(*transaction);
-        if (flit_id == flit_count - 1)
+        if (flit_id == flit_count - 1) { // send IRQ on last flit
           send_irq(*transaction, TLM_WRITE_COMMAND);
+        }
       }
     } else {
       send_to_phy(*transaction);
@@ -140,13 +142,12 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
 
+    // find interconnect id
     int id = -1;
-
     auto it = transaction_id_map.find(transaction);
     if (it != transaction_id_map.end()) {
       id = it->second;
     }
-
     transaction_id_map.erase(transaction);
 
     tlm_resp = interconnect_target_sockets[id]->nb_transport_bw(*transaction,
@@ -158,106 +159,28 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
   }
 }
 
-void chiplet::InterconnectProtocol::send_to_bus(
-    tlm_generic_payload &transaction) {
-  tlm_phase phase = BEGIN_REQ;
-  sc_time delay = SC_ZERO_TIME;
-  tlm_sync_enum tlm_resp;
-
-  tlm_resp = bus_initiator_socket->nb_transport_fw(transaction, phase, delay);
-
-  if (tlm_resp == TLM_UPDATED) {
-    wait(delay);
-  }
-
-  wait(bus_transaction_done);
-}
-
-void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
-                                             tlm_command command) {
-  auto *irq = new ChipletPayload();
-  ChipletExtension *ext;
-  tlm_phase phase = BEGIN_REQ;
-  sc_time delay = SC_ZERO_TIME;
-  tlm_sync_enum tlm_resp;
-
-  transaction.get_extension(ext);
-
-  irq->set_command(command);
-
-  irq->set_request_id(ext->request_id);
-  irq->set_source_id(ext->source_id);
-  irq->set_core_id(ext->core_id);
-  irq->set_destination_id(ext->destination_id);
-
-  if (command == TLM_READ_COMMAND) {
-    unsigned int data_bytes_per_flit = flit_size;
-    data_bytes_per_flit -= header_size;
-    data_bytes_per_flit -= ext->get_size_bytes();
-    data_bytes_per_flit -= ext->get_protocol_size_bytes();
-
-    irq->set_address(transaction.get_address() -
-                     ext->flit_count * data_bytes_per_flit);
-    irq->set_data_length((ext->flit_count * data_bytes_per_flit) -
-                         ext->flit_padding);
-
-    // send read IRQs to request core
-    SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core" << ext->core_id);
-    if (ext->core_id == 0) {
-      tlm_resp =
-          core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
-    } else if (ext->core_id == 1) {
-      tlm_resp =
-          core1_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
-    }
-  } else {
-    unsigned int data_bytes_per_flit = flit_size;
-    data_bytes_per_flit -= header_size;
-    data_bytes_per_flit -= ext->get_size_bytes();
-    data_bytes_per_flit -= ext->get_protocol_size_bytes();
-    data_bytes_per_flit -= sizeof(uint32_t);
-
-    irq->set_address(transaction.get_address() -
-                     (ext->flit_count - 1) * data_bytes_per_flit);
-    irq->set_data_length((ext->flit_count * data_bytes_per_flit) -
-                         ext->flit_padding);
-
-    // send write IRQs to Core0
-    SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core0");
-    tlm_resp = core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
-  }
-
-  if (tlm_resp == TLM_COMPLETED) {
-    wait(delay);
-  }
-
-  SC_LOG_DEBUG(this, transaction, "Sending IRQ to core done");
-
-  delete irq;
-}
-
 // -------------------------------------------------------
-// protocol functions
+// sender functions
 // -------------------------------------------------------
 void chiplet::InterconnectProtocol::send_flits(
     tlm_generic_payload &transaction) {
 
-  auto total_size = transaction.get_data_length();
-  auto address = transaction.get_address();
+  uint32_t address = transaction.get_address();
   unsigned char *data_ptr = transaction.get_data_ptr();
+  unsigned int data_size = transaction.get_data_length();
 
+  unsigned int flit_data_size = get_available_data_bytes_per_flit(transaction);
   unsigned int flit_count = get_required_flit_count(transaction);
-  unsigned int data_bytes_size = get_available_data_bytes_per_flit(transaction);
-
   unsigned int flit_id = 0;
+
   unsigned int offset = 0;
-  while (offset < total_size) {
+  while (offset < data_size) {
     unsigned int current_data_size =
-        std::min(data_bytes_size, total_size - offset);
+        std::min(flit_data_size, data_size - offset);
 
     auto *flit = static_cast<ChipletPayload &>(transaction).clone_ext();
 
-    unsigned char *flit_data = new unsigned char[data_bytes_size]();
+    unsigned char *flit_data = new unsigned char[flit_data_size]();
 
     std::memcpy(flit_data, data_ptr + offset, current_data_size);
 
@@ -267,7 +190,7 @@ void chiplet::InterconnectProtocol::send_flits(
     flit->set_data_length(current_data_size);
     flit->set_flit_count(flit_count);
     flit->set_flit_id(flit_id);
-    flit->set_flit_padding(data_bytes_size - current_data_size);
+    flit->set_flit_padding(flit_data_size - current_data_size);
 
     send_to_phy(*flit);
 
@@ -304,37 +227,75 @@ void chiplet::InterconnectProtocol::send_to_phy(
   wait(phy_transaction_done);
 }
 
-void chiplet::InterconnectProtocol::set_write_address(
+void chiplet::InterconnectProtocol::send_to_bus(
     tlm_generic_payload &transaction) {
-  SC_LOG_DEBUG(this, transaction,
-               "Setting write address to: " << std::hex << write_address);
-  transaction.set_address(write_address);
   ChipletExtension *ext;
-  transaction.get_extension(ext);
-  unsigned int data_bytes_per_flit =
-      get_available_data_bytes_per_flit(transaction);
-  write_address += data_bytes_per_flit - ext->flit_padding;
-  if (write_address >= chiplet_config.get<unsigned int>("ram.size") * 1024) {
-    write_address = (chiplet_config.get<unsigned int>("ram.size") * 1024) / 2;
+  tlm_phase phase = BEGIN_REQ;
+  sc_time delay = SC_ZERO_TIME;
+  tlm_sync_enum tlm_resp;
+
+  tlm_resp = bus_initiator_socket->nb_transport_fw(transaction, phase, delay);
+
+  if (tlm_resp == TLM_UPDATED) {
+    wait(delay);
   }
+
+  wait(bus_transaction_done);
+}
+
+void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
+                                             tlm_command command) {
+  ChipletExtension *ext;
+  tlm_phase phase = BEGIN_REQ;
+  sc_time delay = SC_ZERO_TIME;
+  tlm_sync_enum tlm_resp;
+
+  transaction.get_extension(ext);
+
+  unsigned int flit_data_size = get_available_data_bytes_per_flit(transaction);
+  unsigned int data_size =
+      (ext->flit_count * flit_data_size) - ext->flit_padding;
+
+  unsigned int address_offset = (ext->flit_count - 1) * flit_data_size;
+
+  auto *irq = new ChipletPayload();
+
+  irq->set_command(command);
+  irq->set_address(transaction.get_address() - address_offset);
+  irq->set_data_length(data_size);
+  irq->set_request_id(ext->request_id);
+  irq->set_core_id(ext->core_id);
+  irq->set_source_id(ext->source_id);
+  irq->set_destination_id(ext->destination_id);
+
+  if (command == TLM_READ_COMMAND) {
+    // send read IRQs to request core
+    SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core" << ext->core_id);
+    if (ext->core_id == 0) {
+      tlm_resp =
+          core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
+    } else if (ext->core_id == 1) {
+      tlm_resp =
+          core1_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
+    }
+  } else {
+    // send write IRQs to Core0
+    SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core0");
+    tlm_resp = core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
+  }
+
+  if (tlm_resp == TLM_COMPLETED) {
+    wait(delay);
+  }
+
+  SC_LOG_DEBUG(this, transaction, "Sending IRQ to core done");
+
+  delete irq;
 }
 
 // -------------------------------------------------------
-// flit related functions
+// flit functions
 // -------------------------------------------------------
-bool chiplet::InterconnectProtocol::is_request(const ChipletExtension *ext) {
-  return ext && (ext->destination_id != ext->source_id);
-}
-
-unsigned int chiplet::InterconnectProtocol::get_required_flit_count(
-    tlm_generic_payload &transaction) {
-  unsigned int total_data_bytes = transaction.get_data_length();
-  unsigned int available_data_bytes =
-      get_available_data_bytes_per_flit(transaction);
-
-  return (total_data_bytes + available_data_bytes - 1) / available_data_bytes;
-}
-
 unsigned int chiplet::InterconnectProtocol::get_available_data_bytes_per_flit(
     tlm_generic_payload &transaction) {
   ChipletExtension *ext;
@@ -342,16 +303,44 @@ unsigned int chiplet::InterconnectProtocol::get_available_data_bytes_per_flit(
 
   unsigned int size = flit_size;
 
+  // flit header
   size -= header_size;
 
-  size -= ext->get_size_bytes();
+  // flit metadata
   size -= ext->get_protocol_size_bytes();
+  // chiplet metadata
+  size -= ext->get_size_bytes();
 
-  if (is_request(ext)) {
-    size -= sizeof(uint32_t);
-  }
+  // address
+  size -= sizeof(uint32_t);
 
   return size;
+}
+
+unsigned int chiplet::InterconnectProtocol::get_required_flit_count(
+    tlm_generic_payload &transaction) {
+  unsigned int data_size = transaction.get_data_length();
+  unsigned int flit_data_size = get_available_data_bytes_per_flit(transaction);
+
+  return (data_size + flit_data_size - 1) / flit_data_size;
+}
+
+void chiplet::InterconnectProtocol::set_write_address(
+    tlm_generic_payload &transaction) {
+  SC_LOG_DEBUG_NO_TX(this,
+                     "Setting write address to: " << std::hex << write_address);
+  transaction.set_address(write_address);
+
+  ChipletExtension *ext;
+  transaction.get_extension(ext);
+
+  unsigned int flit_data_size = get_available_data_bytes_per_flit(transaction);
+  unsigned int flit_padding = ext->flit_padding;
+  write_address += flit_data_size - flit_padding;
+
+  if (write_address >= ram_size * 1024) {
+    write_address = (ram_size * 1024) / 2;
+  }
 }
 
 // -------------------------------------------------------
@@ -362,9 +351,8 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
   SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received request from Bus");
 
   // add bus transfer delay
-  delay += get_bus_transfer_fw_delay(
-      *this, transaction, chiplet_config.get<sc_time>("bus.clk_cycle"),
-      chiplet_config.get<unsigned int>("bus.width"));
+  delay +=
+      get_bus_transfer_fw_delay(*this, transaction, bus_clk_cycle, bus_width);
 
   peq_bus.notify(transaction, delay);
 
@@ -379,9 +367,8 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_interconnect(
                "PROTOCOL: Received request from Interconnect" << id);
 
   // add interconnect to protocol layer process delay
-  delay += get_interconnect2protocol_process_delay(
-      *this, transaction,
-      interconnect_config.get<sc_time>("interconnect_protocol.post_delay"));
+  delay +=
+      get_interconnect2protocol_process_delay(*this, transaction, post_delay);
 
   transaction_id_map[&transaction] = id;
 
@@ -396,9 +383,8 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_bus(
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received response from Bus");
 
-    delay += get_bus_transfer_bw_delay(
-        *this, transaction, chiplet_config.get<sc_time>("bus.clk_cycle"),
-        chiplet_config.get<unsigned int>("bus.width"));
+    delay +=
+        get_bus_transfer_bw_delay(*this, transaction, bus_clk_cycle, bus_width);
 
     bus_transaction_done.notify(delay);
 

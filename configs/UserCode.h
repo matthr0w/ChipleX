@@ -48,6 +48,8 @@ using CoreKey = std::pair<int, int>;
 //                     size_t data_size);
 //
 //    Sends random read/write requests every `delay` nanoseconds.
+//
+//    Parameters:
 //    - `write_prob`: Probability of issuing a write
 //       (0.0 = all reads, 1.0 = all writes)
 //    - `destination_min` and `destination_max`: Target modules ID range
@@ -61,8 +63,10 @@ using CoreKey = std::pair<int, int>;
 //                                 unsigned char* data,
 //                                 unsigned int data_size);
 //
-//    Sends a single read/write request over the bus and returns a response
-//    payload.
+//    Sends a TLM request to the target over the bus.
+//
+//    Parameters:
+//    - `command`: `TLM_READ_COMMAND` or `TLM_WRITE_COMMAND`
 //    - `request_id`: Used to identify the request later in the interrupt
 //       handler (you may start at 0 and increment as needed).
 //    - `destination_id`: Target module ID
@@ -70,19 +74,26 @@ using CoreKey = std::pair<int, int>;
 //    - `data`: Must be allocated on the heap using `new`.
 //       - for `WRITE_COMMAND`: the buffer contents will be sent to the target.
 //       - for `READ_COMMAND`: an empty buffer of the appropriate size must be
-//         passed. DO NOT delete the buffer manually. It will be managed and
-//         freed internally.
+//         passed. DO NOT delete the buffer manually. It will be freed
+//         automatically when the returned transaction is deleted.
 //    - `data_size`: Number of bytes in the request buffer
 //
 //    Returns:
-//    - A pointer to a newly allocated response of `ChipletPayload`
-//    - You are responsible for deleting the returned payload when done:
-//      `delete response;`
+//      A pointer to the `ChipletPayload` transaction that was internally set up
+//      by this function. You are responsible for deleting the returned
+//      transaction using `delete`. This will also correctly deallocate the
+//      associated data buffer.
 //
-//    Note:
-//    `send_request` is blocking and only returns when the transaction is
-//    complete. Add appropriate `wait()` calls before sending to simulate
-//    realistic processing delays.
+//    Notes:
+//    - The returned transaction's contents (e.g., data pointer) are only valid
+//      and meaningful for on-chip read and write requests.
+//    - For off-chip requests (to other chiplets or the FPGA), the response
+//      transaction does NOT contain meaningful data and can be ignored.
+//    - For off-chip read requests: the initiating module will receive an
+//      IRQ when the data becomes available and should handle the data fetch
+//      in the IRQ handler.
+//    - For off-chip write requests: the target will receive an IRQ when the
+//      write has completed and should handle the data fetch in the IRQ handler.
 //
 // -----------------------------
 //  Interrupt Handler Notes:
@@ -90,8 +101,22 @@ using CoreKey = std::pair<int, int>;
 //
 // - Your handler receives a pointer to the incoming transaction:
 //     void irq_handler(Module &module, tlm_generic_payload *transaction)
-// - Use `transaction->get_extension<ChipletExtension>()` to access metadata
-//   (e.g., `request_id`).
+//
+// - The incoming transaction does NOT contain any valid payload data.
+//   It only includes important metadata such as:
+//     - `get_address()`: the location where the data can be fetched
+//     - `get_data_length()`: the size of the data
+//     - `ChipletExtension`: custom metadata like `request_id`, etc.
+//
+// - To fetch the actual data related to this IRQ, you must issue a new
+//   on-chip request using the `send_request()` function, passing the
+//   parameters from the IRQ transaction.
+//
+// - You are responsible for deleting the response returned from
+//   `send_request()` to avoid memory leaks.
+//
+// - DO NOT delete the IRQ transaction passed to the handler.
+//   It is owned and managed by the system that dispatched the IRQ.
 //
 // -----------------------------
 //  Configuration Access:
@@ -219,13 +244,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         SC_LOG_DEBUG_NO_TX(&core,
                            "Hello from Chiplet2 Core0 Interrupt Handler!");
 
-        SC_LOG_DEBUG_NO_TX(
-            &core, "Base Address: " << std::hex << transaction->get_address());
-        SC_LOG_DEBUG_NO_TX(&core,
-                           "Data Size: " << transaction->get_data_length());
-
         const size_t buffer_size = transaction->get_data_length();
-        unsigned char *buffer = new unsigned char[buffer_size]();
+        unsigned char *buffer = new unsigned char[buffer_size];
 
         auto response =
             core.send_request(TLM_READ_COMMAND, 0, 2,
