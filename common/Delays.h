@@ -4,6 +4,7 @@
 
 #include "protocol/ChipletExtension.h"
 
+#include "include/configs.h"
 #include "include/globals.h"
 #include "include/logging.h"
 
@@ -212,6 +213,9 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
   //      + flit transfer delay
   //      + wire propagation delay
 
+  static const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
+
   sc_time delay = SC_ZERO_TIME;
   sc_time flit_transfer_delay = SC_ZERO_TIME;
   sc_time wire_propagation_delay = SC_ZERO_TIME;
@@ -222,29 +226,42 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
   wire_propagation_delay = sc_time(distance * wire_ps_per_mm, SC_PS);
 
   delay = flit_transfer_delay + wire_propagation_delay;
+  sc_time base_transfer_delay = delay;
 
-  bool bad_transfer = false;
+  int max_attempts = 1;
+
+  switch (connection_type) {
+  case ConnectionType::UCIe:
+    max_attempts =
+        interconnect_config.get<unsigned int>("interconnect_protocol.retries");
+    break;
+  default:
+    break;
+  }
+
   double prob_bad_transfer =
       1.0 - std::pow(1.0 - bit_error_rate, flit_size * 8);
 
-  if (bit_error_dist(bit_error_gen) < prob_bad_transfer) {
-    SC_LOG_ERROR(&module, transaction, "Bit error");
-    bad_transfer = true;
-  }
-
-  // connection type specific delays
-  switch (connection_type) {
-  case ConnectionType::UCIe: {
-    // UCIe retry mechanism
-    // if bit error happens -> retry transfer -> double delay
-    if (bad_transfer) {
-      delay *= 2;
+  for (int attempt = 0; attempt < max_attempts; ++attempt) {
+    if (bit_error_dist(bit_error_gen) >= prob_bad_transfer) {
+      // no bit error
+      break;
     }
 
-    break;
-  }
-  default:
-    break;
+    SC_LOG_ERROR(&module, transaction,
+                 "Bit error on attempt " + std::to_string(attempt + 1));
+
+    switch (connection_type) {
+    case ConnectionType::PCIe:
+      // forward error correction penalty
+      delay +=
+          interconnect_config.get<sc_time>("interconnect_protocol.fec_delay");
+      break;
+    case ConnectionType::UCIe:
+      // retry penalty
+      delay += base_transfer_delay;
+    default:;
+    }
   }
 
   SC_LOG_DELAY(&module, transaction, "Die to Die Transfer", delay);

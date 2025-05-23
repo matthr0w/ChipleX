@@ -5,6 +5,7 @@ interconnect_protocol:
   pre_delay: 0.5 # ns
   post_delay: 0.1 # ns
   irq_delay: 2.0 # ns
+  retries: 4
   
 interconnect:
   buffer_size: 512 # bytes
