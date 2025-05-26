@@ -65,13 +65,6 @@ void chiplet::Bus::process_transaction_fw() {
                    "PROTOCOL: Forwarding BEGIN_REQ for "
                        << modules[current_owner] << " to RAM");
 
-      // if read operation, source becomes destination now
-      if (transaction->get_command() == TLM_READ_COMMAND) {
-        int source_id = ext->source_id;
-        static_cast<ChipletPayload *>(transaction)
-            ->set_destination_id(source_id);
-      }
-
       tlm_resp =
           ram_initiator_socket->nb_transport_fw(*transaction, phase, delay);
 

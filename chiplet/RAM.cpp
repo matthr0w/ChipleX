@@ -33,6 +33,7 @@ void chiplet::RAM::process_transaction() {
     // read or write data
     if (address + data_size > mem.size()) {
       transaction->set_response_status(TLM_ADDRESS_ERROR_RESPONSE);
+      SC_LOG_ERROR(this, *transaction, "Out of bounds RAM access");
     } else {
       if (transaction->get_command() == TLM_READ_COMMAND) {
         std::memcpy(data, &mem[address], data_size);
@@ -63,7 +64,7 @@ tlm_sync_enum chiplet::RAM::nb_transport_fw(tlm_generic_payload &transaction,
                                             tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_REQ) {
     delay +=
-        get_bus_transfer_fw_delay(*this, transaction, bus_clk_cycle, bus_width);
+        get_mem_address_assignment_delay(*this, transaction, ram_address_delay);
 
     peq.notify(transaction, delay);
 

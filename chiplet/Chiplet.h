@@ -6,6 +6,7 @@
 #include "Core.h"
 #include "Interconnect.h"
 #include "InterconnectProtocol.h"
+#include "MemoryController.h"
 #include "RAM.h"
 
 using namespace sc_core;
@@ -39,6 +40,7 @@ public:
 private:
   chiplet::Bus bus;
   chiplet::InterconnectProtocol interconnectprotocol;
+  chiplet::MemoryController memorycontroller;
   chiplet::RAM ram;
 
   void initialize();

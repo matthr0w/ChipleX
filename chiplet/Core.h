@@ -32,9 +32,9 @@ public:
   void send_random(unsigned int delay, double write_prob,
                    unsigned int destination_min, unsigned int destination_max,
                    size_t data_size);
-  ChipletPayload *send_request(tlm_command command, int request_id,
-                               int destination_id, uint32_t address,
-                               unsigned char *data, unsigned int data_size);
+  ChipletPayload *send_request(
+      tlm_command command, int request_id, int destination_id, uint32_t address,
+      bool fixed_address, unsigned char *data, unsigned int data_size);
 
 private:
   const unsigned int chiplet_id;

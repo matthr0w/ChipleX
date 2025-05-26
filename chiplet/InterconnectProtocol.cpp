@@ -1,6 +1,7 @@
 #include "InterconnectProtocol.h"
 
 #include "common/Delays.h"
+#include "common/Flits.h"
 #include "common/RoutingTable.h"
 #include "common/protocol/ChipletExtension.h"
 #include "common/protocol/ChipletPayload.h"
@@ -31,8 +32,6 @@ chiplet::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
     interconnect_initiator_sockets[i].register_nb_transport_bw(
         this, &chiplet::InterconnectProtocol::nb_transport_bw_interconnect, i);
   }
-
-  write_address = (ram_size * 1024) / 2;
 
   SC_THREAD(process_bus_transaction);
   sensitive << peq_bus.get_event();
@@ -102,7 +101,7 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
 
     // at source and read operation:
     //    transaction was an off-chip read request
-    //    -> set to write operation, set write address, send to RAM via bus
+    //    -> set to write operation, send to RAM via bus
     //    -> send IRQ to core
     // at destination and read operation:
     //    transaction is an off-chip read request
@@ -110,7 +109,7 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
     //    -> send back to source via interconnects
     // at destination and write operation:
     //    transaction is an off-chip write request
-    //    -> set write address, send to RAM via bus
+    //    -> send to RAM via bus
     //    -> send IRQ to core
     // not at source or destination
     //    transaction is not at the destination
@@ -118,7 +117,6 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
 
     if (at_source && read_op) {
       transaction->set_command(TLM_WRITE_COMMAND);
-      set_write_address(*transaction);
       send_to_bus(*transaction);
       if (flit_id == flit_count - 1) { // send IRQ on last flit
         send_irq(*transaction, TLM_READ_COMMAND);
@@ -128,7 +126,6 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
         send_to_bus(*transaction);
         send_to_phy(*transaction);
       } else if (write_op) {
-        set_write_address(*transaction);
         send_to_bus(*transaction);
         if (flit_id == flit_count - 1) { // send IRQ on last flit
           send_irq(*transaction, TLM_WRITE_COMMAND);
@@ -291,56 +288,6 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
   SC_LOG_DEBUG(this, transaction, "Sending IRQ to core done");
 
   delete irq;
-}
-
-// -------------------------------------------------------
-// flit functions
-// -------------------------------------------------------
-unsigned int chiplet::InterconnectProtocol::get_available_data_bytes_per_flit(
-    tlm_generic_payload &transaction) {
-  ChipletExtension *ext;
-  transaction.get_extension(ext);
-
-  unsigned int size = flit_size;
-
-  // flit header
-  size -= header_size;
-
-  // flit metadata
-  size -= ext->get_protocol_size_bytes();
-  // chiplet metadata
-  size -= ext->get_size_bytes();
-
-  // address
-  size -= sizeof(uint32_t);
-
-  return size;
-}
-
-unsigned int chiplet::InterconnectProtocol::get_required_flit_count(
-    tlm_generic_payload &transaction) {
-  unsigned int data_size = transaction.get_data_length();
-  unsigned int flit_data_size = get_available_data_bytes_per_flit(transaction);
-
-  return (data_size + flit_data_size - 1) / flit_data_size;
-}
-
-void chiplet::InterconnectProtocol::set_write_address(
-    tlm_generic_payload &transaction) {
-  SC_LOG_DEBUG_NO_TX(this,
-                     "Setting write address to: " << std::hex << write_address);
-  transaction.set_address(write_address);
-
-  ChipletExtension *ext;
-  transaction.get_extension(ext);
-
-  unsigned int flit_data_size = get_available_data_bytes_per_flit(transaction);
-  unsigned int flit_padding = ext->flit_padding;
-  write_address += flit_data_size - flit_padding;
-
-  if (write_address >= ram_size * 1024) {
-    write_address = (ram_size * 1024) / 2;
-  }
 }
 
 // -------------------------------------------------------

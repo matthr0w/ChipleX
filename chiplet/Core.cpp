@@ -107,7 +107,7 @@ void chiplet::Core::send_random(unsigned int delay, double write_prob,
 
     auto response =
         send_request(do_write ? TLM_WRITE_COMMAND : TLM_READ_COMMAND, request,
-                     destination_id, address, data, data_size);
+                     destination_id, address, true, data, data_size);
 
     delete response;
 
@@ -115,11 +115,9 @@ void chiplet::Core::send_random(unsigned int delay, double write_prob,
   }
 }
 
-ChipletPayload *chiplet::Core::send_request(tlm_command command, int request_id,
-                                            int destination_id,
-                                            uint32_t address,
-                                            unsigned char *data,
-                                            unsigned int data_size) {
+ChipletPayload *chiplet::Core::send_request(
+    tlm_command command, int request_id, int destination_id, uint32_t address,
+    bool fixed_address, unsigned char *data, unsigned int data_size) {
   std::scoped_lock lock(request_mutex);
 
   auto *transaction = new ChipletPayload();
@@ -128,9 +126,20 @@ ChipletPayload *chiplet::Core::send_request(tlm_command command, int request_id,
   tlm_sync_enum tlm_resp;
 
   transaction->set_command(command);
-  transaction->set_address(address);
   transaction->set_data_ptr(data);
   transaction->set_data_length(data_size);
+
+  transaction->set_fixed_address(fixed_address);
+
+  if (command == TLM_WRITE_COMMAND) {
+    if (fixed_address) {
+      transaction->set_address(address);
+    } else {
+      transaction->set_address(0x0);
+    }
+  } else if (command == TLM_READ_COMMAND) {
+    transaction->set_address(address);
+  }
 
   transaction->set_request_id(request_id);
   transaction->set_destination_id(destination_id);
@@ -139,8 +148,13 @@ ChipletPayload *chiplet::Core::send_request(tlm_command command, int request_id,
     SC_LOG_INFO(this, *transaction,
                 "Sending request: READ from 0x" << std::hex << address);
   } else if (command == TLM_WRITE_COMMAND) {
-    SC_LOG_INFO(this, *transaction,
-                "Sending request: WRITE to 0x" << std::hex << address);
+    if (fixed_address) {
+      SC_LOG_INFO(this, *transaction,
+                  "Sending request: WRITE to 0x" << std::hex << address);
+    } else {
+      SC_LOG_INFO(this, *transaction,
+                  "Sending request: WRITE to dynamic address");
+    }
   }
 
   phase = BEGIN_REQ;

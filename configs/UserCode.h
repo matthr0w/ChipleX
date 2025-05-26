@@ -60,6 +60,7 @@ using CoreKey = std::pair<int, int>;
 //                                 int request_id,
 //                                 int destination_id,
 //                                 uint32_t address,
+//                                 bool fixed_address,
 //                                 unsigned char* data,
 //                                 unsigned int data_size);
 //
@@ -71,10 +72,18 @@ using CoreKey = std::pair<int, int>;
 //       handler (you may start at 0 and increment as needed).
 //    - `destination_id`: Target module ID
 //       (0 = FPGA, 1 = Chiplet1, ...)
+//    - `address`: The address to read from or write to.
+//       - `TLM_READ_COMMAND`: the passed address is always used.
+//       - `TLM_WRITE_COMMAND`: if `fixed_address` is true, the passed
+//          address is used; otherwise, the memory controller will assign the
+//          address and you can pass any address.
+//    - `fixed_address`: Indicates whether the write request should use the
+//       provided address (`true`) or allow the memory controller to allocate
+//       it dynamically (`false`). Ignored for read requests.
 //    - `data`: Must be allocated on the heap using `new`.
-//       - for `WRITE_COMMAND`: the buffer contents will be sent to the target.
-//       - for `READ_COMMAND`: an empty buffer of the appropriate size must be
-//         passed. DO NOT delete the buffer manually. It will be freed
+//       - `TLM_WRITE_COMMAND`: the buffer contents will be sent to the target.
+//       - `TLM_READ_COMMAND`: an empty buffer of the appropriate size must
+//         be passed. DO NOT delete the buffer manually. It will be freed
 //         automatically when the returned transaction is deleted.
 //    - `data_size`: Number of bytes in the request buffer
 //
@@ -228,7 +237,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
           std::cout << std::endl;
 
         auto response = core.send_request(TLM_WRITE_COMMAND, 0, 2, 0x1000,
-                                          buffer, buffer_size);
+                                          false, buffer, buffer_size);
         delete response;
       },
       [](chiplet::Core &core, tlm_generic_payload *transaction) {
@@ -247,9 +256,9 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         const size_t buffer_size = transaction->get_data_length();
         unsigned char *buffer = new unsigned char[buffer_size];
 
-        auto response =
-            core.send_request(TLM_READ_COMMAND, 0, 2,
-                              transaction->get_address(), buffer, buffer_size);
+        auto response = core.send_request(TLM_READ_COMMAND, 0, 2,
+                                          transaction->get_address(), true,
+                                          buffer, buffer_size);
 
         std::cout << "Response contents (" << buffer_size
                   << " bytes):" << std::endl;

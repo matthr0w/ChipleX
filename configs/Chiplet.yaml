@@ -10,4 +10,5 @@ ram:
   size: 16 # KB
   width: 32 # bits
   clk_cycle: 3.0 # ns
+  address_delay: 3.0 # ns
   access_delay: 20.0 # ns

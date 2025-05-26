@@ -5,8 +5,6 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
-#include "common/protocol/ChipletExtension.h"
-
 #include "include/configs.h"
 
 using namespace sc_core;
@@ -35,19 +33,12 @@ public:
 private:
   const unsigned int chiplet_id;
 
-  uint32_t write_address;
-  void set_write_address(tlm_generic_payload & transaction);
-
   std::map<tlm::tlm_generic_payload *, int> transaction_id_map;
 
   void send_flits(tlm_generic_payload & transaction);
   void send_to_phy(tlm_generic_payload & transaction);
   void send_to_bus(tlm_generic_payload & transaction);
   void send_irq(tlm_generic_payload & transaction, tlm_command command);
-
-  unsigned int get_available_data_bytes_per_flit(tlm_generic_payload &
-                                                 transaction);
-  unsigned int get_required_flit_count(tlm_generic_payload & transaction);
 
   // -------------------------------------------------------
   // config

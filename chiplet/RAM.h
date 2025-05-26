@@ -24,11 +24,11 @@ private:
   // -------------------------------------------------------
   const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
 
-  const unsigned int bus_width = chiplet_config.get<unsigned int>("bus.width");
-  const sc_time bus_clk_cycle = chiplet_config.get<sc_time>("bus.clk_cycle");
   const unsigned int ram_size = chiplet_config.get<unsigned int>("ram.size");
   const unsigned int ram_width = chiplet_config.get<unsigned int>("ram.width");
   const sc_time ram_clk_cycle = chiplet_config.get<sc_time>("ram.clk_cycle");
+  const sc_time ram_address_delay =
+      chiplet_config.get<sc_time>("ram.address_delay");
   const sc_time ram_access_delay =
       chiplet_config.get<sc_time>("ram.access_delay");
 

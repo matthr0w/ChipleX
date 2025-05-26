@@ -25,8 +25,16 @@ inline sc_time get_extension_cycles_delay(tlm_generic_payload &transaction,
                                           unsigned int width, sc_time cycle) {
   ChipletExtension *ext;
   transaction.get_extension(ext);
-  unsigned int extension_size = ext->get_size_bytes();
-  unsigned int num_cycles = (extension_size * 8 + width - 1) / width;
+
+  unsigned int flitext_size = 0;
+
+  if (ext->flit_id != -1) {
+    flitext_size = ext->get_flitext_size_bytes();
+  }
+
+  unsigned int stdext_size = ext->get_stdext_size_bytes();
+  unsigned int num_cycles =
+      ((stdext_size + flitext_size) * 8 + width - 1) / width;
   return num_cycles * cycle;
 }
 
@@ -129,6 +137,23 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
 // -------------------------------------------------------
 // RAM
 // -------------------------------------------------------
+inline sc_time
+get_mem_address_assignment_delay(sc_module &module,
+                                 tlm_generic_payload &transaction,
+                                 sc_time assignment_delay) {
+  // Memory Controller Address Assignment Delay
+  // -----------------------------------------------
+  //      + fixed assignment delay
+
+  sc_time delay = SC_ZERO_TIME;
+
+  delay = assignment_delay;
+
+  SC_LOG_DELAY(&module, transaction, "Memory Controller Address Assignment",
+               delay);
+  return delay;
+}
+
 inline sc_time get_mem_access_delay(sc_module &module,
                                     tlm_generic_payload &transaction,
                                     sc_time clk_cycle, sc_time access_delay,
