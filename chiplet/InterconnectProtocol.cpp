@@ -161,7 +161,6 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
 // -------------------------------------------------------
 void chiplet::InterconnectProtocol::send_flits(
     tlm_generic_payload &transaction) {
-
   uint32_t address = transaction.get_address();
   unsigned char *data_ptr = transaction.get_data_ptr();
   unsigned int data_size = transaction.get_data_length();

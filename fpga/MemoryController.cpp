@@ -7,13 +7,13 @@
 
 #include "include/logging.h"
 
-chiplet::MemoryController::MemoryController(sc_module_name name)
+fpga::MemoryController::MemoryController(sc_module_name name)
     : sc_module(name), bus_target_socket("bus_target_socket"),
       ram_initiator_socket("ram_initiator_socket"), peq("peq") {
   bus_target_socket.register_nb_transport_fw(
-      this, &chiplet::MemoryController::nb_transport_fw);
+      this, &fpga::MemoryController::nb_transport_fw);
   ram_initiator_socket.register_nb_transport_bw(
-      this, &chiplet::MemoryController::nb_transport_bw);
+      this, &fpga::MemoryController::nb_transport_bw);
 
   offchip_base_address = (ram_size * 1024) / 2;
 
@@ -21,7 +21,7 @@ chiplet::MemoryController::MemoryController(sc_module_name name)
   sensitive << peq.get_event();
 }
 
-void chiplet::MemoryController::process_transaction() {
+void fpga::MemoryController::process_transaction() {
   ChipletExtension *ext;
   tlm_generic_payload *transaction;
   tlm_phase phase;
@@ -51,7 +51,7 @@ void chiplet::MemoryController::process_transaction() {
   }
 }
 
-void chiplet::MemoryController::send_to_ram(tlm_generic_payload &transaction) {
+void fpga::MemoryController::send_to_ram(tlm_generic_payload &transaction) {
   ChipletExtension *ext;
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
@@ -66,7 +66,7 @@ void chiplet::MemoryController::send_to_ram(tlm_generic_payload &transaction) {
   wait(ram_transaction_done);
 }
 
-void chiplet::MemoryController::set_address(
+void fpga::MemoryController::set_address(
     tlm::tlm_generic_payload &transaction) {
   ChipletExtension *ext;
   transaction.get_extension(ext);
@@ -139,7 +139,7 @@ void chiplet::MemoryController::set_address(
   }
 }
 
-uint32_t chiplet::MemoryController::allocate_dynamic_address(
+uint32_t fpga::MemoryController::allocate_dynamic_address(
     tlm_generic_payload &transaction, bool onchip, uint32_t size) {
   uint32_t base_address = onchip ? 0 : offchip_base_address;
   uint32_t max_address = onchip ? offchip_base_address : ram_size * 1024;
@@ -166,8 +166,8 @@ uint32_t chiplet::MemoryController::allocate_dynamic_address(
 // transport functions
 // -------------------------------------------------------
 tlm_sync_enum
-chiplet::MemoryController::nb_transport_fw(tlm_generic_payload &transaction,
-                                           tlm_phase &phase, sc_time &delay) {
+fpga::MemoryController::nb_transport_fw(tlm_generic_payload &transaction,
+                                        tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received request from Bus");
 
   // add address assignment delay
@@ -181,8 +181,8 @@ chiplet::MemoryController::nb_transport_fw(tlm_generic_payload &transaction,
 }
 
 tlm_sync_enum
-chiplet::MemoryController::nb_transport_bw(tlm_generic_payload &transaction,
-                                           tlm_phase &phase, sc_time &delay) {
+fpga::MemoryController::nb_transport_bw(tlm_generic_payload &transaction,
+                                        tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received response from RAM");
 
