@@ -23,7 +23,7 @@ void Parser::print_help(const char *progname) {
          "in millimeters (default: 5000)\n"
       << "  --ber=<prob>              Set bit error rate (default: 1e-12)\n"
       << "  --logging=level           Set logging level: INFO, WARN, "
-         "ERROR, DEBUG, SILENT (default: SILENT)\n"
+         "ERROR, DEBUG, SILENT (default: ERROR)\n"
       << "  --help                    Show this help message\n";
 }
 
