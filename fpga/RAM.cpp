@@ -8,9 +8,7 @@ using namespace sc_core;
 using namespace tlm;
 
 fpga::RAM::RAM(sc_module_name name)
-    : sc_module(name), socket("socket"), peq("peq") {
-  std::vector<uint8_t> mem(fpga_config.get<unsigned int>("ram.size") * 1024, 0);
-
+    : sc_module(name), socket("socket"), peq("peq"), mem(ram_size * 1024, 0) {
   socket.register_nb_transport_fw(this, &fpga::RAM::nb_transport_fw);
 
   SC_THREAD(process_transaction);
@@ -35,20 +33,18 @@ void fpga::RAM::process_transaction() {
     // read or write data
     if (address + data_size > mem.size()) {
       transaction->set_response_status(TLM_ADDRESS_ERROR_RESPONSE);
+      SC_LOG_ERROR(this, *transaction, "Out of bounds RAM access");
     } else {
-      if (transaction->get_command() == TLM_READ_COMMAND)
+      if (transaction->get_command() == TLM_READ_COMMAND) {
         std::memcpy(data, &mem[address], data_size);
-      else if (transaction->get_command() == TLM_WRITE_COMMAND)
+      } else if (transaction->get_command() == TLM_WRITE_COMMAND) {
         std::memcpy(&mem[address], data, data_size);
-
-      transaction->set_response_status(TLM_OK_RESPONSE);
+      }
     }
 
     // RAM access delay
-    wait(get_mem_access_delay(*this, *transaction,
-                              fpga_config.get<sc_time>("ram.clk_cycle"),
-                              fpga_config.get<sc_time>("ram.access_delay"),
-                              fpga_config.get<unsigned int>("ram.width")));
+    wait(get_mem_access_delay(*this, *transaction, ram_clk_cycle,
+                              ram_access_delay, ram_width));
 
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
@@ -66,18 +62,15 @@ void fpga::RAM::process_transaction() {
 // -------------------------------------------------------
 tlm_sync_enum fpga::RAM::nb_transport_fw(tlm_generic_payload &transaction,
                                          tlm_phase &phase, sc_time &delay) {
-  if (phase != BEGIN_REQ) {
-    SC_LOG_ERROR(this, transaction,
-                 "PROTOCOL ERROR: Request from Bus with " << phase);
-    exit(1);
+  if (phase == BEGIN_REQ) {
+    delay +=
+        get_mem_address_assignment_delay(*this, transaction, ram_address_delay);
+
+    peq.notify(transaction, delay);
+
+    phase = END_REQ;
+    return TLM_UPDATED;
   }
 
-  delay += get_bus_transfer_fw_delay(
-      *this, transaction, fpga_config.get<sc_time>("bus.clk_cycle"),
-      fpga_config.get<unsigned int>("bus.width"));
-
-  peq.notify(transaction, delay);
-
-  phase = END_REQ;
-  return TLM_UPDATED;
+  return TLM_ACCEPTED;
 }

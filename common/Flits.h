@@ -4,49 +4,43 @@
 
 #include "protocol/ChipletExtension.h"
 
+#include "include/configs.h"
+
 using namespace sc_core;
 using namespace tlm;
 
-inline bool is_request(const ChipletExtension *ext) {
-  return ext && (ext->destination_id != ext->source_id);
-}
+inline unsigned int
+get_available_data_bytes_per_flit(tlm_generic_payload &transaction) {
+  static const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
 
-inline unsigned get_payload_bytes(tlm_generic_payload &transaction) {
-  unsigned size = 0;
+  static const unsigned int flit_size =
+      interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
+  static const unsigned int header_size = interconnect_config.get<unsigned int>(
+      "interconnect_protocol.header_size");
 
-  ChipletExtension *ext = nullptr;
+  ChipletExtension *ext;
   transaction.get_extension(ext);
 
-  // address only in requests
-  if (is_request(ext)) {
-    size += sizeof(uint32_t);
-  }
+  unsigned int size = flit_size;
 
-  // data
-  size += transaction.get_data_length();
+  // flit header
+  size -= header_size;
 
-  // extension
-  if (ext) {
-    size += ext->get_size_bytes();
-  }
+  // flit metadata
+  size -= ext->get_flitext_size_bytes();
+  // chiplet metadata
+  size -= ext->get_stdext_size_bytes();
+
+  // address
+  size -= sizeof(uint32_t);
 
   return size;
 }
 
-inline unsigned get_protocol_bytes(tlm_generic_payload &transaction,
-                                   unsigned header_size) {
-  return header_size;
-}
+inline unsigned int get_required_flit_count(tlm_generic_payload &transaction) {
+  unsigned int data_size = transaction.get_data_length();
+  unsigned int flit_data_size = get_available_data_bytes_per_flit(transaction);
 
-inline unsigned get_flit_count(tlm_generic_payload &transaction,
-                               unsigned flit_size, unsigned header_size) {
-  unsigned total_bytes = get_protocol_bytes(transaction, header_size) +
-                         get_payload_bytes(transaction);
-  return (total_bytes + flit_size - 1) / flit_size;
-}
-
-inline unsigned get_flit_bytes(tlm_generic_payload &transaction,
-                               unsigned flit_size, unsigned header_size) {
-  unsigned flit_count = get_flit_count(transaction, flit_size, header_size);
-  return flit_count * flit_size;
+  return (data_size + flit_data_size - 1) / flit_data_size;
 }

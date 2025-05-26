@@ -5,23 +5,19 @@
 unsigned int Chiplet::instance = 1;
 
 Chiplet::Chiplet(sc_module_name name)
-    : sc_module(name), chiplet_id(Chiplet::instance++),
-      core0("Core0", chiplet_id, 0), core1("Core1", chiplet_id, 1), ram("RAM"),
-      bus("Bus", chiplet_id),
-      interconnectprotocol("InterconnectProtocol", chiplet_id) {
+    : sc_module(name), chiplet_id(Chiplet::instance++), bus("Bus", chiplet_id),
+      core0("Core0", chiplet_id, 0), core1("Core1", chiplet_id, 1),
+      interconnectprotocol("InterconnectProtocol", chiplet_id),
+      memorycontroller("MemoryController"), ram("RAM") {
   for (unsigned int i = 0; i < 3; ++i) {
     std::string name = "Interconnect" + std::to_string(i);
 
     if (i == 0) { // to FPGA interconnect
       interconnects.push_back(new chiplet::Interconnect(
-          name.c_str(),
-          interconnect_config.get<double>("interconnect.bandwidth_fpga"),
-          fpga_distance_mm));
+          name.c_str(), bandwidth_fpga, fpga_distance_mm));
     } else {
       interconnects.push_back(new chiplet::Interconnect(
-          name.c_str(),
-          interconnect_config.get<double>("interconnect.bandwidth_chiplets"),
-          chiplet_distance_um / 1000));
+          name.c_str(), bandwidth_chiplet, chiplet_distance_um / 1000));
     }
   }
 
@@ -40,13 +36,15 @@ void Chiplet::initialize() {
   // cores
   core0.socket.bind(bus.core0_target_socket);
   core1.socket.bind(bus.core1_target_socket);
-  // RAM
-  bus.ram_initiator_socket.bind(ram.socket);
   // interconnects
   bus.interconnect_initiator_socket.bind(
       interconnectprotocol.bus_target_socket);
   interconnectprotocol.bus_initiator_socket.bind(
       bus.interconnect_target_socket);
+  // memory controller
+  bus.ram_initiator_socket.bind(memorycontroller.bus_target_socket);
+  // RAM
+  memorycontroller.ram_initiator_socket.bind(ram.socket);
 
   // IRQs
   interconnectprotocol.core0_irq_initiator_socket.bind(core0.irq_socket);

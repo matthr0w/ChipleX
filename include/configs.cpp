@@ -1,12 +1,14 @@
 #include "configs.h"
 
 const std::set<std::string> ConfigRegistry::chiplet_specification = {
-    "cores.clk_cycle", "bus.width", "bus.clk_cycle", "bus.arbitration_delay",
-    "ram.size",        "ram.width", "ram.clk_cycle", "ram.access_delay"};
+    "cores.clk_cycle",       "bus.width",         "bus.clk_cycle",
+    "bus.arbitration_delay", "ram.size",          "ram.width",
+    "ram.clk_cycle",         "ram.address_delay", "ram.access_delay"};
 
 const std::set<std::string> ConfigRegistry::fpga_specification = {
-    "cores.clk_cycle", "bus.width", "bus.clk_cycle", "bus.arbitration_delay",
-    "ram.size",        "ram.width", "ram.clk_cycle", "ram.access_delay"};
+    "cores.clk_cycle",       "bus.width",         "bus.clk_cycle",
+    "bus.arbitration_delay", "ram.size",          "ram.width",
+    "ram.clk_cycle",         "ram.address_delay", "ram.access_delay"};
 
 const std::map<std::string, std::set<std::string>>
     ConfigRegistry::interconnect_specifications{
@@ -22,15 +24,17 @@ const std::map<std::string, std::set<std::string>>
           "interconnect_protocol.flit_size",
           "interconnect_protocol.header_size",
           "interconnect_protocol.pre_delay", "interconnect_protocol.post_delay",
-          "interconnect_protocol.irq_delay", "interconnect.buffer_size",
-          "interconnect.bandwidth_chiplets", "interconnect.bandwidth_fpga"}},
+          "interconnect_protocol.fec_delay", "interconnect_protocol.irq_delay",
+          "interconnect.buffer_size", "interconnect.bandwidth_chiplets",
+          "interconnect.bandwidth_fpga"}},
         {"UCIe",
          {"interconnect_protocol.buffer_size",
           "interconnect_protocol.flit_size",
           "interconnect_protocol.header_size",
           "interconnect_protocol.pre_delay", "interconnect_protocol.post_delay",
-          "interconnect_protocol.irq_delay", "interconnect.buffer_size",
-          "interconnect.bandwidth_chiplets", "interconnect.bandwidth_fpga"}},
+          "interconnect_protocol.irq_delay", "interconnect_protocol.retries",
+          "interconnect.buffer_size", "interconnect.bandwidth_chiplets",
+          "interconnect.bandwidth_fpga"}},
         {"SPI",
          {"interconnect_protocol.buffer_size",
           "interconnect_protocol.flit_size",

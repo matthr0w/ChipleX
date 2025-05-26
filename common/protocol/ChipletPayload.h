@@ -55,6 +55,21 @@ public:
     return cp;
   }
 
+  ChipletPayload *clone_ext() const {
+    auto *cp = new ChipletPayload();
+
+    // extension
+    ChipletExtension *ext = nullptr;
+    this->get_extension(ext);
+    if (ext) {
+      ChipletExtension *cp_ext = new ChipletExtension();
+      cp_ext->copy_from(*ext);
+      cp->set_extension(cp_ext);
+    }
+
+    return cp;
+  }
+
   ChipletExtension *ensure_extension() {
     auto *ext = get_extension<ChipletExtension>();
     if (!ext) {
@@ -65,7 +80,11 @@ public:
   }
 
   void set_request_id(int id) { ensure_extension()->request_id = id; }
-  void set_source_id(int id) { ensure_extension()->source_id = id; }
   void set_core_id(int id) { ensure_extension()->core_id = id; }
+  void set_source_id(int id) { ensure_extension()->source_id = id; }
   void set_destination_id(int id) { ensure_extension()->destination_id = id; }
+  void set_fixed_address(int flag) { ensure_extension()->fixed_address = flag; }
+  void set_flit_count(int count) { ensure_extension()->flit_count = count; }
+  void set_flit_id(int id) { ensure_extension()->flit_id = id; }
+  void set_flit_padding(int count) { ensure_extension()->flit_padding = count; }
 };

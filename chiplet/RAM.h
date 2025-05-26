@@ -19,7 +19,18 @@ public:
   SC_CTOR(RAM);
 
 private:
+  // -------------------------------------------------------
+  // config
+  // -------------------------------------------------------
   const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
+
+  const unsigned int ram_size = chiplet_config.get<unsigned int>("ram.size");
+  const unsigned int ram_width = chiplet_config.get<unsigned int>("ram.width");
+  const sc_time ram_clk_cycle = chiplet_config.get<sc_time>("ram.clk_cycle");
+  const sc_time ram_address_delay =
+      chiplet_config.get<sc_time>("ram.address_delay");
+  const sc_time ram_access_delay =
+      chiplet_config.get<sc_time>("ram.access_delay");
 
   std::vector<uint8_t> mem;
 

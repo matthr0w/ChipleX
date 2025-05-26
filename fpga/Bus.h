@@ -26,9 +26,8 @@ public:
   Bus(sc_module_name name, unsigned int fpga_id);
 
 private:
-  const Config &fpga_config = ConfigRegistry::instance().get("FPGA");
-
   const unsigned int fpga_id;
+
   unsigned int current_owner;
 
   const std::array<std::string, 4> modules = {"Unassigned", "Generator",
@@ -44,6 +43,14 @@ private:
   void process_transaction_fw();
   void process_transaction_bw();
   void process_queue();
+
+  // -------------------------------------------------------
+  // config
+  // -------------------------------------------------------
+  const Config &fpga_config = ConfigRegistry::instance().get("FPGA");
+
+  const sc_time bus_arbitration_delay =
+      fpga_config.get<sc_time>("bus.arbitration_delay");
 
   // -------------------------------------------------------
   // peqs

@@ -50,6 +50,7 @@ void fpga::Bus::process_transaction_fw() {
       SC_LOG_DEBUG(this, *transaction,
                    "PROTOCOL: Forwarding BEGIN_REQ for "
                        << modules[current_owner] << " to Interconnect");
+
       tlm_resp = interconnect_initiator_socket->nb_transport_fw(*transaction,
                                                                 phase, delay);
 
@@ -60,13 +61,6 @@ void fpga::Bus::process_transaction_fw() {
       SC_LOG_DEBUG(this, *transaction,
                    "PROTOCOL: Forwarding BEGIN_REQ for "
                        << modules[current_owner] << " to RAM");
-
-      // if read operation, source becomes destination now
-      if (transaction->get_command() == TLM_READ_COMMAND) {
-        int source_id = ext->source_id;
-        static_cast<ChipletPayload *>(transaction)
-            ->set_destination_id(source_id);
-      }
 
       tlm_resp =
           ram_initiator_socket->nb_transport_fw(*transaction, phase, delay);
@@ -135,13 +129,12 @@ void fpga::Bus::process_queue() {
   next_transaction = next_request.transaction;
   next_transaction->get_extension(ext);
 
-  delay = get_bus_arbitration_delay(
-      *this, *next_transaction,
-      fpga_config.get<sc_time>("bus.arbitration_delay"));
+  delay = get_bus_arbitration_delay(*this, *next_transaction,
+                                    bus_arbitration_delay);
 
-  SC_LOG_INFO(this, *next_transaction,
-              "Granting bus access to " << modules[current_owner]
-                                        << " from queue");
+  SC_LOG_DEBUG(this, *next_transaction,
+               "Granting bus access to " << modules[current_owner]
+                                         << " from queue");
 
   peq_fw.notify(*next_transaction, delay);
 
@@ -184,13 +177,13 @@ tlm_sync_enum fpga::Bus::nb_transport_fw(int id,
 
   if (current_owner == 0 && request_queue.empty()) {
     // bus is free and queue is empty: grant access immediately
-    SC_LOG_INFO(this, transaction,
-                "Bus is empty -> granting bus access to " << modules[id]);
+    SC_LOG_DEBUG(this, transaction,
+                 "Bus is empty -> granting bus access to " << modules[id]);
 
     current_owner = id;
 
-    delay = get_bus_arbitration_delay(
-        *this, transaction, fpga_config.get<sc_time>("bus.arbitration_delay"));
+    delay =
+        get_bus_arbitration_delay(*this, transaction, bus_arbitration_delay);
 
     peq_fw.notify(transaction, delay);
 
@@ -198,10 +191,10 @@ tlm_sync_enum fpga::Bus::nb_transport_fw(int id,
     return TLM_UPDATED;
   } else {
     // bus is busy or queue is not empty: enqueue request
-    SC_LOG_INFO(this, transaction,
-                "Bus is busy with " << modules[current_owner]
-                                    << " -> enqueuing request from "
-                                    << modules[id]);
+    SC_LOG_DEBUG(this, transaction,
+                 "Bus is busy with " << modules[current_owner]
+                                     << " -> enqueuing request from "
+                                     << modules[id]);
 
     if (id == 2) { // to avoid deadlocks prefer interconnect
       request_queue.push_front({id, &transaction});
@@ -226,8 +219,7 @@ tlm_sync_enum fpga::Bus::nb_transport_bw(int id,
     exit(1);
   }
 
-  delay += get_bus_arbitration_delay(
-      *this, transaction, fpga_config.get<sc_time>("bus.arbitration_delay"));
+  delay += get_bus_arbitration_delay(*this, transaction, bus_arbitration_delay);
 
   peq_bw.notify(transaction, delay);
 

@@ -6,6 +6,7 @@ interconnect_protocol:
   header_size: 20 # bytes
   pre_delay: 5.0 # ns
   post_delay: 5.0 # ns
+  fec_delay: 3.0 # ns
   irq_delay: 2.0 # ns
   
 interconnect:

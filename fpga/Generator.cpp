@@ -57,10 +57,9 @@ void fpga::Generator::send_random(unsigned int delay, double write_prob,
   }
 
   // address space separation
-  size_t total_bytes_fpga = fpga_config.get<unsigned int>("ram.size") * 1024;
+  size_t total_bytes_fpga = fpga_ram_size * 1024;
   size_t half_bytes_fpga = total_bytes_fpga / 2;
-  size_t total_bytes_chiplet =
-      chiplet_config.get<unsigned int>("ram.size") * 1024;
+  size_t total_bytes_chiplet = chiplet_ram_size * 1024;
   size_t half_bytes_chiplet = total_bytes_chiplet / 2;
 
   // random number distributions
@@ -103,7 +102,7 @@ void fpga::Generator::send_random(unsigned int delay, double write_prob,
 
     auto response =
         send_request(do_write ? TLM_WRITE_COMMAND : TLM_READ_COMMAND, request,
-                     destination_id, address, data, data_size);
+                     destination_id, address, true, data, data_size);
 
     delete response;
 
@@ -111,10 +110,9 @@ void fpga::Generator::send_random(unsigned int delay, double write_prob,
   }
 }
 
-ChipletPayload *
-fpga::Generator::send_request(tlm_command command, int request_id,
-                              int destination_id, uint32_t address,
-                              unsigned char *data, unsigned int data_size) {
+ChipletPayload *fpga::Generator::send_request(
+    tlm_command command, int request_id, int destination_id, uint32_t address,
+    bool fixed_address, unsigned char *data, unsigned int data_size) {
   std::scoped_lock lock(request_mutex);
 
   auto *transaction = new ChipletPayload();
@@ -123,9 +121,20 @@ fpga::Generator::send_request(tlm_command command, int request_id,
   tlm_sync_enum tlm_resp;
 
   transaction->set_command(command);
-  transaction->set_address(address);
   transaction->set_data_ptr(data);
   transaction->set_data_length(data_size);
+
+  transaction->set_fixed_address(fixed_address);
+
+  if (command == TLM_WRITE_COMMAND) {
+    if (fixed_address) {
+      transaction->set_address(address);
+    } else {
+      transaction->set_address(0x0);
+    }
+  } else if (command == TLM_READ_COMMAND) {
+    transaction->set_address(address);
+  }
 
   transaction->set_request_id(request_id);
   transaction->set_destination_id(destination_id);
@@ -134,8 +143,13 @@ fpga::Generator::send_request(tlm_command command, int request_id,
     SC_LOG_INFO(this, *transaction,
                 "Sending request: READ from 0x" << std::hex << address);
   } else if (command == TLM_WRITE_COMMAND) {
-    SC_LOG_INFO(this, *transaction,
-                "Sending request: WRITE to 0x" << std::hex << address);
+    if (fixed_address) {
+      SC_LOG_INFO(this, *transaction,
+                  "Sending request: WRITE to 0x" << std::hex << address);
+    } else {
+      SC_LOG_INFO(this, *transaction,
+                  "Sending request: WRITE to dynamic address");
+    }
   }
 
   phase = BEGIN_REQ;
@@ -152,13 +166,9 @@ fpga::Generator::send_request(tlm_command command, int request_id,
 
   wait(transaction_done);
 
-  auto *response = transaction->clone();
-
   SC_LOG_INFO(this, *transaction, "Transaction successful");
 
-  delete transaction;
-
-  return response;
+  return transaction;
 }
 
 // -------------------------------------------------------
@@ -169,9 +179,7 @@ fpga::Generator::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                      tlm_phase &phase,
                                      sc_core::sc_time &delay) {
   if (phase == BEGIN_REQ) {
-    delay += get_irq_transfer_delay(
-        *this, transaction,
-        interconnect_config.get<sc_time>("interconnect_protocol.irq_delay"));
+    delay += get_irq_transfer_delay(*this, transaction, irq_delay);
 
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();
@@ -194,9 +202,8 @@ tlm_sync_enum fpga::Generator::nb_transport_bw(tlm_generic_payload &transaction,
     transaction.get_extension(ext);
 
     if (ext->source_id == -1) {
-      delay += get_bus_transfer_bw_delay(
-          *this, transaction, fpga_config.get<sc_time>("bus.clk_cycle"),
-          fpga_config.get<unsigned int>("bus.width"));
+      delay += get_bus_transfer_bw_delay(*this, transaction, bus_clk_cycle,
+                                         bus_width);
     } else {
       // request to interconnect
       // no direct data response -> no extra delay

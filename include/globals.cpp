@@ -1,6 +1,6 @@
 #include "globals.h"
 
-LogLevel log_level = LogLevel::SILENT;
+LogLevel log_level = LogLevel::ERROR;
 
 sc_time sim_duration = sc_time(1000, SC_NS);
 

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <deque>
 #include <systemc>
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
@@ -32,36 +31,49 @@ public:
   ~InterconnectProtocol();
 
 private:
+  const unsigned int chiplet_id;
+
+  std::map<tlm::tlm_generic_payload *, int> transaction_id_map;
+
+  void send_flits(tlm_generic_payload & transaction);
+  void send_to_phy(tlm_generic_payload & transaction);
+  void send_to_bus(tlm_generic_payload & transaction);
+  void send_irq(tlm_generic_payload & transaction, tlm_command command);
+
+  // -------------------------------------------------------
+  // config
+  // -------------------------------------------------------
   const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
   const Config &interconnect_config =
       ConfigRegistry::instance().get("Interconnect");
 
-  const unsigned int chiplet_id;
-  uint32_t write_address;
+  const unsigned int bus_width = chiplet_config.get<unsigned int>("bus.width");
+  const sc_time bus_clk_cycle = chiplet_config.get<sc_time>("bus.clk_cycle");
+  const unsigned int ram_size = chiplet_config.get<unsigned int>("ram.size");
+  const unsigned int flit_size =
+      interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
+  const unsigned int header_size = interconnect_config.get<unsigned int>(
+      "interconnect_protocol.header_size");
+  const sc_time pre_delay =
+      interconnect_config.get<sc_time>("interconnect_protocol.pre_delay");
+  const sc_time post_delay =
+      interconnect_config.get<sc_time>("interconnect_protocol.post_delay");
+  const sc_time irq_delay =
+      interconnect_config.get<sc_time>("interconnect_protocol.irq_delay");
 
-  void process_tx_buffer();
-  void process_rx_buffer();
-
-  void process_bus_transaction(tlm_generic_payload & transaction);
-  void send_to_interconnect(tlm_generic_payload & transaction);
-  void send_irq(tlm_generic_payload & transaction, tlm_command command);
-
-  void set_write_address(tlm_generic_payload & transaction);
-
-  std::deque<tlm_generic_payload *> tx_buffer;
-  std::deque<tlm_generic_payload *> rx_buffer;
-  unsigned tx_buffer_used_bytes;
-  unsigned rx_buffer_used_bytes;
+  // -------------------------------------------------------
+  // peqs
+  // -------------------------------------------------------
+  peq_with_get<tlm_generic_payload> peq_bus;
+  void process_bus_transaction();
+  peq_with_get<tlm_generic_payload> peq_phy;
+  void process_phy_transaction();
 
   // -------------------------------------------------------
   // events
   // -------------------------------------------------------
-  sc_event tx_transaction_done;
-  sc_event rx_transaction_done;
-  sc_event tx_buffer_in_event;
-  sc_event tx_buffer_out_event;
-  sc_event rx_buffer_in_event;
-  sc_event rx_buffer_out_event;
+  sc_event bus_transaction_done;
+  sc_event phy_transaction_done;
 
   // -------------------------------------------------------
   // transport functions

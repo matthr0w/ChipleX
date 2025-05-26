@@ -2,9 +2,9 @@
 
 #include <systemc>
 
-#include "Flits.h"
 #include "protocol/ChipletExtension.h"
 
+#include "include/configs.h"
 #include "include/globals.h"
 #include "include/logging.h"
 
@@ -25,8 +25,16 @@ inline sc_time get_extension_cycles_delay(tlm_generic_payload &transaction,
                                           unsigned int width, sc_time cycle) {
   ChipletExtension *ext;
   transaction.get_extension(ext);
-  unsigned int extension_size = ext->get_size_bytes();
-  unsigned int num_cycles = (extension_size * 8 + width - 1) / width;
+
+  unsigned int flitext_size = 0;
+
+  if (ext->flit_id != -1) {
+    flitext_size = ext->get_flitext_size_bytes();
+  }
+
+  unsigned int stdext_size = ext->get_stdext_size_bytes();
+  unsigned int num_cycles =
+      ((stdext_size + flitext_size) * 8 + width - 1) / width;
   return num_cycles * cycle;
 }
 
@@ -102,7 +110,7 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
   // write operation:
   //      - no address cycle delay
   //      - no data cycles delay
-  //      + extension cycles delay
+  //      - extension cycles delay
 
   sc_time delay = SC_ZERO_TIME;
   sc_time address_cycle_delay = SC_ZERO_TIME;
@@ -117,8 +125,7 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
   } else if (transaction.get_command() == TLM_WRITE_COMMAND) {
     address_cycle_delay = SC_ZERO_TIME;
     data_cycles_delay = SC_ZERO_TIME;
-    extension_cycles_delay =
-        get_extension_cycles_delay(transaction, width, clk_cycle);
+    extension_cycles_delay = SC_ZERO_TIME;
   }
 
   delay = address_cycle_delay + data_cycles_delay + extension_cycles_delay;
@@ -130,6 +137,23 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
 // -------------------------------------------------------
 // RAM
 // -------------------------------------------------------
+inline sc_time
+get_mem_address_assignment_delay(sc_module &module,
+                                 tlm_generic_payload &transaction,
+                                 sc_time assignment_delay) {
+  // Memory Controller Address Assignment Delay
+  // -----------------------------------------------
+  //      + fixed assignment delay
+
+  sc_time delay = SC_ZERO_TIME;
+
+  delay = assignment_delay;
+
+  SC_LOG_DELAY(&module, transaction, "Memory Controller Address Assignment",
+               delay);
+  return delay;
+}
+
 inline sc_time get_mem_access_delay(sc_module &module,
                                     tlm_generic_payload &transaction,
                                     sc_time clk_cycle, sc_time access_delay,
@@ -208,50 +232,61 @@ inline sc_time get_irq_transfer_delay(sc_module &module,
 inline sc_time get_die2die_transfer_delay(sc_module &module,
                                           tlm_generic_payload &transaction,
                                           double bandwidth, double distance,
-                                          unsigned int flit_size,
-                                          unsigned int header_size) {
+                                          unsigned int flit_size) {
   // Die to Die Transfer Delay
   // -----------------------------------------------
   //      + flit transfer delay
   //      + wire propagation delay
 
+  static const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
+
   sc_time delay = SC_ZERO_TIME;
   sc_time flit_transfer_delay = SC_ZERO_TIME;
   sc_time wire_propagation_delay = SC_ZERO_TIME;
 
-  unsigned int transaction_flit_size =
-      get_flit_bytes(transaction, flit_size, header_size);
-
-  flit_transfer_delay =
-      get_bandwidth_transfer_delay(transaction_flit_size, bandwidth);
+  flit_transfer_delay = get_bandwidth_transfer_delay(flit_size, bandwidth);
 
   // wire propagation delay based on distance
   wire_propagation_delay = sc_time(distance * wire_ps_per_mm, SC_PS);
 
   delay = flit_transfer_delay + wire_propagation_delay;
+  sc_time base_transfer_delay = delay;
 
-  bool bad_transfer = false;
-  double prob_bad_transfer =
-      1.0 - std::pow(1.0 - bit_error_rate, transaction_flit_size * 8);
+  int max_attempts = 1;
 
-  if (bit_error_dist(bit_error_gen) < prob_bad_transfer) {
-    SC_LOG_ERROR(&module, transaction, "Bit error");
-    bad_transfer = true;
-  }
-
-  // connection type specific delays
   switch (connection_type) {
-  case ConnectionType::UCIe: {
-    // UCIe retry mechanism
-    // if bit error happens -> retry transfer -> double delay
-    if (bad_transfer) {
-      delay *= 2;
-    }
-
+  case ConnectionType::UCIe:
+    max_attempts =
+        interconnect_config.get<unsigned int>("interconnect_protocol.retries");
     break;
-  }
   default:
     break;
+  }
+
+  double prob_bad_transfer =
+      1.0 - std::pow(1.0 - bit_error_rate, flit_size * 8);
+
+  for (int attempt = 0; attempt < max_attempts; ++attempt) {
+    if (bit_error_dist(bit_error_gen) >= prob_bad_transfer) {
+      // no bit error
+      break;
+    }
+
+    SC_LOG_ERROR(&module, transaction,
+                 "Bit error on attempt " + std::to_string(attempt + 1));
+
+    switch (connection_type) {
+    case ConnectionType::PCIe:
+      // forward error correction penalty
+      delay +=
+          interconnect_config.get<sc_time>("interconnect_protocol.fec_delay");
+      break;
+    case ConnectionType::UCIe:
+      // retry penalty
+      delay += base_transfer_delay;
+    default:;
+    }
   }
 
   SC_LOG_DELAY(&module, transaction, "Die to Die Transfer", delay);
