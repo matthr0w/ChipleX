@@ -7,7 +7,7 @@ bus:
   arbitration_delay: 5.0 # ns
 
 ram:
-  size: 16 # KB
+  size: 512 # KB
   width: 32 # bits
   clk_cycle: 3.0 # ns
   address_delay: 3.0 # ns

@@ -11,6 +11,16 @@
 #include "include/globals.h"
 #include "include/logging.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
+struct ImageHeader {
+  uint32_t width;
+  uint32_t height;
+};
+
 using GeneratorFunctions =
     std::pair<std::function<void(fpga::Generator &)>, // main thread
               std::function<void(fpga::Generator &,
@@ -203,73 +213,135 @@ using CoreKey = std::pair<int, int>;
 inline GeneratorFunctions generator_code = {
     [](fpga::Generator &gen) {
       // FPGA GENERATOR CODE BELOW
-      SC_LOG_DEBUG_NO_TX(&gen, "Hello from FPGA Generator!");
+      int width, height, channels;
+      unsigned char *input_img =
+          stbi_load("tum_input.jpg", &width, &height, &channels, 3);
+
+      size_t header_size = sizeof(ImageHeader);
+      size_t img_size = width * height * channels;
+      size_t buffer_size = header_size + img_size;
+
+      unsigned char *buffer = new unsigned char[buffer_size];
+
+      ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
+      header->width = width;
+      header->height = height;
+
+      std::memcpy(buffer + header_size, input_img, img_size);
+
+      stbi_image_free(input_img);
+
+      // write to Chiplet1 RAM
+      auto response = gen.send_request(TLM_WRITE_COMMAND, 0, 1, 0x0, false,
+                                       buffer, buffer_size);
+
+      delete response;
       // ------------------------------
     },
     [](fpga::Generator &gen, tlm::tlm_generic_payload *transaction) {
       // FPGA INTERRUPT HANDLER CODE BELOW
-      SC_LOG_DEBUG_NO_TX(&gen, "Hello from FPGA Interrupt Handler!");
+      auto addr = transaction->get_address();
+      auto size = transaction->get_data_length();
+
+      // read from FPGA RAM
+      auto *buffer = new unsigned char[size];
+      auto *response =
+          gen.send_request(TLM_READ_COMMAND, 1, 0, addr, true, buffer, size);
+
+      ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
+      uint32_t width = header->width;
+      uint32_t height = header->height;
+
+      unsigned char *img_data = buffer + sizeof(ImageHeader);
+
+      stbi_write_jpg("tum_output.jpg", width, height, 3, img_data, 100);
+
+      delete response;
       // ------------------------------
     }};
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
     // Chiplet1 Core0
     {{1, 0},
-     {[](chiplet::Core &core) {
-        SC_LOG_DEBUG_NO_TX(&core, "Hello from Chiplet1 Core0!");
-
-        const size_t buffer_size = 256;
-        unsigned char *buffer = new unsigned char[buffer_size];
-
-        for (size_t i = 0; i < buffer_size; ++i) {
-          buffer[i] = static_cast<unsigned char>(i % 256);
-        }
-
-        std::cout << "Request contents (" << buffer_size
-                  << " bytes):" << std::endl;
-        for (size_t i = 0; i < buffer_size; ++i) {
-          std::cout << std::hex << std::setw(2) << std::setfill('0')
-                    << static_cast<int>(buffer[i]) << ' ' << std::dec;
-          if ((i + 1) % 16 == 0)
-            std::cout << std::endl;
-        }
-        if (buffer_size % 16 != 0)
-          std::cout << std::endl;
-
-        auto response = core.send_request(TLM_WRITE_COMMAND, 0, 2, 0x1000,
-                                          false, buffer, buffer_size);
-        delete response;
-      },
+     {[](chiplet::Core &core) {},
       [](chiplet::Core &core, tlm_generic_payload *transaction) {
-        SC_LOG_DEBUG_NO_TX(&core,
-                           "Hello from Chiplet1 Core0 Interrupt Handler!");
+        auto addr = transaction->get_address();
+        auto len = transaction->get_data_length();
+
+        // read from Chiplet1 RAM
+        unsigned char *read_buffer = new unsigned char[len];
+        auto response = core.send_request(TLM_READ_COMMAND, 0, 1, addr, false,
+                                          read_buffer, len);
+
+        // image header
+        size_t header_size = sizeof(ImageHeader);
+        ImageHeader *header = reinterpret_cast<ImageHeader *>(read_buffer);
+        uint32_t width = header->width;
+        uint32_t height = header->height;
+
+        // update image header
+        const int crop_margin = 28;
+        uint32_t new_width = width - 2 * crop_margin;
+        uint32_t new_height = height - 2 * crop_margin;
+
+        size_t new_img_size = new_width * new_height * 3;
+        size_t new_buffer_size = header_size + new_img_size;
+
+        unsigned char *write_buffer = new unsigned char[new_buffer_size];
+
+        ImageHeader *new_header = reinterpret_cast<ImageHeader *>(write_buffer);
+        new_header->width = new_width;
+        new_header->height = new_height;
+
+        // crop image
+        unsigned char *src_pixels = read_buffer + header_size;
+        unsigned char *dst_pixels = write_buffer + header_size;
+
+        for (uint32_t y = 0; y < new_height; ++y) {
+          unsigned char *src_row =
+              src_pixels + ((y + crop_margin) * width + crop_margin) * 3;
+          unsigned char *dst_row = dst_pixels + (y * new_width) * 3;
+          std::memcpy(dst_row, src_row, new_width * 3);
+        }
+
+        delete response;
+
+        // write to Chiplet2 RAM
+        response = core.send_request(TLM_WRITE_COMMAND, 1, 2, 0x0, false,
+                                     write_buffer, len);
+
+        delete response;
       }}},
     // Chiplet2 Core0
     {{2, 0},
-     {[](chiplet::Core &core) {
-        SC_LOG_DEBUG_NO_TX(&core, "Hello from Chiplet2 Core0!");
-      },
+     {[](chiplet::Core &core) {},
       [](chiplet::Core &core, tlm_generic_payload *transaction) {
-        SC_LOG_DEBUG_NO_TX(&core,
-                           "Hello from Chiplet2 Core0 Interrupt Handler!");
+        auto addr = transaction->get_address();
+        auto len = transaction->get_data_length();
 
-        const size_t buffer_size = transaction->get_data_length();
-        unsigned char *buffer = new unsigned char[buffer_size];
+        // read from Chiplet2 RAM
+        unsigned char *read_buffer = new unsigned char[len];
+        auto response = core.send_request(TLM_READ_COMMAND, 0, 2, addr, false,
+                                          read_buffer, len);
 
-        auto response = core.send_request(TLM_READ_COMMAND, 0, 2,
-                                          transaction->get_address(), true,
-                                          buffer, buffer_size);
+        // image header
+        const size_t header_size = sizeof(ImageHeader);
+        ImageHeader *header = reinterpret_cast<ImageHeader *>(read_buffer);
 
-        std::cout << "Response contents (" << buffer_size
-                  << " bytes):" << std::endl;
-        for (size_t i = 0; i < buffer_size; ++i) {
-          std::cout << std::hex << std::setw(2) << std::setfill('0')
-                    << static_cast<int>(response->get_data_ptr()[i]) << ' ';
-          if ((i + 1) % 16 == 0)
-            std::cout << std::endl;
+        // copy header
+        unsigned char *write_buffer = new unsigned char[len];
+        std::memcpy(write_buffer, read_buffer, header_size);
+
+        // invert image
+        for (int i = header_size; i < len; ++i) {
+          write_buffer[i] = 255 - read_buffer[i];
         }
-        if (buffer_size % 16 != 0)
-          std::cout << std::endl;
+
+        delete response;
+
+        // write to FPGA RAM
+        response = core.send_request(TLM_WRITE_COMMAND, 1, 0, 0x0, false,
+                                     write_buffer, len);
 
         delete response;
       }}},
