@@ -25,8 +25,11 @@ private:
   std::unordered_map<int, uint32_t> pending_flit_writes;
 
   void set_address(tlm_generic_payload & transaction);
+
   uint32_t allocate_dynamic_address(tlm_generic_payload & transaction,
                                     bool onchip, unsigned int size);
+  void deallocate_dynamic_address(tlm_generic_payload & transaction,
+                                  uint32_t address, unsigned int size);
 
   void send_to_ram(tlm_generic_payload & transaction);
 

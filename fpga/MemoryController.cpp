@@ -83,8 +83,9 @@ void fpga::MemoryController::set_address(
   if (is_onchip) {
     if (read_op) {
       // on-chip read request
-      // free allocated addresses on read
-      allocated_ranges.erase(address);
+      // free allocated address range on read
+      deallocate_dynamic_address(transaction, transaction.get_address(),
+                                 transaction.get_data_length());
     } else if (write_op && ext->flit_id != -1) {
       // off-chip read response
       uint32_t dynamic_address =
@@ -101,8 +102,9 @@ void fpga::MemoryController::set_address(
     if (read_op) {
       // off-chip read request
       transaction.set_address(address + offchip_base_address);
-      // free allocated addresses on read
-      allocated_ranges.erase(address + offchip_base_address);
+      // free allocated address range on read
+      deallocate_dynamic_address(transaction, transaction.get_address(),
+                                 transaction.get_data_length());
       // for read response: source becomes destination
       static_cast<ChipletPayload *>(&transaction)
           ->set_destination_id(ext->source_id);
@@ -131,6 +133,11 @@ void fpga::MemoryController::set_address(
         transaction.set_address(flit_address);
 
         if (ext->flit_id == ext->flit_count - 1) {
+          // deallocate flit padding on last flit
+          deallocate_dynamic_address(transaction,
+                                     transaction.get_address() +
+                                         transaction.get_data_length(),
+                                     ext->flit_padding);
           // remove pending on last flit
           pending_flit_writes.erase(it);
         }
@@ -158,8 +165,51 @@ uint32_t fpga::MemoryController::allocate_dynamic_address(
     address = base_address;
   }
 
+  SC_LOG_DEBUG(this, transaction,
+               "Allocate: " << std::hex << address << " - " << address + size);
+
   allocated_ranges[address] = size;
   return address;
+}
+
+void fpga::MemoryController::deallocate_dynamic_address(
+    tlm_generic_payload &transaction, uint32_t address, unsigned int size) {
+  auto it = allocated_ranges.lower_bound(address);
+  if (it != allocated_ranges.begin() &&
+      (it == allocated_ranges.end() || it->first > address)) {
+    --it;
+  }
+
+  if (it == allocated_ranges.end() || address < it->first ||
+      address + size > it->first + it->second) {
+    SC_LOG_WARN(this, transaction,
+                "Tried to deallocate an unallocated address range");
+    return;
+  }
+
+  uint32_t start = it->first;
+  uint32_t end = start + it->second;
+  uint32_t new_start = address + size;
+  uint32_t new_end = end;
+
+  SC_LOG_DEBUG(this, transaction,
+               "Deallocate: " << std::hex << start << " - " << end);
+
+  allocated_ranges.erase(it);
+
+  if (address > start) {
+    // left part remains
+    SC_LOG_DEBUG(this, transaction,
+                 "Allocate: " << std::hex << start << " - " << address);
+    allocated_ranges[start] = address - start;
+  }
+
+  if (new_start < new_end) {
+    // right part remains
+    SC_LOG_DEBUG(this, transaction,
+                 "Allocate: " << std::hex << new_start << " - " << new_end);
+    allocated_ranges[new_start] = new_end - new_start;
+  }
 }
 
 // -------------------------------------------------------
