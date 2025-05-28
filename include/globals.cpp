@@ -2,7 +2,7 @@
 
 LogLevel log_level = LogLevel::ERROR;
 
-sc_time sim_duration = sc_time(1000, SC_NS);
+sc_time sim_duration = sc_time(0, SC_NS);
 
 unsigned int num_chiplets = 2;
 

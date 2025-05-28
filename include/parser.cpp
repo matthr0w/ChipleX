@@ -9,7 +9,7 @@ void Parser::print_help(const char *progname) {
       << "Usage: " << progname << " [options]\n"
       << "Options:\n"
       << "  --time=<ns>               Set simulation time in nanoseconds "
-         "(default: 1000)\n"
+         "(default: unlimited)\n"
       << "  --chiplets=<n>            Set number of chiplets (minimum: 2, "
          "default: 2)\n"
       << "  --connection-type=<type>  Set interconnect type: Custom, "
@@ -28,7 +28,6 @@ void Parser::print_help(const char *progname) {
 
 void Parser::print_args() {
   std::cout << "=== Simulation Configuration ===\n"
-            << "Simulation Time: " << sim_duration << "\n"
             << "Number of Chiplets: " << num_chiplets << "\n"
             << "Interconnect Type: " << to_string(connection_type) << "\n"
             << "FPGA Connection Targets: ";

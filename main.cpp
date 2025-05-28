@@ -122,7 +122,11 @@ int sc_main(int argc, char *argv[]) {
         chiplets[i]->interconnects[0]->interconnect_target_socket);
   }
 
-  sc_start(sim_duration);
+  if (sim_duration == SC_ZERO_TIME) {
+    sc_start();
+  } else {
+    sc_start(sim_duration);
+  }
 
   // clean up chiplets
   for (auto *chiplet : chiplets) {
