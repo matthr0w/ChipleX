@@ -88,16 +88,16 @@ void chiplet::MemoryController::set_address(
                                  transaction.get_data_length());
     } else if (write_op && ext->flit_id != -1) {
       // off-chip read response
-      uint32_t dynamic_address =
-          allocate_dynamic_address(transaction, true, data_size);
-      transaction.set_address(dynamic_address);
+      set_flit_address(transaction);
+    } else if (write_op && ext->fixed_address) {
+      // on-chip fixed write request
+      allocated_ranges[address] = data_size;
     } else if (write_op && !ext->fixed_address) {
-      // on-chip write, dynamic
+      // on-chip dynamic write request
       uint32_t dynamic_address =
           allocate_dynamic_address(transaction, true, data_size);
       transaction.set_address(dynamic_address);
     }
-    // else: write_op && ext->fixed_address -> do nothing
   } else {
     if (read_op) {
       // off-chip read request
@@ -109,39 +109,48 @@ void chiplet::MemoryController::set_address(
       static_cast<ChipletPayload *>(&transaction)
           ->set_destination_id(ext->source_id);
     } else if (write_op && ext->fixed_address) {
+      // off-chip fixed write request
       transaction.set_address(address + offchip_base_address);
+      allocated_ranges[address + offchip_base_address] = data_size;
     } else if (write_op && !ext->fixed_address) {
-      const int request_id = ext->request_id;
-      const unsigned int flit_data_size =
-          get_available_data_bytes_per_flit(transaction);
-      const unsigned int request_data_size = flit_data_size * ext->flit_count;
+      // off-chip dynamic write request
+      set_flit_address(transaction);
+    }
+  }
+}
 
-      if (ext->flit_id == 0) {
-        // allocate dynamic address for first flit
-        uint32_t flit_base_address =
-            allocate_dynamic_address(transaction, false, request_data_size);
-        pending_flit_writes[request_id] = flit_base_address;
-        transaction.set_address(flit_base_address);
-      } else {
-        // increment dynamic address for upcoming flits
-        auto it = pending_flit_writes.find(request_id);
+void chiplet::MemoryController::set_flit_address(
+    tlm_generic_payload &transaction) {
+  ChipletExtension *ext;
+  transaction.get_extension(ext);
 
-        uint32_t flit_base_address = it->second;
-        uint32_t flit_address =
-            flit_base_address + ext->flit_id * flit_data_size;
+  int request_id = ext->request_id;
+  unsigned int flit_data_size = get_available_data_bytes_per_flit(transaction);
+  unsigned int request_data_size = flit_data_size * ext->flit_count;
 
-        transaction.set_address(flit_address);
+  if (ext->flit_id == 0) {
+    // allocate dynamic address range with first flit
+    uint32_t flit_base_address =
+        allocate_dynamic_address(transaction, false, request_data_size);
+    pending_flit_writes[request_id] = flit_base_address;
+    transaction.set_address(flit_base_address);
+  } else {
+    // increment dynamic address for upcoming flits
+    auto it = pending_flit_writes.find(request_id);
 
-        if (ext->flit_id == ext->flit_count - 1) {
-          // deallocate flit padding on last flit
-          deallocate_dynamic_address(transaction,
-                                     transaction.get_address() +
-                                         transaction.get_data_length(),
-                                     ext->flit_padding);
-          // remove pending on last flit
-          pending_flit_writes.erase(it);
-        }
-      }
+    uint32_t flit_base_address = it->second;
+    uint32_t flit_address = flit_base_address + ext->flit_id * flit_data_size;
+
+    transaction.set_address(flit_address);
+
+    if (ext->flit_id == ext->flit_count - 1) {
+      // deallocate flit padding on last flit
+      deallocate_dynamic_address(transaction,
+                                 transaction.get_address() +
+                                     transaction.get_data_length(),
+                                 ext->flit_padding);
+      // remove pending on last flit
+      pending_flit_writes.erase(it);
     }
   }
 }
