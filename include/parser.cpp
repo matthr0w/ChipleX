@@ -13,8 +13,7 @@ void Parser::print_help(const char *progname) {
       << "  --chiplets=<n>            Set number of chiplets (minimum: 2, "
          "default: 2)\n"
       << "  --connection-type=<type>  Set interconnect type: Custom, "
-         "UCIe, PCIe, "
-         "SPI (default: Custom)\n"
+         "PCIe, UCIe, SPI (default: Custom)\n"
       << "  --connections=1,2,3       Set FPGA connection targets: "
          "1,2,...,n (default: 1,2)\n"
       << "  --chiplet-distance=<um>   Set distance between chiplets in "
@@ -68,10 +67,12 @@ ConnectionType Parser::parse_connection_type(const std::string &value) {
   std::string type = value;
   std::transform(type.begin(), type.end(), type.begin(), ::toupper);
 
-  if (type == "UCIE")
-    return ConnectionType::UCIe;
+  if (type == "CUSTOM")
+    return ConnectionType::Custom;
   if (type == "PCIE")
     return ConnectionType::PCIe;
+  if (type == "UCIE")
+    return ConnectionType::UCIe;
   if (type == "SPI")
     return ConnectionType::SPI;
   return ConnectionType::Unknown;
