@@ -143,13 +143,13 @@ using CoreKey = std::pair<int, int>;
 //
 // - Global constants:                 see `globals.h`
 // - FPGA configuration parameters:
-//     Config &config = ConfigRegistry::instance().get("FPGA");
+//     const Config &config = ConfigRegistry::instance().get("FPGA");
 //     type param = config.get<type>("YAML.PATH")
 // - Chiplet configuration parameters:
-//     Config &config = ConfigRegistry::instance().get("Chiplet");
+//     const Config &config = ConfigRegistry::instance().get("Chiplet");
 //     type param = config.get<type>("YAML.PATH")
 // - Interconnect configuration parameters:
-//     Config &config = ConfigRegistry::instance().get("Interconnect");
+//     const Config &config = ConfigRegistry::instance().get("Interconnect");
 //     type param = config.get<type>("YAML.PATH")
 //
 // -----------------------------
@@ -231,6 +231,8 @@ inline GeneratorFunctions generator_code = {
 
       stbi_image_free(input_img);
 
+      // TODO: realistic delay
+
       // write to Chiplet1 RAM
       auto response = gen.send_request(TLM_WRITE_COMMAND, 0, 1, 0x0, false,
                                        buffer, buffer_size);
@@ -256,6 +258,8 @@ inline GeneratorFunctions generator_code = {
 
       stbi_write_jpg("tum_output.jpg", width, height, 3, img_data, 100);
 
+      // TODO: realistic delay
+
       delete response;
       // ------------------------------
     }};
@@ -265,6 +269,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
     {{1, 0},
      {[](chiplet::Core &core) {},
       [](chiplet::Core &core, tlm_generic_payload *transaction) {
+        static const Config &config = ConfigRegistry::instance().get("Chiplet");
+
         auto addr = transaction->get_address();
         auto len = transaction->get_data_length();
 
@@ -306,6 +312,9 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         delete response;
 
+        // cycle count simulated with Spike
+        wait(612248 * config.get<sc_time>("cores.clk_cycle"));
+
         // write to Chiplet2 RAM
         response = core.send_request(TLM_WRITE_COMMAND, 1, 2, 0x0, false,
                                      write_buffer, len);
@@ -316,6 +325,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
     {{2, 0},
      {[](chiplet::Core &core) {},
       [](chiplet::Core &core, tlm_generic_payload *transaction) {
+        static const Config &config = ConfigRegistry::instance().get("Chiplet");
+
         auto addr = transaction->get_address();
         auto len = transaction->get_data_length();
 
@@ -338,6 +349,9 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         }
 
         delete response;
+
+        // cycle count simulated with Spike
+        wait(2399898 * config.get<sc_time>("cores.clk_cycle"));
 
         // write to FPGA RAM
         response = core.send_request(TLM_WRITE_COMMAND, 1, 0, 0x0, false,

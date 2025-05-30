@@ -10,19 +10,19 @@ This project provides a high-level simulation environment using SystemC.
 
 ```bash
 sudo dnf install cmake clang
-sudo dnf install glibc-static libstdc++-static  # Required for static linking
+sudo dnf install glibc-static libstdc++-static  # required for static linking
 ```
 
 ### Installation Steps
 
-1. **Clone the SystemC Repository**  
+1. **Clone the SystemC repository**  
    Clone the official SystemC repository from Accellera:
 
    ```bash
    git clone https://github.com/accellera-official/systemc.git
    ```
 
-2. **Create a Build Directory**  
+2. **Create a build directory**  
    Change into the SystemC directory and create a build subdirectory:
 
    ```bash
@@ -38,7 +38,7 @@ sudo dnf install glibc-static libstdc++-static  # Required for static linking
    cmake .. -DCMAKE_INSTALL_PREFIX=../install -DBUILD_SHARED_LIBS=OFF
    ```
 
-4. **Compile the Source**  
+4. **Compile the source**  
    Compile the project using all available CPU cores:
 
    ```bash
@@ -66,10 +66,67 @@ export LD_LIBRARY_PATH=$SYSTEMC_PATH/lib:$LD_LIBRARY_PATH
 source ~/.bashrc
 ```
 
-## Compilation
+## Building
 
 ```bash
 make
 ```
 
 ## Model Information
+
+**TODO**
+
+## RISC-V Cycle Estimation
+
+### Prerequisites
+
+**RISC-V GNU Compiler Toolchain** 
+
+https://github.com/riscv-collab/riscv-gnu-toolchain
+
+**RISC-V Proxy Kernel and Boot Loader**
+
+https://github.com/riscv-software-src/riscv-pk
+
+**Spike RISC-V ISA Simulator**
+
+https://github.com/riscv-software-src/riscv-isa-sim
+
+### Simulation Steps
+
+1. **Modify the user code to measure clock cycles**  
+   Insert code to read the cycle CSR via RDCYCLE before and after the workload to capture cycle counts:
+
+   ```C
+   #include <stdio.h>
+
+   uint64_t read_cycles(void) {
+      uint64_t cycles;
+      asm volatile ("rdcycle %0" : "=r" (cycles));
+      return cycles;
+   }
+
+   int main() {
+      uint64_t start_cycles = read_cycles();
+
+      // USERCODE //
+
+      uint64_t end_cycles = read_cycles();
+
+      printf("Cycles: %lu\n", end_cycles - start_cycles);
+
+      return 0;
+   }
+   ```
+
+2. **Compile the code using the RISC-V toolchain**
+
+   ```bash
+   riscv64-unknown-elf-gcc -o usercode usercode.c
+   ```
+
+3. **Run the compiled program on Spike simulator**
+
+   ```bash
+   spike pk usercode
+   ```
