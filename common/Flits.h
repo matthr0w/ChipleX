@@ -5,6 +5,7 @@
 #include "protocol/ChipletExtension.h"
 
 #include "include/configs.h"
+#include "include/globals.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -19,23 +20,28 @@ get_available_data_bytes_per_flit(tlm_generic_payload &transaction) {
   static const unsigned int header_size = interconnect_config.get<unsigned int>(
       "interconnect_protocol.header_size");
 
-  ChipletExtension *ext;
-  transaction.get_extension(ext);
+  switch (connection_type) {
+  case ConnectionType::SPI:
+    return flit_size;
+  default:
+    ChipletExtension *ext;
+    transaction.get_extension(ext);
 
-  unsigned int size = flit_size;
+    unsigned int size = flit_size;
 
-  // flit header
-  size -= header_size;
+    // flit header
+    size -= header_size;
 
-  // flit metadata
-  size -= ext->get_flitext_size_bytes();
-  // chiplet metadata
-  size -= ext->get_stdext_size_bytes();
+    // flit metadata
+    size -= ext->get_flitext_size_bytes();
+    // chiplet metadata
+    size -= ext->get_stdext_size_bytes();
 
-  // address
-  size -= sizeof(uint32_t);
+    // address
+    size -= sizeof(uint32_t);
 
-  return size;
+    return size;
+  }
 }
 
 inline unsigned int get_required_flit_count(tlm_generic_payload &transaction) {
