@@ -9,6 +9,8 @@
 #include "MemoryController.h"
 #include "RAM.h"
 
+#include "common/Tracker.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -25,6 +27,12 @@ private:
       interconnect_config.get<double>("interconnect.bandwidth_fpga");
 
 public:
+  // -------------------------------------------------------
+  // trackers
+  // -------------------------------------------------------
+  std::vector<BufferUsageTracker *> buffer_trackers;
+  std::vector<UtilizationTracker *> utilization_trackers;
+
   fpga::Generator generator;
   std::vector<fpga::Interconnect *> interconnects;
 

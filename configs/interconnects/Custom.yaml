@@ -9,3 +9,4 @@ interconnect:
   buffer_size: 512 # bytes
   bandwidth_chiplets: 10.0 # GB/s
   bandwidth_fpga: 5.0 # GB/s
+  efficiency: 2.0 # pJ/bit

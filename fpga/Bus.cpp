@@ -1,13 +1,14 @@
 #include "Bus.h"
 
 #include "common/Delays.h"
+#include "common/Tracker.h"
 #include "common/protocol/ChipletExtension.h"
 #include "common/protocol/ChipletPayload.h"
 
 #include "include/logging.h"
 
 fpga::Bus::Bus(sc_module_name name, unsigned int id)
-    : sc_module(name), fpga_id(id),
+    : sc_module(name), utilization_tracker(this->name()), fpga_id(id),
       generator_target_socket("generator_target_socket"),
       interconnect_target_socket("interconnect_target_socket"),
       interconnect_initiator_socket("interconnect_initiator_socket"),
@@ -105,6 +106,8 @@ void fpga::Bus::process_transaction_bw() {
       // release bus
       current_owner = 0;
 
+      utilization_tracker.set_idle();
+
       // process queue
       if (!request_queue.empty()) {
         process_queue();
@@ -167,13 +170,7 @@ tlm_sync_enum fpga::Bus::nb_transport_fw(int id,
     exit(1);
   }
 
-  // set core id
-  ChipletExtension *ext;
-  transaction.get_extension(ext);
-  if (ext->core_id == -1) {
-    int core_id = (id == 1) ? 0 : 1;
-    static_cast<ChipletPayload *>(&transaction)->set_core_id(core_id);
-  }
+  utilization_tracker.set_active();
 
   if (current_owner == 0 && request_queue.empty()) {
     // bus is free and queue is empty: grant access immediately

@@ -3,6 +3,7 @@
 #include <random>
 
 #include "common/Delays.h"
+#include "common/Tracker.h"
 #include "common/protocol/ChipletExtension.h"
 #include "common/protocol/ChipletPayload.h"
 
@@ -10,8 +11,8 @@
 #include "include/logging.h"
 
 fpga::Generator::Generator(sc_module_name name, unsigned int fpga_id)
-    : sc_module(name), fpga_id(fpga_id), request(0), socket("socket"),
-      irq_peq("irq_peq") {
+    : sc_module(name), utilization_tracker(this->name()), fpga_id(fpga_id),
+      request(0), socket("socket"), irq_peq("irq_peq") {
   socket.register_nb_transport_bw(this, &fpga::Generator::nb_transport_bw);
   irq_socket.register_nb_transport_fw(this,
                                       &fpga::Generator::nb_transport_fw_irq);
@@ -24,7 +25,7 @@ fpga::Generator::Generator(sc_module_name name, unsigned int fpga_id)
 
 void fpga::Generator::gen_thread() {
   if (gen_fn) {
-    gen_fn(*this);
+    gen_fn(*this, &utilization_tracker);
   }
 }
 
@@ -41,7 +42,7 @@ void fpga::Generator::handle_interrupt() {
     transaction = irq_peq.get_next_transaction();
 
     if (interrupt_fn) {
-      interrupt_fn(*this, transaction);
+      interrupt_fn(*this, &utilization_tracker, transaction);
     }
 
     delete transaction;
@@ -116,6 +117,7 @@ ChipletPayload *fpga::Generator::send_request(
   std::scoped_lock lock(request_mutex);
 
   auto *transaction = new ChipletPayload();
+  ChipletExtension *ext;
   tlm_phase phase;
   sc_time delay;
   tlm_sync_enum tlm_resp;
@@ -165,6 +167,13 @@ ChipletPayload *fpga::Generator::send_request(
   }
 
   wait(transaction_done);
+
+  // on-chip requests: request done
+  if (destination_id == fpga_id) {
+    transaction->get_extension(ext);
+    sc_time latency = sc_time_stamp() - ext->start_time;
+    LatencyTracker::instance().record(latency);
+  }
 
   SC_LOG_INFO(this, *transaction, "Transaction successful");
 

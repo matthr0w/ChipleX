@@ -1,13 +1,17 @@
 #include "Interconnect.h"
 
 #include "common/Delays.h"
+#include "common/Tracker.h"
 #include "common/protocol/ChipletPayload.h"
 
 #include "include/logging.h"
 
 fpga::Interconnect::Interconnect(sc_module_name name, double bandwidth,
                                  double distance)
-    : sc_module(name), bandwidth(bandwidth), distance(distance),
+    : sc_module(name), utilization_tracker(this->name()),
+      tx_tracker(this->name() + std::string(" Tx Buffer")),
+      rx_tracker(this->name() + std::string(" Rx Buffer")),
+      bandwidth(bandwidth), distance(distance),
       protocol_target_socket("protocol_target_socket"),
       protocol_initiator_socket("protocol_initiator_socket"),
       interconnect_target_socket("interconnect_target_socket"),
@@ -48,6 +52,7 @@ void fpga::Interconnect::process_protocol_transaction() {
     auto *transaction_copy =
         static_cast<ChipletPayload *>(transaction)->clone();
     tx_buffer_used_bytes += flit_size;
+    tx_tracker.update(tx_buffer_used_bytes);
     tx_buffer.push_back(transaction_copy);
     tx_buffer_in_event.notify();
 
@@ -79,6 +84,7 @@ void fpga::Interconnect::process_interconnect_transaction() {
     auto *transaction_copy =
         static_cast<ChipletPayload *>(transaction)->clone();
     rx_buffer_used_bytes += flit_size;
+    rx_tracker.update(rx_buffer_used_bytes);
     rx_buffer.push_back(transaction_copy);
     rx_buffer_in_event.notify();
 
@@ -100,6 +106,8 @@ void fpga::Interconnect::process_tx_buffer() {
     wait(tx_buffer_in_event);
 
     while (!tx_buffer.empty()) {
+      utilization_tracker.set_active();
+
       tlm_generic_payload *transaction = tx_buffer.front();
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
@@ -116,10 +124,13 @@ void fpga::Interconnect::process_tx_buffer() {
 
       // remove from tx buffer
       tx_buffer_used_bytes -= flit_size;
+      tx_tracker.update(tx_buffer_used_bytes);
       tx_buffer.pop_front();
       tx_buffer_out_event.notify();
 
       delete transaction;
+
+      utilization_tracker.set_idle();
     }
   }
 }
@@ -129,6 +140,8 @@ void fpga::Interconnect::process_rx_buffer() {
     wait(rx_buffer_in_event);
 
     while (!rx_buffer.empty()) {
+      utilization_tracker.set_active();
+
       tlm_generic_payload *transaction = rx_buffer.front();
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
@@ -145,10 +158,13 @@ void fpga::Interconnect::process_rx_buffer() {
 
       // remove from rx buffer
       rx_buffer_used_bytes -= flit_size;
+      rx_tracker.update(rx_buffer_used_bytes);
       rx_buffer.pop_front();
       rx_buffer_out_event.notify();
 
       delete transaction;
+
+      utilization_tracker.set_idle();
     }
   }
 }

@@ -11,7 +11,8 @@
 
 fpga::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
                                                  unsigned int fpga_id)
-    : sc_module(name), fpga_id(fpga_id), bus_target_socket("bus_target_socket"),
+    : sc_module(name), utilization_tracker(this->name()), fpga_id(fpga_id),
+      bus_target_socket("bus_target_socket"),
       bus_initiator_socket("bus_initiator_socket"),
       generator_irq_initiator_socket("generator_irq_initiator_socket"),
       peq_bus("peq_bus"), peq_phy("peq_phy") {
@@ -53,6 +54,8 @@ void fpga::InterconnectProtocol::process_bus_transaction() {
   while (true) {
     wait();
 
+    utilization_tracker.set_active();
+
     transaction = peq_bus.get_next_transaction();
     transaction->get_extension(ext);
 
@@ -73,6 +76,8 @@ void fpga::InterconnectProtocol::process_bus_transaction() {
     if (tlm_resp == TLM_COMPLETED) {
       wait(delay);
     }
+
+    utilization_tracker.set_idle();
   }
 }
 
@@ -85,6 +90,8 @@ void fpga::InterconnectProtocol::process_phy_transaction() {
 
   while (true) {
     wait();
+
+    utilization_tracker.set_active();
 
     transaction = peq_phy.get_next_transaction();
     transaction->get_extension(ext);
@@ -152,6 +159,8 @@ void fpga::InterconnectProtocol::process_phy_transaction() {
     if (tlm_resp == TLM_COMPLETED) {
       wait(delay);
     }
+
+    utilization_tracker.set_idle();
   }
 }
 

@@ -5,6 +5,8 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "common/Tracker.h"
+
 #include "include/configs.h"
 
 using namespace sc_core;
@@ -14,6 +16,14 @@ using namespace tlm_utils;
 namespace chiplet {
 SC_MODULE(MemoryController) {
 public:
+  // -------------------------------------------------------
+  // trackers
+  // -------------------------------------------------------
+  UtilizationTracker utilization_tracker;
+
+  // -------------------------------------------------------
+  // sockets
+  // -------------------------------------------------------
   simple_target_socket<MemoryController> bus_target_socket;
   simple_initiator_socket<MemoryController> ram_initiator_socket;
 

@@ -2,6 +2,7 @@
 #include <vector>
 
 #include "chiplet/Chiplet.h"
+#include "common/Tracker.h"
 #include "fpga/FPGA.h"
 
 #include "configs/UserCode.h"
@@ -127,6 +128,50 @@ int sc_main(int argc, char *argv[]) {
   } else {
     sc_start(sim_duration);
   }
+
+  // -------------------------------------------------------
+  // statistics
+  // -------------------------------------------------------
+  std::cout << "=== Statistics ===" << std::endl;
+  std::cout << "--- General ---" << std::endl;
+  // execution time
+  std::cout << "Execution Time: " << sc_time_stamp() << std::endl;
+  // latencies
+  std::cout << "Request Latencies:" << std::endl;
+  LatencyTracker::instance().report();
+  // transmissions
+  std::cout << "Interconnect Transmissions:" << std::endl;
+  TransmissionTracker::instance().report();
+  std::cout << "\n";
+
+  // FPGA
+  std::string title = "--- FPGA ---";
+  std::cout << title << std::endl;
+  std::cout << "Utilizations:" << std::endl;
+  for (unsigned int j = 0; j < fpga.utilization_trackers.size(); ++j) {
+    fpga.utilization_trackers[j]->report();
+  }
+  std::cout << "Average Buffer Fill Levels:" << std::endl;
+  for (unsigned int j = 0; j < fpga.buffer_trackers.size(); ++j) {
+    fpga.buffer_trackers[j]->report();
+  }
+  std::cout << "\n";
+
+  // chiplets
+  for (unsigned int i = 0; i < num_chiplets; ++i) {
+    std::string title = "--- Chiplet" + std::to_string(i + 1) + " ---";
+    std::cout << title << std::endl;
+    std::cout << "Utilizations:" << std::endl;
+    for (unsigned int j = 0; j < chiplets[i]->utilization_trackers.size();
+         ++j) {
+      chiplets[i]->utilization_trackers[j]->report();
+    }
+    std::cout << "Average Buffer Fill Levels:" << std::endl;
+    for (unsigned int j = 0; j < chiplets[i]->buffer_trackers.size(); ++j) {
+      chiplets[i]->buffer_trackers[j]->report();
+    }
+  }
+  std::cout << "\n";
 
   // clean up chiplets
   for (auto *chiplet : chiplets) {

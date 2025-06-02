@@ -58,4 +58,23 @@ void Chiplet::initialize() {
     interconnects[i]->protocol_initiator_socket.bind(
         interconnectprotocol.interconnect_target_sockets[i]);
   }
+
+  // trackers
+  // utilization
+  utilization_trackers.push_back(&core0.utilization_tracker);
+  utilization_trackers.push_back(&core1.utilization_tracker);
+  utilization_trackers.push_back(&bus.utilization_tracker);
+  utilization_trackers.push_back(&memorycontroller.utilization_tracker);
+  utilization_trackers.push_back(&ram.utilization_tracker);
+  utilization_trackers.push_back(&interconnectprotocol.utilization_tracker);
+
+  for (unsigned int i = 0; i < 3; ++i) {
+    utilization_trackers.push_back(&interconnects[i]->utilization_tracker);
+  }
+
+  // buffer usages
+  for (unsigned int i = 0; i < 3; ++i) {
+    buffer_trackers.push_back(&interconnects[i]->tx_tracker);
+    buffer_trackers.push_back(&interconnects[i]->rx_tracker);
+  }
 }

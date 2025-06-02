@@ -5,6 +5,7 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "common/Tracker.h"
 #include "common/protocol/ChipletPayload.h"
 
 #include "include/configs.h"
@@ -17,6 +18,11 @@ namespace fpga {
 SC_MODULE(Generator) {
 public:
   // -------------------------------------------------------
+  // trackers
+  // -------------------------------------------------------
+  UtilizationTracker utilization_tracker;
+
+  // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
   simple_initiator_socket<Generator> socket;
@@ -24,8 +30,9 @@ public:
 
   Generator(sc_module_name name, unsigned int fpga_id);
 
-  std::function<void(Generator &)> gen_fn;
-  std::function<void(Generator &, tlm_generic_payload *)> interrupt_fn;
+  std::function<void(Generator &, UtilizationTracker *)> gen_fn;
+  std::function<void(Generator &, UtilizationTracker *, tlm_generic_payload *)>
+      interrupt_fn;
 
   void gen_thread();
 

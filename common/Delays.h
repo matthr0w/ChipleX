@@ -2,6 +2,7 @@
 
 #include <systemc>
 
+#include "Tracker.h"
 #include "protocol/ChipletExtension.h"
 
 #include "include/configs.h"
@@ -268,6 +269,8 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
       1.0 - std::pow(1.0 - bit_error_rate, flit_size * 8);
 
   for (int attempt = 0; attempt < max_attempts; ++attempt) {
+    TransmissionTracker::instance().record_transmission(base_transfer_delay);
+
     if (bit_error_dist(bit_error_gen) >= prob_bad_transfer) {
       // no bit error
       break;
@@ -281,10 +284,12 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
       // forward error correction penalty
       delay +=
           interconnect_config.get<sc_time>("interconnect_protocol.fec_delay");
+      TransmissionTracker::instance().record_attempt();
       break;
     case ConnectionType::UCIe:
       // retry penalty
       delay += base_transfer_delay;
+      TransmissionTracker::instance().record_attempt();
     default:;
     }
   }

@@ -6,6 +6,8 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "common/Tracker.h"
+
 #include "include/configs.h"
 
 using namespace sc_core;
@@ -15,6 +17,13 @@ using namespace tlm_utils;
 namespace fpga {
 SC_MODULE(Interconnect) {
 public:
+  // -------------------------------------------------------
+  // trackers
+  // -------------------------------------------------------
+  UtilizationTracker utilization_tracker;
+  BufferUsageTracker tx_tracker;
+  BufferUsageTracker rx_tracker;
+
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
@@ -34,8 +43,8 @@ private:
 
   std::deque<tlm_generic_payload *> tx_buffer;
   std::deque<tlm_generic_payload *> rx_buffer;
-  unsigned tx_buffer_used_bytes;
-  unsigned rx_buffer_used_bytes;
+  unsigned int tx_buffer_used_bytes;
+  unsigned int rx_buffer_used_bytes;
 
   // -------------------------------------------------------
   // config

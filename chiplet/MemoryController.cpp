@@ -2,13 +2,15 @@
 
 #include "common/Delays.h"
 #include "common/Flits.h"
+#include "common/Tracker.h"
 #include "common/protocol/ChipletExtension.h"
 #include "common/protocol/ChipletPayload.h"
 
 #include "include/logging.h"
 
 chiplet::MemoryController::MemoryController(sc_module_name name)
-    : sc_module(name), bus_target_socket("bus_target_socket"),
+    : sc_module(name), utilization_tracker(this->name()),
+      bus_target_socket("bus_target_socket"),
       ram_initiator_socket("ram_initiator_socket"), peq("peq") {
   bus_target_socket.register_nb_transport_fw(
       this, &chiplet::MemoryController::nb_transport_fw);
@@ -31,6 +33,8 @@ void chiplet::MemoryController::process_transaction() {
   while (true) {
     wait();
 
+    utilization_tracker.set_active();
+
     transaction = peq.get_next_transaction();
 
     // set address
@@ -48,6 +52,8 @@ void chiplet::MemoryController::process_transaction() {
     if (tlm_resp == TLM_COMPLETED) {
       wait(delay);
     }
+
+    utilization_tracker.set_idle();
   }
 }
 

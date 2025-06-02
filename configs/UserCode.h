@@ -7,6 +7,8 @@
 #include "chiplet/Core.h"
 #include "fpga/Generator.h"
 
+#include "common/Tracker.h"
+
 #include "include/configs.h"
 #include "include/globals.h"
 #include "include/logging.h"
@@ -21,17 +23,17 @@ struct ImageHeader {
   uint32_t height;
 };
 
-using GeneratorFunctions =
-    std::pair<std::function<void(fpga::Generator &)>, // main thread
-              std::function<void(fpga::Generator &,
-                                 tlm_generic_payload *)> // interrupt handler
-              >;
+using GeneratorFunctions = std::pair<
+    std::function<void(fpga::Generator &, UtilizationTracker *)>, // main thread
+    std::function<void(fpga::Generator &, UtilizationTracker *,
+                       tlm_generic_payload *)> // interrupt handler
+    >;
 
-using CoreFunctions =
-    std::pair<std::function<void(chiplet::Core &)>, // main thread
-              std::function<void(chiplet::Core &,
-                                 tlm_generic_payload *)> // interrupt handler
-              >;
+using CoreFunctions = std::pair<
+    std::function<void(chiplet::Core &, UtilizationTracker *)>, // main thread
+    std::function<void(chiplet::Core &, UtilizationTracker *,
+                       tlm_generic_payload *)> // interrupt handler
+    >;
 using CoreKey = std::pair<int, int>;
 
 // DO NOT EDIT CODE ABOVE THIS LINE
@@ -115,11 +117,26 @@ using CoreKey = std::pair<int, int>;
 //      write has completed and should handle the data fetch in the IRQ handler.
 //
 // -----------------------------
+//  Simulation Notes:
+// -----------------------------
+//
+// - Your user functions receive a pointer to the utilization tracker:
+//     void main_thread(Module &module, UtilizationTracker *tracker)
+//     void irq_handler(Module &module, UtilizationTracker *tracker,
+//                      tlm_generic_payload *transaction)
+//
+// - You should use `tracker.set_active()` and `tracker.set_idle()` to track the
+//   utilization.
+//
+// - You should add realistic process delays before sending requests.
+//
+// -----------------------------
 //  Interrupt Handler Notes:
 // -----------------------------
 //
 // - Your handler receives a pointer to the incoming transaction:
-//     void irq_handler(Module &module, tlm_generic_payload *transaction)
+//     void irq_handler(Module &module, UtilizationTracker *tracker,
+//                      tlm_generic_payload *transaction)
 //
 // - The incoming transaction does NOT contain any valid payload data.
 //   It only includes important metadata such as:
@@ -185,14 +202,19 @@ using CoreKey = std::pair<int, int>;
 // Core Code Example:
 // // Chiplet1 Core0
 // {{1, 0},
-//  {[](chiplet::Core &core) {
+//  {[](chiplet::Core &core, UtilizationTracker *tracker) {
 //     SC_LOG_DEBUG_NO_TX(&core, "Starting Core Logic");
+//     tracker.set_active();
 //     uint32_t *data = new uint32_t(0xABCD);
-//     auto response = core.send_request(TLM_WRITE_COMMAND, 0, 0, 0x1000,
-//                       reinterpret_cast<unsigned char *>(data), 4);
+//     wait(100, SC_NS); // example delay
+//     auto response =
+//         core.send_request(TLM_WRITE_COMMAND, 0, 0, 0x1000, false,
+//                           reinterpret_cast<unsigned char *>(data), 4);
 //     delete response;
+//     tracker.set_idle();
 //   },
-//   [](chiplet::Core &core, tlm_generic_payload *transaction) {
+//   [](chiplet::Core &core, UtilizationTracker *tracker,
+//      tlm_generic_payload *transaction) {
 //     auto *ext = transaction->get_extension<ChipletExtension>();
 //     if (ext) {
 //       SC_LOG_DEBUG_NO_TX(&core,
@@ -211,8 +233,10 @@ using CoreKey = std::pair<int, int>;
 // ============================================================
 
 inline GeneratorFunctions generator_code = {
-    [](fpga::Generator &gen) {
+    [](fpga::Generator &gen, UtilizationTracker *tracker) {
       // FPGA GENERATOR CODE BELOW
+      tracker->set_active();
+
       int width, height, channels;
       unsigned char *input_img =
           stbi_load("tum_input.jpg", &width, &height, &channels, 3);
@@ -238,10 +262,15 @@ inline GeneratorFunctions generator_code = {
                                        buffer, buffer_size);
 
       delete response;
+
+      tracker->set_idle();
       // ------------------------------
     },
-    [](fpga::Generator &gen, tlm::tlm_generic_payload *transaction) {
+    [](fpga::Generator &gen, UtilizationTracker *tracker,
+       tlm_generic_payload *transaction) {
       // FPGA INTERRUPT HANDLER CODE BELOW
+      tracker->set_active();
+
       auto addr = transaction->get_address();
       auto size = transaction->get_data_length();
 
@@ -261,15 +290,20 @@ inline GeneratorFunctions generator_code = {
       // TODO: realistic delay
 
       delete response;
+
+      tracker->set_idle();
       // ------------------------------
     }};
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
     // Chiplet1 Core0
     {{1, 0},
-     {[](chiplet::Core &core) {},
-      [](chiplet::Core &core, tlm_generic_payload *transaction) {
+     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
+      [](chiplet::Core &core, UtilizationTracker *tracker,
+         tlm_generic_payload *transaction) {
         static const Config &config = ConfigRegistry::instance().get("Chiplet");
+
+        tracker->set_active();
 
         auto addr = transaction->get_address();
         auto len = transaction->get_data_length();
@@ -320,12 +354,17 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
                                      write_buffer, len);
 
         delete response;
+
+        tracker->set_idle();
       }}},
     // Chiplet2 Core0
     {{2, 0},
-     {[](chiplet::Core &core) {},
-      [](chiplet::Core &core, tlm_generic_payload *transaction) {
+     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
+      [](chiplet::Core &core, UtilizationTracker *tracker,
+         tlm_generic_payload *transaction) {
         static const Config &config = ConfigRegistry::instance().get("Chiplet");
+
+        tracker->set_active();
 
         auto addr = transaction->get_address();
         auto len = transaction->get_data_length();
@@ -358,5 +397,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
                                      write_buffer, len);
 
         delete response;
+
+        tracker->set_idle();
       }}},
 };

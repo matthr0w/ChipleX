@@ -9,6 +9,8 @@
 #include "MemoryController.h"
 #include "RAM.h"
 
+#include "common/Tracker.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -30,6 +32,12 @@ private:
       interconnect_config.get<double>("interconnect.bandwidth_chiplets");
 
 public:
+  // -------------------------------------------------------
+  // trackers
+  // -------------------------------------------------------
+  std::vector<BufferUsageTracker *> buffer_trackers;
+  std::vector<UtilizationTracker *> utilization_trackers;
+
   chiplet::Core core0;
   chiplet::Core core1;
   std::vector<chiplet::Interconnect *> interconnects;

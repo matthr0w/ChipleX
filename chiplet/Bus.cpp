@@ -1,13 +1,14 @@
 #include "Bus.h"
 
 #include "common/Delays.h"
+#include "common/Tracker.h"
 #include "common/protocol/ChipletExtension.h"
 #include "common/protocol/ChipletPayload.h"
 
 #include "include/logging.h"
 
 chiplet::Bus::Bus(sc_module_name name, unsigned int id)
-    : sc_module(name), chiplet_id(id),
+    : sc_module(name), utilization_tracker(this->name()), chiplet_id(id),
       core0_target_socket("core0_target_socket"),
       core1_target_socket("core1_target_socket"),
       interconnect_target_socket("interconnect_target_socket"),
@@ -111,6 +112,8 @@ void chiplet::Bus::process_transaction_bw() {
       // release bus
       current_owner = 0;
 
+      utilization_tracker.set_idle();
+
       // process queue
       if (!request_queue.empty()) {
         process_queue();
@@ -175,6 +178,8 @@ tlm_sync_enum chiplet::Bus::nb_transport_fw(int id,
                                                  << phase);
     exit(1);
   }
+
+  utilization_tracker.set_active();
 
   // set core id
   ChipletExtension *ext;

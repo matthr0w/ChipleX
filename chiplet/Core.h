@@ -5,6 +5,7 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "common/Tracker.h"
 #include "common/protocol/ChipletPayload.h"
 
 #include "include/configs.h"
@@ -17,6 +18,11 @@ namespace chiplet {
 SC_MODULE(Core) {
 public:
   // -------------------------------------------------------
+  // trackers
+  // -------------------------------------------------------
+  UtilizationTracker utilization_tracker;
+
+  // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
   simple_initiator_socket<Core> socket;
@@ -24,8 +30,9 @@ public:
 
   Core(sc_module_name name, unsigned int chiplet_id, unsigned int core_id);
 
-  std::function<void(Core &)> thread_fn;
-  std::function<void(Core &, tlm_generic_payload *)> interrupt_fn;
+  std::function<void(Core &, UtilizationTracker *)> thread_fn;
+  std::function<void(Core &, UtilizationTracker *, tlm_generic_payload *)>
+      interrupt_fn;
 
   void core_thread();
 
