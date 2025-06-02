@@ -53,7 +53,8 @@ int RoutingTable::get_route(unsigned int from, unsigned int to) {
       }
     }
 
-    return closest_chiplet;
+    // FPGA interconnect ids are chiplet_ids - 1
+    return closest_chiplet - 1;
   }
 
   // FPGA is destination
