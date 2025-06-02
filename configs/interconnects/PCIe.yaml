@@ -1,7 +1,6 @@
 # PCIe 6.0 x16
 # https://pcisig.com/blog/evolution-pci-express-specification-its-sixth-generation-third-decade-and-still-going-strong
 interconnect_protocol:
-  buffer_size: 512 # bytes
   flit_size: 256 # bytes
   header_size: 20 # bytes
   pre_delay: 5.0 # ns
@@ -11,5 +10,5 @@ interconnect_protocol:
   
 interconnect:
   buffer_size: 512 # bytes
-  bandwidth_chiplets: 1024.0 # Gb/s
-  bandwidth_fpga: 512.0 # Gb/s
+  bandwidth_chiplets: 128.0 # GB/s
+  bandwidth_fpga: 128.0 # GB/s
