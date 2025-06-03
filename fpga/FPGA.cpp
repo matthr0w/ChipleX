@@ -12,7 +12,7 @@ FPGA::FPGA(sc_module_name name)
   for (unsigned int i = 0; i < num_chiplets; ++i) {
     std::string name =
         "Interconnect" +
-        std::to_string(i + 1); // interconnect names follow chiplet ids
+        std::to_string(i);
     interconnects.push_back(
         new fpga::Interconnect(name.c_str(), bandwidth_fpga, fpga_distance_mm));
   }
