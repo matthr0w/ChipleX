@@ -11,7 +11,7 @@ fpga::Interconnect::Interconnect(sc_module_name name, double bandwidth,
     : sc_module(name), utilization_tracker(this->name()),
       tx_tracker(this->name() + std::string(" Tx Buffer")),
       rx_tracker(this->name() + std::string(" Rx Buffer")),
-      bandwidth(bandwidth), distance(distance),
+      bandwidth(bandwidth), distance(distance), incoming_flits(0),
       protocol_target_socket("protocol_target_socket"),
       protocol_initiator_socket("protocol_initiator_socket"),
       interconnect_target_socket("interconnect_target_socket"),
@@ -87,6 +87,7 @@ void fpga::Interconnect::process_interconnect_transaction() {
     rx_tracker.update(rx_buffer_used_bytes);
     rx_buffer.push_back(transaction_copy);
     rx_buffer_in_event.notify();
+    ++incoming_flits;
 
     // begin response to interconnect
     phase = BEGIN_RESP;

@@ -65,10 +65,10 @@ public:
   }
 
   void report() {
-    std::cout << "  Transmissions:     " << transmission_count << std::endl;
-    std::cout << "  Retries/FECs:      " << attempt_count << std::endl;
-    std::cout << "  Flit Overhead:     " << calculate_overhead() << "%\n";
-    std::cout << "  Power Dissipation: " << calculate_power_mW() << " mW\n";
+    std::cout << "  Total Transmissions: " << transmission_count << std::endl;
+    std::cout << "  Retries/FECs:        " << attempt_count << std::endl;
+    std::cout << "  Flit Overhead:       " << calculate_overhead() << "%\n";
+    std::cout << "  Power Dissipation:   " << calculate_power_mW() << " mW\n";
   }
 
 private:

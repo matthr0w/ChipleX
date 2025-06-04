@@ -23,6 +23,7 @@ public:
   UtilizationTracker utilization_tracker;
   BufferUsageTracker tx_tracker;
   BufferUsageTracker rx_tracker;
+  unsigned int incoming_flits;
 
   // -------------------------------------------------------
   // sockets

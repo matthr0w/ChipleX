@@ -141,6 +141,48 @@ int sc_main(int argc, char *argv[]) {
   LatencyTracker::instance().report();
   // transmissions
   std::cout << "Interconnect Transmissions:" << std::endl;
+  // flits to chiplets
+  for (unsigned int i = 0; i < num_chiplets; ++i) {
+    std::string target = "Chiplet" + std::to_string(i + 1);
+
+    unsigned int prev_index = (i == 0) ? num_chiplets - 1 : i - 1;
+    std::string prev_source = "Chiplet" + std::to_string(prev_index + 1);
+    unsigned int next_index = (i == num_chiplets - 1) ? 0 : i + 1;
+    std::string next_source = "Chiplet" + std::to_string(next_index + 1);
+
+    unsigned int fpga_to_chiplet =
+        chiplets[i]->interconnects[0]->incoming_flits;
+    unsigned int prev_to_chiplet =
+        chiplets[i]->interconnects[1]->incoming_flits;
+    unsigned int next_to_chiplet =
+        chiplets[i]->interconnects[2]->incoming_flits;
+
+    if (fpga_to_chiplet > 0) {
+      std::cout << "  Flits from FPGA to " << target << ": " << fpga_to_chiplet
+                << std::endl;
+    }
+
+    if (prev_to_chiplet > 0) {
+      std::cout << "  Flits from " << prev_source << " to " << target << ": "
+                << prev_to_chiplet << std::endl;
+    }
+
+    if (next_to_chiplet > 0) {
+      std::cout << "  Flits from " << next_source << " to " << target << ": "
+                << next_to_chiplet << std::endl;
+    }
+  }
+  // flits to FPGA
+  for (unsigned int i = 0; i < num_chiplets; ++i) {
+    std::string source = "Chiplet" + std::to_string(i + 1);
+
+    unsigned int chiplet_to_fpga = fpga.interconnects[i]->incoming_flits;
+
+    if (chiplet_to_fpga > 0) {
+      std::cout << "  Flits from " << source << " to FPGA: " << chiplet_to_fpga
+                << std::endl;
+    }
+  }
   TransmissionTracker::instance().report();
   std::cout << "\n";
 

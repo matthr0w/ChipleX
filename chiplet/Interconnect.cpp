@@ -11,7 +11,7 @@ chiplet::Interconnect::Interconnect(sc_module_name name, double bandwidth,
     : sc_module(name), utilization_tracker(this->name()),
       tx_tracker(this->name() + std::string(" Tx Buffer")),
       rx_tracker(this->name() + std::string(" Rx Buffer")),
-      bandwidth(bandwidth), distance(distance),
+      bandwidth(bandwidth), distance(distance), incoming_flits(0),
       protocol_target_socket("protocol_target_socket"),
       protocol_initiator_socket("protocol_initiator_socket"),
       interconnect_target_socket("interconnect_target_socket"),
@@ -161,6 +161,7 @@ void chiplet::Interconnect::process_rx_buffer() {
       rx_tracker.update(rx_buffer_used_bytes);
       rx_buffer.pop_front();
       rx_buffer_out_event.notify();
+      ++incoming_flits;
 
       delete transaction;
 
