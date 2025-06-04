@@ -137,7 +137,7 @@ int sc_main(int argc, char *argv[]) {
   // execution time
   std::cout << "Execution Time: " << sc_time_stamp() << std::endl;
   // latencies
-  std::cout << "Request Latencies:" << std::endl;
+  std::cout << "Transaction Latencies:" << std::endl;
   LatencyTracker::instance().report();
   // transmissions
   std::cout << "Interconnect Transmissions:" << std::endl;

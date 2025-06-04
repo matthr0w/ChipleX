@@ -16,7 +16,7 @@ public:
 
   void record(sc_time latency) {
     std::lock_guard<std::mutex> lock(mutex);
-    ++requests_count;
+    ++transactions_count;
     total_latency += latency;
     if (latency < min_latency) {
       min_latency = latency;
@@ -27,16 +27,19 @@ public:
   }
 
   void report() {
-    std::cout << "  Requests: " << requests_count << std::endl;
-    std::cout << "  Average:  " << total_latency / requests_count << std::endl;
-    std::cout << "  Minimum:  " << min_latency << std::endl;
-    std::cout << "  Maximum:  " << max_latency << std::endl;
+    std::cout << "  Finished Transactions: " << transactions_count << std::endl;
+    if (transactions_count > 0) {
+      std::cout << "  Average:  " << total_latency / transactions_count
+                << std::endl;
+      std::cout << "  Minimum:  " << min_latency << std::endl;
+      std::cout << "  Maximum:  " << max_latency << std::endl;
+    }
   }
 
 private:
   mutable std::mutex mutex;
 
-  unsigned int requests_count = 0;
+  unsigned int transactions_count = 0;
 
   sc_time total_latency = SC_ZERO_TIME;
   sc_time min_latency = sc_max_time();
