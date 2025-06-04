@@ -272,12 +272,12 @@ inline GeneratorFunctions generator_code = {
       tracker->set_active();
 
       auto addr = transaction->get_address();
-      auto size = transaction->get_data_length();
+      auto len = transaction->get_data_length();
 
       // read from FPGA RAM
-      auto *buffer = new unsigned char[size];
+      auto *buffer = new unsigned char[len];
       auto *response =
-          gen.send_request(TLM_READ_COMMAND, 1, 0, addr, true, buffer, size);
+          gen.send_request(TLM_READ_COMMAND, 1, 0, addr, true, buffer, len);
 
       ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
       uint32_t width = header->width;
@@ -351,7 +351,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         // write to Chiplet2 RAM
         response = core.send_request(TLM_WRITE_COMMAND, 1, 2, 0x0, false,
-                                     write_buffer, len);
+                                     write_buffer, new_buffer_size);
 
         delete response;
 
