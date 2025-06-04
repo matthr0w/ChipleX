@@ -11,7 +11,7 @@ using namespace tlm;
 
 chiplet::RAM::RAM(sc_module_name name)
     : sc_module(name), utilization_tracker(this->name()), socket("socket"),
-      peq("peq"), mem(ram_size * 1024, 0) {
+      peq("peq"), mem(ram_size * 1024, 0), written_flags(mem.size(), false) {
   socket.register_nb_transport_fw(this, &chiplet::RAM::nb_transport_fw);
 
   SC_THREAD(process_transaction);
@@ -45,6 +45,11 @@ void chiplet::RAM::process_transaction() {
         std::memcpy(data, &mem[address], data_size);
       } else if (transaction->get_command() == TLM_WRITE_COMMAND) {
         std::memcpy(&mem[address], data, data_size);
+
+        // set written flags
+        for (unsigned int i = 0; i < data_size; ++i) {
+          written_flags[address + i] = true;
+        }
       }
     }
 
@@ -72,6 +77,14 @@ void chiplet::RAM::process_transaction() {
 
     utilization_tracker.set_idle();
   }
+}
+
+void chiplet::RAM::report_usage() {
+  size_t written_bytes =
+      std::count(written_flags.begin(), written_flags.end(), true);
+
+  std::cout << "  Used Bytes: " << written_bytes << " / " << mem.size() << " ("
+            << (100.0 * written_bytes / mem.size()) << "%)\n";
 }
 
 // -------------------------------------------------------

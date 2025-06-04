@@ -151,6 +151,8 @@ int sc_main(int argc, char *argv[]) {
   for (unsigned int j = 0; j < fpga.utilization_trackers.size(); ++j) {
     fpga.utilization_trackers[j]->report();
   }
+  std::cout << "RAM Usage:" << std::endl;
+  fpga.ram.report_usage();
   std::cout << "Average Buffer Fill Levels:" << std::endl;
   for (unsigned int j = 0; j < fpga.buffer_trackers.size(); ++j) {
     fpga.buffer_trackers[j]->report();
@@ -166,6 +168,8 @@ int sc_main(int argc, char *argv[]) {
          ++j) {
       chiplets[i]->utilization_trackers[j]->report();
     }
+    std::cout << "RAM Usage:" << std::endl;
+    chiplets[i]->ram.report_usage();
     std::cout << "Buffer Fill Levels:" << std::endl;
     for (unsigned int j = 0; j < chiplets[i]->buffer_trackers.size(); ++j) {
       chiplets[i]->buffer_trackers[j]->report();

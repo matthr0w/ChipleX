@@ -35,6 +35,7 @@ public:
 
   fpga::Generator generator;
   std::vector<fpga::Interconnect *> interconnects;
+  fpga::RAM ram;
 
   SC_CTOR(FPGA);
   ~FPGA();
@@ -43,7 +44,6 @@ private:
   fpga::Bus bus;
   fpga::InterconnectProtocol interconnectprotocol;
   fpga::MemoryController memorycontroller;
-  fpga::RAM ram;
 
   void initialize();
 };

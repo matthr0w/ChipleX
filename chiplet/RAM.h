@@ -28,6 +28,8 @@ public:
 
   SC_CTOR(RAM);
 
+  void report_usage();
+
 private:
   // -------------------------------------------------------
   // config
@@ -43,6 +45,7 @@ private:
       chiplet_config.get<sc_time>("ram.access_delay");
 
   std::vector<uint8_t> mem;
+  std::vector<bool> written_flags;
 
   // -------------------------------------------------------
   // peqs

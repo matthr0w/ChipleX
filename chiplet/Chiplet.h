@@ -41,6 +41,7 @@ public:
   chiplet::Core core0;
   chiplet::Core core1;
   std::vector<chiplet::Interconnect *> interconnects;
+  chiplet::RAM ram;
 
   SC_CTOR(Chiplet);
   ~Chiplet();
@@ -49,7 +50,6 @@ private:
   chiplet::Bus bus;
   chiplet::InterconnectProtocol interconnectprotocol;
   chiplet::MemoryController memorycontroller;
-  chiplet::RAM ram;
 
   void initialize();
 };
