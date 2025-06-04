@@ -58,30 +58,28 @@ void Config::load(const std::string &filepath,
 
   for (const std::string &key : specification) {
     const std::vector<std::string> parts = split_key(key);
-    const YAML::Node *current = &root;
+    YAML::Node current = YAML::Clone(root);
     for (const auto &part : parts) {
-      if (!current->IsMap() || !(*current)[part]) {
+      if (!current.IsMap() || !current[part]) {
         throw std::runtime_error("Missing configuration key: " + key);
       }
-      YAML::Node next = (*current)[part];
-      current = &next;
+      current = current[part];
     }
   }
 }
 
 template <typename T> T Config::get(const std::string &key) const {
   const std::vector<std::string> parts = split_key(key);
-  const YAML::Node *current = &root;
+  YAML::Node current = YAML::Clone(root);
   for (const auto &part : parts) {
-    if (!current->IsMap() || !(*current)[part]) {
+    if (!current.IsMap() || !current[part]) {
       throw std::runtime_error("Missing configuration key: " + key);
     }
-    YAML::Node next = (*current)[part];
-    current = &next;
+    current = current[part];
   }
 
   try {
-    return current->as<T>();
+    return current.as<T>();
   } catch (const YAML::BadConversion &e) {
     throw std::runtime_error("Invalid type for key: " + key);
   }
