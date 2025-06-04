@@ -166,7 +166,7 @@ int sc_main(int argc, char *argv[]) {
          ++j) {
       chiplets[i]->utilization_trackers[j]->report();
     }
-    std::cout << "Average Buffer Fill Levels:" << std::endl;
+    std::cout << "Buffer Fill Levels:" << std::endl;
     for (unsigned int j = 0; j < chiplets[i]->buffer_trackers.size(); ++j) {
       chiplets[i]->buffer_trackers[j]->report();
     }

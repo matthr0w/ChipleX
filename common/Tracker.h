@@ -155,6 +155,9 @@ public:
     cumulative_usage += last_usage * delta_time.to_seconds(); // usage * time
     last_update_time = sc_time_stamp();
     last_usage = usage;
+    if (usage > max_usage) {
+      max_usage = usage;
+    }
   }
 
   double get_average() {
@@ -162,14 +165,16 @@ public:
   }
 
   void report() {
-    std::cout << "  " << name << ": " << get_average() << " bytes\n";
+    std::cout << "  " << name << " (Average | Maximum): " << get_average()
+              << " | " << max_usage << " bytes\n";
   }
 
 private:
   std::string name;
 
   double cumulative_usage = 0.0; // in bytes * seconds
-  unsigned last_usage = 0;
+  unsigned int max_usage = 0;
+  unsigned int last_usage = 0;
 
   sc_time last_update_time = SC_ZERO_TIME;
 };
