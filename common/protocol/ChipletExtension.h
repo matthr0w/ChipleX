@@ -6,29 +6,38 @@
 using namespace sc_core;
 
 struct ChipletExtension : tlm::tlm_extension<ChipletExtension> {
+  // statistics
   sc_time start_time;
-  int request_id;
-  int core_id;
-  int source_id;
-  int destination_id;
-  bool fixed_address;
-  int flit_count;
-  int flit_id;
-  int flit_padding;
 
-  ChipletExtension(sc_time start_time = sc_time_stamp(), int request = -1,
-                   int core = -1, int source = -1, int destination = -1,
-                   bool fixed_address = true, int flit_count = -1,
-                   int flit_id = -1, int flit_padding = -1)
-      : start_time(start_time), request_id(request), core_id(core),
-        source_id(source), destination_id(destination),
+  // metadata
+  int request_id = -1;
+  int core_id = -1;
+  int source_id = -1;
+  int destination_id = -1;
+  bool fixed_address = true;
+
+  // flits
+  int flit_count = -1;
+  int flit_id = -1;
+  int flit_padding = -1;
+
+  // transfer result
+  bool success = true;
+
+  ChipletExtension(sc_time start_time = sc_time_stamp(), int request_id = -1,
+                   int core_id = -1, int source_id = -1,
+                   int destination_id = -1, bool fixed_address = true,
+                   int flit_count = -1, int flit_id = -1, int flit_padding = -1,
+                   bool success = true)
+      : start_time(start_time), request_id(request_id), core_id(core_id),
+        source_id(source_id), destination_id(destination_id),
         fixed_address(fixed_address), flit_count(flit_count), flit_id(flit_id),
-        flit_padding(flit_padding) {}
+        flit_padding(flit_padding), success(success) {}
 
   virtual tlm_extension_base *clone() const override {
     return new ChipletExtension(start_time, request_id, core_id, source_id,
                                 destination_id, fixed_address, flit_count,
-                                flit_id, flit_padding);
+                                flit_id, flit_padding, success);
   }
 
   virtual void copy_from(const tlm_extension_base &ext) override {
@@ -42,6 +51,7 @@ struct ChipletExtension : tlm::tlm_extension<ChipletExtension> {
     flit_count = other.flit_count;
     flit_id = other.flit_id;
     flit_padding = other.flit_padding;
+    success = other.success;
   }
 
   unsigned get_stdext_size_bytes() const {

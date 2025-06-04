@@ -182,7 +182,7 @@ The following extensions are only required when the transaction is split into da
 
 - **`flit_padding`**: Indicates the number of zero-padded bytes in the flit.
 
-Additionally, a `start_time` variable is used to measure transaction latency. This variable is only for evaluation purposes and does not affect the simulation behavior.
+Additionally, the `start_time` variable is used to measure transaction latency, while the `success` flag indicates whether a transmission was successful. Both are intended solely for internal evaluation. They do not represent real-world header fields and should not be relied upon by user logic.
 
 ## RISC-V Cycle Estimation
 

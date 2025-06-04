@@ -87,4 +87,5 @@ public:
   void set_flit_count(int count) { ensure_extension()->flit_count = count; }
   void set_flit_id(int id) { ensure_extension()->flit_id = id; }
   void set_flit_padding(int count) { ensure_extension()->flit_padding = count; }
+  void set_transfer_result(bool flag) { ensure_extension()->success = flag; }
 };

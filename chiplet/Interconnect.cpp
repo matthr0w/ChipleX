@@ -71,6 +71,7 @@ void chiplet::Interconnect::process_protocol_transaction() {
 
 void chiplet::Interconnect::process_interconnect_transaction() {
   tlm_generic_payload *transaction;
+  ChipletExtension *ext;
   tlm_phase phase;
   sc_time delay;
   tlm_sync_enum tlm_resp;
@@ -79,14 +80,18 @@ void chiplet::Interconnect::process_interconnect_transaction() {
     wait();
 
     transaction = peq_interconnect.get_next_transaction();
+    transaction->get_extension(ext);
 
-    // put transaction in rx buffer
-    auto *transaction_copy =
-        static_cast<ChipletPayload *>(transaction)->clone();
-    rx_buffer_used_bytes += flit_size;
-    rx_tracker.update(rx_buffer_used_bytes);
-    rx_buffer.push_back(transaction_copy);
-    rx_buffer_in_event.notify();
+    // only put transaction in rx buffer if transfer was successful
+    if (ext->success) {
+      auto *transaction_copy =
+          static_cast<ChipletPayload *>(transaction)->clone();
+      rx_buffer_used_bytes += flit_size;
+      rx_tracker.update(rx_buffer_used_bytes);
+      rx_buffer.push_back(transaction_copy);
+      rx_buffer_in_event.notify();
+      ++incoming_flits;
+    }
 
     // begin response to interconnect
     phase = BEGIN_RESP;
@@ -161,7 +166,6 @@ void chiplet::Interconnect::process_rx_buffer() {
       rx_tracker.update(rx_buffer_used_bytes);
       rx_buffer.pop_front();
       rx_buffer_out_event.notify();
-      ++incoming_flits;
 
       delete transaction;
 

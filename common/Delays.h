@@ -4,6 +4,7 @@
 
 #include "Tracker.h"
 #include "protocol/ChipletExtension.h"
+#include "protocol/ChipletPayload.h"
 
 #include "include/configs.h"
 #include "include/globals.h"
@@ -254,8 +255,10 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
   delay = flit_transfer_delay + wire_propagation_delay;
   sc_time base_transfer_delay = delay;
 
-  int max_attempts = 1;
+  double prob_bad_transfer =
+      1.0 - std::pow(1.0 - bit_error_rate, flit_size * 8);
 
+  int max_attempts = 1;
   switch (connection_type) {
   case ConnectionType::UCIe:
     max_attempts =
@@ -265,14 +268,14 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
     break;
   }
 
-  double prob_bad_transfer =
-      1.0 - std::pow(1.0 - bit_error_rate, flit_size * 8);
+  bool transfer_successful = false;
 
   for (int attempt = 0; attempt < max_attempts; ++attempt) {
     TransmissionTracker::instance().record_transmission(base_transfer_delay);
 
     if (bit_error_dist(bit_error_gen) >= prob_bad_transfer) {
       // no bit error
+      transfer_successful = true;
       break;
     }
 
@@ -285,6 +288,8 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
       delay +=
           interconnect_config.get<sc_time>("interconnect_protocol.fec_delay");
       TransmissionTracker::instance().record_attempt();
+      // assuming FEC handles it
+      transfer_successful = true;
       break;
     case ConnectionType::UCIe:
       // retry penalty
@@ -292,6 +297,13 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
       TransmissionTracker::instance().record_attempt();
     default:;
     }
+  }
+
+  static_cast<ChipletPayload *>(&transaction)
+      ->set_transfer_result(transfer_successful);
+
+  if (!transfer_successful) {
+    SC_LOG_ERROR(&module, transaction, "Transfer failed");
   }
 
   SC_LOG_DELAY(&module, transaction, "Die to Die Transfer", delay);
