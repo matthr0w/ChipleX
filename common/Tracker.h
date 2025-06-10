@@ -127,14 +127,21 @@ public:
     }
   }
 
-  void report() {
+  double get_average() {
     if (active_count > 0) {
       accumulated_active_time += sc_time_stamp() - last_active_time;
     }
 
-    double utilization =
-        accumulated_active_time.to_seconds() / sc_time_stamp().to_seconds();
-    std::cout << "  " << name << ": " << (utilization * 100.0) << "%\n";
+    if (sc_time_stamp() > SC_ZERO_TIME) {
+      return accumulated_active_time.to_seconds() /
+             sc_time_stamp().to_seconds();
+    } else {
+      return 0;
+    }
+  }
+
+  void report() {
+    std::cout << "  " << name << ": " << (get_average() * 100.0) << "%\n";
   }
 
 private:
@@ -161,7 +168,11 @@ public:
   }
 
   double get_average() {
-    return cumulative_usage / sc_time_stamp().to_seconds();
+    if (sc_time_stamp() > SC_ZERO_TIME) {
+      return cumulative_usage / sc_time_stamp().to_seconds();
+    } else {
+      return 0;
+    }
   }
 
   void report() {
