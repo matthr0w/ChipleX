@@ -13,6 +13,17 @@
 #include "include/globals.h"
 #include "include/logging.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
+struct ImageHeader {
+  uint32_t width;
+  uint32_t height;
+  uint32_t channels;
+};
+
 using GeneratorFunctions = std::pair<
     std::function<void(fpga::Generator &, UtilizationTracker *)>, // main thread
     std::function<void(fpga::Generator &, UtilizationTracker *,
@@ -225,11 +236,85 @@ using CoreKey = std::pair<int, int>;
 inline GeneratorFunctions generator_code = {
     [](fpga::Generator &gen, UtilizationTracker *tracker) {
       // FPGA GENERATOR CODE BELOW
+      static unsigned int request = 0;
+      static sc_time request_delay(8, SC_MS); // approximately 120 fps
+
+      int width, height, channels;
+      unsigned char *input_img = stbi_load("configs/duckiebot_input.jpg",
+                                           &width, &height, &channels, 3);
+
+      size_t header_size = sizeof(ImageHeader);
+      size_t img_size = width * height * channels;
+      size_t buffer_size = header_size + img_size;
+
+      while (true) {
+        tracker->set_active();
+
+        unsigned char *buffer = new unsigned char[buffer_size];
+
+        ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
+        header->width = width;
+        header->height = height;
+        header->channels = channels;
+
+        std::memcpy(buffer + header_size, input_img, img_size);
+
+        sc_time request_start_stamp = sc_time_stamp();
+
+        // write to Chiplet1 RAM
+        auto response = gen.send_request(TLM_WRITE_COMMAND, request, 1, 0x0,
+                                         false, buffer, buffer_size);
+
+        delete response;
+
+        sc_time request_end_stamp = sc_time_stamp();
+
+        ++request;
+
+        tracker->set_idle();
+
+        if (request == 10) {
+          break;
+        }
+
+        wait(request_delay - (request_end_stamp - request_start_stamp));
+      }
+
+      stbi_image_free(input_img);
       // ------------------------------
     },
     [](fpga::Generator &gen, UtilizationTracker *tracker,
        tlm_generic_payload *transaction) {
       // FPGA INTERRUPT HANDLER CODE BELOW
+      static unsigned int request = 0;
+
+      tracker->set_active();
+
+      auto addr = transaction->get_address();
+      auto len = transaction->get_data_length();
+
+      // read from FPGA RAM
+      unsigned char *buffer = new unsigned char[len];
+      auto *response = gen.send_request(TLM_READ_COMMAND, request, 0, addr,
+                                        true, buffer, len);
+
+      ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
+      uint32_t width = header->width;
+      uint32_t height = header->height;
+      uint32_t channels = header->channels;
+
+      unsigned char *img_data = buffer + sizeof(ImageHeader);
+
+      std::string filename =
+          "configs/duckiebot_output" + std::to_string(request) + ".jpg";
+
+      stbi_write_jpg(filename.c_str(), width, height, channels, img_data, 100);
+
+      delete response;
+
+      ++request;
+
+      tracker->set_idle();
       // ------------------------------
     }};
 
@@ -238,5 +323,130 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
     {{1, 0},
      {[](chiplet::Core &core, UtilizationTracker *tracker) {},
       [](chiplet::Core &core, UtilizationTracker *tracker,
-         tlm_generic_payload *transaction) {}}},
+         tlm_generic_payload *transaction) {
+        static const Config &config = ConfigRegistry::instance().get("Chiplet");
+        static unsigned int request = 0;
+
+        tracker->set_active();
+
+        auto addr = transaction->get_address();
+        auto len = transaction->get_data_length();
+
+        // read from Chiplet1 RAM
+        unsigned char *read_buffer = new unsigned char[len];
+        auto response = core.send_request(TLM_READ_COMMAND, request, 1, addr,
+                                          false, read_buffer, len);
+
+        // image header
+        size_t header_size = sizeof(ImageHeader);
+        ImageHeader *header = reinterpret_cast<ImageHeader *>(read_buffer);
+        uint32_t width = header->width;
+        uint32_t height = header->height;
+        uint32_t channels = header->channels;
+
+        // update image header
+        const int crop_margin = 12;
+        uint32_t new_width = width;
+        uint32_t new_height = height - crop_margin;
+
+        size_t new_img_size = new_width * new_height * 3;
+        size_t new_buffer_size = header_size + new_img_size;
+
+        unsigned char *write_buffer = new unsigned char[new_buffer_size];
+
+        ImageHeader *new_header = reinterpret_cast<ImageHeader *>(write_buffer);
+        new_header->width = new_width;
+        new_header->height = new_height;
+        new_header->channels = channels;
+
+        // crop image
+        unsigned char *src_pixels = read_buffer + header_size;
+        unsigned char *dst_pixels = write_buffer + header_size;
+
+        for (uint32_t y = 0; y < new_height; ++y) {
+          unsigned char *src_row = src_pixels + ((y + crop_margin) * width) * 3;
+          unsigned char *dst_row = dst_pixels + (y * new_width) * 3;
+          std::memcpy(dst_row, src_row, new_width * 3);
+        }
+
+        delete response;
+
+        // cycle count simulated with Spike
+        wait(1347 * config.get<sc_time>("cores.clk_cycle"));
+
+        // write to Chiplet2 RAM
+        response = core.send_request(TLM_WRITE_COMMAND, request, 2, 0x0, false,
+                                     write_buffer, new_buffer_size);
+
+        delete response;
+
+        ++request;
+
+        tracker->set_idle();
+      }}},
+    // Chiplet2 Core0
+    {{2, 0},
+     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
+      [](chiplet::Core &core, UtilizationTracker *tracker,
+         tlm_generic_payload *transaction) {
+        static const Config &config = ConfigRegistry::instance().get("Chiplet");
+        static unsigned int request = 0;
+
+        tracker->set_active();
+
+        auto addr = transaction->get_address();
+        auto len = transaction->get_data_length();
+
+        // read from Chiplet2 RAM
+        unsigned char *read_buffer = new unsigned char[len];
+        auto response = core.send_request(TLM_READ_COMMAND, request, 2, addr, false,
+                                          read_buffer, len);
+
+        // image header
+        const size_t header_size = sizeof(ImageHeader);
+        ImageHeader *header = reinterpret_cast<ImageHeader *>(read_buffer);
+        uint32_t width = header->width;
+        uint32_t height = header->height;
+
+        // update header
+        size_t new_img_size = width * height * 1;
+        size_t new_buffer_size = header_size + new_img_size;
+
+        unsigned char *write_buffer = new unsigned char[new_buffer_size];
+        std::memcpy(write_buffer, read_buffer, header_size);
+
+        ImageHeader *new_header = reinterpret_cast<ImageHeader *>(write_buffer);
+        new_header->channels = 1;
+
+        // convert to grayscale
+        unsigned char *src_pixels = read_buffer + header_size;
+        unsigned char *dst_pixels = write_buffer + header_size;
+
+        for (size_t i = 0; i < new_img_size; ++i) {
+          unsigned char r = src_pixels[i * 3 + 0];
+          unsigned char g = src_pixels[i * 3 + 1];
+          unsigned char b = src_pixels[i * 3 + 2];
+
+          // standard grayscale conversion
+          unsigned char gray =
+              static_cast<unsigned char>(0.299 * r + 0.587 * g + 0.114 * b);
+
+          dst_pixels[i] = gray;
+        }
+
+        delete response;
+
+        // cycle count simulated with Spike
+        wait(54006 * config.get<sc_time>("cores.clk_cycle"));
+
+        // write to FPGA RAM
+        response = core.send_request(TLM_WRITE_COMMAND, request, 0, 0x0, false,
+                                     write_buffer, new_buffer_size);
+
+        delete response;
+
+        ++request;
+
+        tracker->set_idle();
+      }}},
 };

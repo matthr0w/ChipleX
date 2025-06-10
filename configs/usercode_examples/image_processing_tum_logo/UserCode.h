@@ -13,6 +13,16 @@
 #include "include/globals.h"
 #include "include/logging.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
+struct ImageHeader {
+  uint32_t width;
+  uint32_t height;
+};
+
 using GeneratorFunctions = std::pair<
     std::function<void(fpga::Generator &, UtilizationTracker *)>, // main thread
     std::function<void(fpga::Generator &, UtilizationTracker *,
@@ -225,11 +235,59 @@ using CoreKey = std::pair<int, int>;
 inline GeneratorFunctions generator_code = {
     [](fpga::Generator &gen, UtilizationTracker *tracker) {
       // FPGA GENERATOR CODE BELOW
+      tracker->set_active();
+
+      int width, height, channels;
+      unsigned char *input_img =
+          stbi_load("configs/tum_input.jpg", &width, &height, &channels, 3);
+
+      size_t header_size = sizeof(ImageHeader);
+      size_t img_size = width * height * channels;
+      size_t buffer_size = header_size + img_size;
+
+      unsigned char *buffer = new unsigned char[buffer_size];
+
+      ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
+      header->width = width;
+      header->height = height;
+
+      std::memcpy(buffer + header_size, input_img, img_size);
+
+      stbi_image_free(input_img);
+
+      // write to Chiplet1 RAM
+      auto response = gen.send_request(TLM_WRITE_COMMAND, 0, 1, 0x0, false,
+                                       buffer, buffer_size);
+
+      delete response;
+
+      tracker->set_idle();
       // ------------------------------
     },
     [](fpga::Generator &gen, UtilizationTracker *tracker,
        tlm_generic_payload *transaction) {
       // FPGA INTERRUPT HANDLER CODE BELOW
+      tracker->set_active();
+
+      auto addr = transaction->get_address();
+      auto len = transaction->get_data_length();
+
+      // read from FPGA RAM
+      unsigned char *buffer = new unsigned char[len];
+      auto *response =
+          gen.send_request(TLM_READ_COMMAND, 1, 0, addr, true, buffer, len);
+
+      ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
+      uint32_t width = header->width;
+      uint32_t height = header->height;
+
+      unsigned char *img_data = buffer + sizeof(ImageHeader);
+
+      stbi_write_jpg("configs/tum_output.jpg", width, height, 3, img_data, 100);
+
+      delete response;
+
+      tracker->set_idle();
       // ------------------------------
     }};
 
@@ -238,5 +296,104 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
     {{1, 0},
      {[](chiplet::Core &core, UtilizationTracker *tracker) {},
       [](chiplet::Core &core, UtilizationTracker *tracker,
-         tlm_generic_payload *transaction) {}}},
+         tlm_generic_payload *transaction) {
+        static const Config &config = ConfigRegistry::instance().get("Chiplet");
+
+        tracker->set_active();
+
+        auto addr = transaction->get_address();
+        auto len = transaction->get_data_length();
+
+        // read from Chiplet1 RAM
+        unsigned char *read_buffer = new unsigned char[len];
+        auto response = core.send_request(TLM_READ_COMMAND, 0, 1, addr, false,
+                                          read_buffer, len);
+
+        // image header
+        size_t header_size = sizeof(ImageHeader);
+        ImageHeader *header = reinterpret_cast<ImageHeader *>(read_buffer);
+        uint32_t width = header->width;
+        uint32_t height = header->height;
+
+        // update image header
+        const int crop_margin = 28;
+        uint32_t new_width = width - 2 * crop_margin;
+        uint32_t new_height = height - 2 * crop_margin;
+
+        size_t new_img_size = new_width * new_height * 3;
+        size_t new_buffer_size = header_size + new_img_size;
+
+        unsigned char *write_buffer = new unsigned char[new_buffer_size];
+
+        ImageHeader *new_header = reinterpret_cast<ImageHeader *>(write_buffer);
+        new_header->width = new_width;
+        new_header->height = new_height;
+
+        // crop image
+        unsigned char *src_pixels = read_buffer + header_size;
+        unsigned char *dst_pixels = write_buffer + header_size;
+
+        for (uint32_t y = 0; y < new_height; ++y) {
+          unsigned char *src_row =
+              src_pixels + ((y + crop_margin) * width + crop_margin) * 3;
+          unsigned char *dst_row = dst_pixels + (y * new_width) * 3;
+          std::memcpy(dst_row, src_row, new_width * 3);
+        }
+
+        delete response;
+
+        // cycle count simulated with Spike
+        wait(612248 * config.get<sc_time>("cores.clk_cycle"));
+
+        // write to Chiplet2 RAM
+        response = core.send_request(TLM_WRITE_COMMAND, 1, 2, 0x0, false,
+                                     write_buffer, new_buffer_size);
+
+        delete response;
+
+        tracker->set_idle();
+      }}},
+    // Chiplet2 Core0
+    {{2, 0},
+     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
+      [](chiplet::Core &core, UtilizationTracker *tracker,
+         tlm_generic_payload *transaction) {
+        static const Config &config = ConfigRegistry::instance().get("Chiplet");
+
+        tracker->set_active();
+
+        auto addr = transaction->get_address();
+        auto len = transaction->get_data_length();
+
+        // read from Chiplet2 RAM
+        unsigned char *read_buffer = new unsigned char[len];
+        auto response = core.send_request(TLM_READ_COMMAND, 0, 2, addr, false,
+                                          read_buffer, len);
+
+        // image header
+        const size_t header_size = sizeof(ImageHeader);
+        ImageHeader *header = reinterpret_cast<ImageHeader *>(read_buffer);
+
+        // copy header
+        unsigned char *write_buffer = new unsigned char[len];
+        std::memcpy(write_buffer, read_buffer, header_size);
+
+        // invert image
+        for (unsigned int i = header_size; i < len; ++i) {
+          write_buffer[i] = 255 - read_buffer[i];
+        }
+
+        delete response;
+
+        // cycle count simulated with Spike
+        wait(2399898 * config.get<sc_time>("cores.clk_cycle"));
+
+        // write to FPGA RAM
+        response = core.send_request(TLM_WRITE_COMMAND, 1, 0, 0x0, false,
+                                     write_buffer, len);
+
+        delete response;
+
+        tracker->set_idle();
+      }}},
 };
