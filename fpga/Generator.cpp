@@ -71,10 +71,10 @@ void fpga::Generator::send_random(unsigned int delay, double write_prob,
   std::uniform_int_distribution<uint32_t> destination_dist(destination_min,
                                                            destination_max);
 
-  std::uniform_int_distribution<uint32_t> address_onchip_dist(
-      0, half_bytes_fpga - 1);
-  std::uniform_int_distribution<uint32_t> address_offchip_dist(
-      half_bytes_chiplet, total_bytes_chiplet - 1);
+  std::uniform_int_distribution<uint32_t> address_dist_fpga(
+      0, half_bytes_fpga - data_size - 1);
+  std::uniform_int_distribution<uint32_t> address_dist_chiplet(
+      0, half_bytes_chiplet - data_size - 1);
 
   std::uniform_int_distribution<unsigned short> byte_dist(0, 255);
   while (true) {
@@ -90,9 +90,9 @@ void fpga::Generator::send_random(unsigned int delay, double write_prob,
     uint32_t address;
 
     if (destination_id == 0) {
-      address = address_onchip_dist(gen);
+      address = address_dist_fpga(gen);
     } else {
-      address = address_offchip_dist(gen);
+      address = address_dist_chiplet(gen);
     }
 
     // random data buffer
