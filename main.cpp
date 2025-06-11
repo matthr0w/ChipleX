@@ -5,7 +5,7 @@
 #include "common/Tracker.h"
 #include "fpga/FPGA.h"
 
-#include "configs/UserCode.h"
+#include "usercode/UserCode.h"
 
 #include "common/RoutingTable.h"
 

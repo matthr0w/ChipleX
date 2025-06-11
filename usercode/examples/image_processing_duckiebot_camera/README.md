@@ -11,4 +11,4 @@ This example processes the `duckiebot_input.jpg` image by cropping and convertin
 
 ## Usage
 
-To use this example, copy the header files and the `duckiebot_input.jpg` image file into the `configs` folder, then build the project.
+To use this example, copy the header files and the `duckiebot_input.jpg` image file into the `usercode` directory, then build the project. You can ignore the `spike` directory.

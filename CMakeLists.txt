@@ -32,7 +32,7 @@ file(GLOB CHIPLET_SOURCES ${PROJECT_SOURCE_DIR}/chiplet/*.cpp)
 # fpga sources
 file(GLOB FPGA_SOURCES ${PROJECT_SOURCE_DIR}/fpga/*.cpp)
 # usercode sources
-file(GLOB USERCODE_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp ${PROJECT_SOURCE_DIR}/configs/*.c)
+file(GLOB USERCODE_SOURCES ${PROJECT_SOURCE_DIR}/usercode/*.c ${PROJECT_SOURCE_DIR}/usercode/*.cpp)
 
 # add source files
 add_executable(sim main.cpp ${COMMON_SOURCES} ${INCLUDE_SOURCES} ${CHIPLET_SOURCES} ${FPGA_SOURCES} ${USERCODE_SOURCES})

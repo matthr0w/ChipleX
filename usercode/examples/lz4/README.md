@@ -10,4 +10,4 @@ This example compresses and decompresses a test string.
 
 ## Usage
 
-To use this example, copy the header and implementation files into the `configs` folder, then build the project.
+To use this example, copy the header and implementation files into the `usercode` directory, then build the project. You can ignore the `spike` directory.

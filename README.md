@@ -130,7 +130,7 @@ The model is highly configurable. All configuration files are located in the `co
 
 ### User Code
 
-The `configs` directory also contains the `UserCode.h` file, which allows the user to program the cores and the FPGA data generator. Detailed instructions on how to do this are provided within the file itself.
+The `usercode` directory contains the `UserCode.h` file, which allows the user to program the cores and the FPGA data generator. Detailed instructions on how to do this are provided within the file itself. Examples can be found in the `examples` subdirectory.
 
 ### Message Sequence Diagrams
 

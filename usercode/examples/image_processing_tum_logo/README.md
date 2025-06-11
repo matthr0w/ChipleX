@@ -11,4 +11,4 @@ This example reads the `tum_input.jpg` image, crops and inverts it, and finally 
 
 ## Usage
 
-To use this example, copy the header files and the `tum_input.jpg` image file into the `configs` folder, then build the project.
+To use this example, copy the header files and the `tum_input.jpg` image file into the `usercode` directory, then build the project. You can ignore the `spike` directory.
