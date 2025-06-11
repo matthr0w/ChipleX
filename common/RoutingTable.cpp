@@ -34,6 +34,9 @@ int RoutingTable::get_route(unsigned int from, unsigned int to) {
   if (from == to)
     return -1;
 
+  if (to > num_chiplets)
+    return -1;
+
   // FPGA is source
   if (from == 0) {
     if (connections.empty())

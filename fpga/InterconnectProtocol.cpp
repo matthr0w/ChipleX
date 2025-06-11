@@ -214,19 +214,25 @@ void fpga::InterconnectProtocol::send_to_phy(tlm_generic_payload &transaction) {
 
   int route = RoutingTable::get_route(fpga_id, ext->destination_id);
 
-  SC_LOG_DEBUG(this, transaction,
-               "ROUTING: FPGA ID " << fpga_id << " Destination "
-                                   << ext->destination_id
-                                   << " Route to Interconnect" << route);
+  if (route != -1) {
+    SC_LOG_DEBUG(this, transaction,
+                 "ROUTING: FPGA ID " << fpga_id << " Destination "
+                                     << ext->destination_id
+                                     << " Route to Interconnect" << route);
 
-  tlm_resp = interconnect_initiator_sockets[route]->nb_transport_fw(
-      transaction, phase, delay);
+    tlm_resp = interconnect_initiator_sockets[route]->nb_transport_fw(
+        transaction, phase, delay);
 
-  if (tlm_resp == TLM_UPDATED) {
-    wait(delay);
+    if (tlm_resp == TLM_UPDATED) {
+      wait(delay);
+    }
+
+    wait(phy_transaction_done);
+  } else {
+    SC_LOG_ERROR(this, transaction,
+                 "ROUTING: Destination " << ext->destination_id
+                                         << " not available.");
   }
-
-  wait(phy_transaction_done);
 }
 
 void fpga::InterconnectProtocol::send_to_bus(tlm_generic_payload &transaction) {
