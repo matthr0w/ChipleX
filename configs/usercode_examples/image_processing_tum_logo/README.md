@@ -6,7 +6,7 @@ This example reads the `tum_input.jpg` image, crops and inverts it, and finally 
 
 ## Requirements
 
-1. The example is coded for two chiplets.
+1. The example is designed for two chiplets.
 2. The chiplets and the FPGA must have at least **512 KB** of RAM each.
 
 ## Usage

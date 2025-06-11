@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(sim LANGUAGES CXX)
+project(sim LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,9 +31,11 @@ file(GLOB INCLUDE_SOURCES ${PROJECT_SOURCE_DIR}/include/*.cpp)
 file(GLOB CHIPLET_SOURCES ${PROJECT_SOURCE_DIR}/chiplet/*.cpp)
 # fpga sources
 file(GLOB FPGA_SOURCES ${PROJECT_SOURCE_DIR}/fpga/*.cpp)
+# usercode sources
+file(GLOB USERCODE_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp ${PROJECT_SOURCE_DIR}/configs/*.c)
 
 # add source files
-add_executable(sim main.cpp ${COMMON_SOURCES} ${INCLUDE_SOURCES} ${CHIPLET_SOURCES} ${FPGA_SOURCES})
+add_executable(sim main.cpp ${COMMON_SOURCES} ${INCLUDE_SOURCES} ${CHIPLET_SOURCES} ${FPGA_SOURCES} ${USERCODE_SOURCES})
 
 # include SystemC headers
 target_include_directories(sim PRIVATE $ENV{SYSTEMC_PATH}/include)
