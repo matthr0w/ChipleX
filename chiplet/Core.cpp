@@ -82,6 +82,8 @@ void chiplet::Core::send_random(unsigned int delay, double write_prob,
   while (true) {
     wait(delay, SC_NS);
 
+    utilization_tracker.set_active();
+
     // read or write
     bool do_write = write_dist(gen);
 
@@ -110,6 +112,8 @@ void chiplet::Core::send_random(unsigned int delay, double write_prob,
     delete response;
 
     request += 1;
+
+    utilization_tracker.set_idle();
   }
 }
 
