@@ -3,6 +3,7 @@
 #include <systemc>
 
 #include "Bus.h"
+#include "Cache.h"
 #include "Core.h"
 #include "Interconnect.h"
 #include "InterconnectProtocol.h"
@@ -40,6 +41,8 @@ public:
 
   chiplet::Core core0;
   chiplet::Core core1;
+  chiplet::Cache cache0;
+  chiplet::Cache cache1;
   std::vector<chiplet::Interconnect *> interconnects;
   chiplet::RAM ram;
 

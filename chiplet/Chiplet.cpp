@@ -7,6 +7,7 @@ unsigned int Chiplet::instance = 1;
 Chiplet::Chiplet(sc_module_name name)
     : sc_module(name), chiplet_id(Chiplet::instance++), bus("Bus", chiplet_id),
       core0("Core0", chiplet_id, 0), core1("Core1", chiplet_id, 1),
+      cache0("Cache0", chiplet_id), cache1("Cache1", chiplet_id),
       interconnectprotocol("InterconnectProtocol", chiplet_id),
       memorycontroller("MemoryController"), ram("RAM") {
   for (unsigned int i = 0; i < 3; ++i) {
@@ -34,8 +35,11 @@ Chiplet::~Chiplet() {
 void Chiplet::initialize() {
   // sockets
   // cores
-  core0.socket.bind(bus.core0_target_socket);
-  core1.socket.bind(bus.core1_target_socket);
+  core0.socket.bind(cache0.core_target_socket);
+  core1.socket.bind(cache1.core_target_socket);
+  // caches
+  cache0.bus_initiator_socket.bind(bus.core0_target_socket);
+  cache1.bus_initiator_socket.bind(bus.core1_target_socket);
   // interconnects
   bus.interconnect_initiator_socket.bind(
       interconnectprotocol.bus_target_socket);
@@ -63,6 +67,8 @@ void Chiplet::initialize() {
   // utilization
   utilization_trackers.push_back(&core0.utilization_tracker);
   utilization_trackers.push_back(&core1.utilization_tracker);
+  utilization_trackers.push_back(&cache0.utilization_tracker);
+  utilization_trackers.push_back(&cache1.utilization_tracker);
   utilization_trackers.push_back(&bus.utilization_tracker);
   utilization_trackers.push_back(&memorycontroller.utilization_tracker);
   utilization_trackers.push_back(&ram.utilization_tracker);

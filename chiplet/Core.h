@@ -58,8 +58,6 @@ private:
   const Config &interconnect_config =
       ConfigRegistry::instance().get("Interconnect");
 
-  const unsigned int bus_width = chiplet_config.get<unsigned int>("bus.width");
-  const sc_time bus_clk_cycle = chiplet_config.get<sc_time>("bus.clk_cycle");
   const unsigned int chiplet_ram_size =
       chiplet_config.get<unsigned int>("ram.size");
   const unsigned int fpga_ram_size = fpga_config.get<unsigned int>("ram.size");

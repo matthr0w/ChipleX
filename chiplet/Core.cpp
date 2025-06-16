@@ -211,19 +211,6 @@ tlm_sync_enum chiplet::Core::nb_transport_bw(tlm_generic_payload &transaction,
                                              tlm_phase &phase,
                                              sc_core::sc_time &delay) {
   if (phase == BEGIN_RESP) {
-    ChipletExtension *ext;
-
-    transaction.get_extension(ext);
-
-    if (ext->source_id == -1) {
-      delay += get_bus_transfer_bw_delay(*this, transaction, bus_clk_cycle,
-                                         bus_width);
-    } else {
-      // request to interconnect
-      // no direct data response -> no extra delay
-      delay += SC_ZERO_TIME;
-    }
-
     transaction_done.notify(delay);
 
     phase = END_RESP;

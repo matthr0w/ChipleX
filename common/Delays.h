@@ -137,6 +137,37 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
 }
 
 // -------------------------------------------------------
+// Cache
+// -------------------------------------------------------
+inline sc_time get_cache_arbitration_delay(sc_module &module,
+                                           tlm_generic_payload &transaction,
+                                           sc_time arbitration_delay) {
+  // Cache Arbitration Delay
+  // -----------------------------------------------
+  //      + fixed arbitration delay
+
+  sc_time delay = arbitration_delay;
+
+  SC_LOG_DELAY(&module, transaction, "Cache Arbitration", delay);
+  return delay;
+}
+
+inline sc_time get_cache_access_delay(sc_module &module,
+                                      tlm_generic_payload &transaction,
+                                      sc_time access_delay) {
+  // Cache Access Delay
+  // -----------------------------------------------
+  //      + fixed access delay
+
+  sc_time delay = SC_ZERO_TIME;
+
+  delay = access_delay;
+
+  SC_LOG_DELAY(&module, transaction, "Cache Access", delay);
+  return delay;
+}
+
+// -------------------------------------------------------
 // RAM
 // -------------------------------------------------------
 inline sc_time

@@ -195,8 +195,7 @@ void chiplet::MemoryController::deallocate_dynamic_address(
     --it;
   }
 
-  if (it == allocated_ranges.end() || address < it->first ||
-      address + size > it->first + it->second) {
+  if (it == allocated_ranges.end() || address < it->first) {
     SC_LOG_WARN(this, transaction,
                 "Tried to deallocate an unallocated address range");
     return;
