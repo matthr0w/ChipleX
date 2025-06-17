@@ -174,6 +174,8 @@ To control both on-chip and off-chip traffic, several flags are required for eac
 
 - **`fixed_address`**: Set by the core; instructs the memory controller whether to allocate a free address or use the one provided.
 
+- **`is_volatile`**: Set by the core; instructs the cache controller to bypass the cache and always load from RAM.
+
 The following extensions are only required when the transaction is split into data flits and transmitted over the interconnect:
 
 - **`flit_count`**: Specifies how many flits the data is divided into.

@@ -38,8 +38,6 @@ void chiplet::Cache::process_transaction() {
   while (true) {
     wait();
 
-    utilization_tracker.set_active();
-
     transaction = peq.get_next_transaction();
     transaction->get_extension(ext);
 
@@ -47,13 +45,17 @@ void chiplet::Cache::process_transaction() {
     unsigned char *data = transaction->get_data_ptr();
     unsigned int data_size = transaction->get_data_length();
 
-    // skip cache for dynamic or off-chip transactions
-    if (!ext->fixed_address || ext->destination_id != chiplet_id) {
-      SC_LOG_DEBUG(this, *transaction,
-                   "Dynamic address or off-chip request -> skipping cache");
+    // skip cache for dynamic, volatile or off-chip transactions
+    if (!ext->fixed_address || ext->is_volatile ||
+        ext->destination_id != chiplet_id) {
+      SC_LOG_DEBUG(
+          this, *transaction,
+          "Dynamic address, volatile or off-chip request -> skipping cache");
       send_to_bus(*transaction);
     } else {
+      utilization_tracker.set_active();
       split_transaction(*transaction);
+      utilization_tracker.set_idle();
     }
 
     phase = BEGIN_RESP;
@@ -64,8 +66,6 @@ void chiplet::Cache::process_transaction() {
     if (tlm_resp == TLM_COMPLETED) {
       wait(delay);
     }
-
-    utilization_tracker.set_idle();
   }
 }
 

@@ -107,7 +107,7 @@ void chiplet::Core::send_random(unsigned int delay, double write_prob,
 
     auto response =
         send_request(do_write ? TLM_WRITE_COMMAND : TLM_READ_COMMAND, request,
-                     destination_id, address, true, data, data_size);
+                     destination_id, address, true, false, data, data_size);
 
     delete response;
 
@@ -117,9 +117,11 @@ void chiplet::Core::send_random(unsigned int delay, double write_prob,
   }
 }
 
-ChipletPayload *chiplet::Core::send_request(
-    tlm_command command, int request_id, int destination_id, uint32_t address,
-    bool fixed_address, unsigned char *data, unsigned int data_size) {
+ChipletPayload *
+chiplet::Core::send_request(tlm_command command, int request_id,
+                            int destination_id, uint32_t address,
+                            bool fixed_address, bool is_volatile,
+                            unsigned char *data, unsigned int data_size) {
   std::scoped_lock lock(request_mutex);
 
   auto *transaction = new ChipletPayload();
@@ -133,6 +135,7 @@ ChipletPayload *chiplet::Core::send_request(
   transaction->set_data_length(data_size);
 
   transaction->set_fixed_address(fixed_address);
+  transaction->set_volatile(is_volatile);
 
   if (command == TLM_WRITE_COMMAND) {
     if (fixed_address) {

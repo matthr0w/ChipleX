@@ -63,6 +63,7 @@ using CoreKey = std::pair<int, int>;
 //                                 int destination_id,
 //                                 uint32_t address,
 //                                 bool fixed_address,
+//                                 bool is_volatile,
 //                                 unsigned char* data,
 //                                 unsigned int data_size);
 //
@@ -82,6 +83,10 @@ using CoreKey = std::pair<int, int>;
 //    - `fixed_address`: Indicates whether the write request should use the
 //       provided address (`true`) or allow the memory controller to allocate
 //       it dynamically (`false`). Ignored for read requests.
+//    - `is_volatile`: Indicates whether the data should bypass the cache.
+//       If set to `true`, the cache will be skipped during access. This is
+//       useful for frequently changing or time-sensitive data that should
+//       always be read directly from memory.
 //    - `data`: Must be allocated on the heap using `new`.
 //       - `TLM_WRITE_COMMAND`: the buffer contents will be sent to the target.
 //       - `TLM_READ_COMMAND`: an empty buffer of the appropriate size must
@@ -236,7 +241,59 @@ inline GeneratorFunctions generator_code = {
 inline std::map<CoreKey, CoreFunctions> core_code = {
     // Chiplet1 Core0
     {{1, 0},
-     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
+     {[](chiplet::Core &core, UtilizationTracker *tracker) {
+        unsigned int data_size = 128;
+        unsigned char *data = new unsigned char[data_size];
+
+        for (unsigned int i = 0; i < data_size; ++i) {
+          data[i] = static_cast<unsigned char>(i & 0xFF);
+        }
+
+        std::cout << "Data bytes: ";
+        for (int i = 0; i < data_size; ++i) {
+          std::cout << "0x" << std::hex << static_cast<int>(data[i]) << " ";
+        }
+        std::cout << std::endl;
+
+        auto response = core.send_request(TLM_READ_COMMAND, 0, 1, 0x0, true,
+                                          true, data, data_size);
+
+        std::cout << "Data bytes: ";
+        for (int i = 0; i < data_size; ++i) {
+          std::cout << "0x" << std::hex << static_cast<int>(data[i]) << " ";
+        }
+        std::cout << std::endl;
+
+        for (unsigned int i = 0; i < data_size; ++i) {
+          data[i] = static_cast<unsigned char>(i & 0xFF);
+        }
+
+        std::cout << "Data bytes: ";
+        for (int i = 0; i < data_size; ++i) {
+          std::cout << "0x" << std::hex << static_cast<int>(data[i]) << " ";
+        }
+        std::cout << std::endl;
+
+        response = core.send_request(TLM_READ_COMMAND, 0, 1, 0x0, true, false,
+                                     data, data_size);
+
+        std::cout << "Data bytes: ";
+        for (int i = 0; i < data_size; ++i) {
+          std::cout << "0x" << std::hex << static_cast<int>(data[i]) << " ";
+        }
+        std::cout << std::endl;
+
+        response = core.send_request(TLM_READ_COMMAND, 0, 1, 0x0, true, false,
+                                     data, data_size);
+
+        std::cout << "Data bytes: ";
+        for (int i = 0; i < data_size; ++i) {
+          std::cout << "0x" << std::hex << static_cast<int>(data[i]) << " ";
+        }
+        std::cout << std::endl;
+
+        delete response;
+      },
       [](chiplet::Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {}}},
 };

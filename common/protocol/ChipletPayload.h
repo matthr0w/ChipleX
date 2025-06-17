@@ -84,6 +84,7 @@ public:
   void set_source_id(int id) { ensure_extension()->source_id = id; }
   void set_destination_id(int id) { ensure_extension()->destination_id = id; }
   void set_fixed_address(int flag) { ensure_extension()->fixed_address = flag; }
+  void set_volatile(int flag) { ensure_extension()->is_volatile = flag; }
   void set_flit_count(int count) { ensure_extension()->flit_count = count; }
   void set_flit_id(int id) { ensure_extension()->flit_id = id; }
   void set_flit_padding(int count) { ensure_extension()->flit_padding = count; }
