@@ -17,6 +17,10 @@ chiplet::Cache::Cache(sc_module_name name, unsigned int chiplet_id)
   num_lines = cache_size / block_size;
   cache_lines.resize(num_lines);
 
+  num_accesses = 0;
+  num_hits = 0;
+  num_misses = 0;
+
   core_target_socket.register_nb_transport_fw(this, &Cache::nb_transport_fw);
   bus_initiator_socket.register_nb_transport_bw(this, &Cache::nb_transport_bw);
 
@@ -76,6 +80,8 @@ void chiplet::Cache::split_transaction(tlm_generic_payload &transaction) {
   // process each block covered by the request
   unsigned int processed = 0;
   while (processed < data_size) {
+    num_accesses++;
+
     // mask tag + index bits
     uint32_t block_address = (address + processed) & ~(block_size - 1);
     // mask offset bits
@@ -104,6 +110,9 @@ void chiplet::Cache::split_transaction(tlm_generic_payload &transaction) {
       // cache miss if invalid or wrong tag
       if (!(line.valid && line.tag == tag)) {
         SC_LOG_DEBUG(this, transaction, "CACHE MISS: Loading data from RAM");
+
+        num_misses++;
+
         auto *tmp_trans =
             static_cast<ChipletPayload &>(transaction).clone_ext();
 
@@ -140,19 +149,28 @@ void chiplet::Cache::split_transaction(tlm_generic_payload &transaction) {
         // cache hit: use data from cache
         SC_LOG_DEBUG(this, transaction, "CACHE HIT: Loading data from cache");
 
+        num_hits++;
+
         std::memcpy(data_ptr + processed, &line.data[block_offset], length);
         wait(get_cache_access_delay(*this, transaction, access_delay));
       }
     } else if (transaction.is_write()) {
       // cache hit if valid and correct tag
       if (line.valid && line.tag == tag) {
-        SC_LOG_DEBUG(this, transaction, "CACHE HIT: Writing data to cache");
+        SC_LOG_DEBUG(this, transaction,
+                     "CACHE HIT: Writing data to cache and RAM");
+
+        num_hits++;
 
         std::memcpy(&line.data[block_offset], data_ptr + processed, length);
         wait(get_cache_access_delay(*this, transaction, access_delay));
 
         // mark as updated
         updated_cache_indices[index] = true;
+      } else {
+        SC_LOG_DEBUG(this, transaction, "CACHE MISS: Writing data only to RAM");
+
+        num_misses++;
       }
 
       // write-through: write data to RAM
@@ -191,6 +209,16 @@ void chiplet::Cache::send_to_bus(tlm_generic_payload &transaction) {
   }
 
   wait(bus_transaction_done);
+}
+
+void chiplet::Cache::report_rates() {
+  std::cout << "  Cache Accesses: " << num_accesses << std::endl;
+  if (num_accesses > 0) {
+    double hit_rate = double(100) * num_hits / num_accesses;
+    double miss_rate = double(100) * num_misses / num_accesses;
+    std::cout << "  Hit Rate: " << std::dec << hit_rate << "%\n";
+    std::cout << "  Miss Rate: " << std::dec << miss_rate << "%\n";
+  }
 }
 
 // -------------------------------------------------------

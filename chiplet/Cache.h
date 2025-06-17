@@ -31,6 +31,8 @@ public:
 
   Cache(sc_module_name name, unsigned int chiplet_id);
 
+  void report_rates();
+
 private:
   const unsigned int chiplet_id;
 
@@ -47,6 +49,9 @@ private:
 
   std::vector<CacheLine> cache_lines;
   unsigned int num_lines;
+  unsigned int num_accesses;
+  unsigned int num_hits;
+  unsigned int num_misses;
 
   // -------------------------------------------------------
   // config

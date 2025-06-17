@@ -210,6 +210,10 @@ int sc_main(int argc, char *argv[]) {
          ++j) {
       chiplets[i]->utilization_trackers[j]->report();
     }
+    std::cout << "Core0.Cache:" << std::endl;
+    chiplets[i]->cache0.report_rates();
+    std::cout << "Core1.Cache:" << std::endl;
+    chiplets[i]->cache1.report_rates();
     std::cout << "RAM Usage:" << std::endl;
     chiplets[i]->ram.report_usage();
     std::cout << "Buffer Fill Levels:" << std::endl;
