@@ -27,6 +27,8 @@ int sc_main(int argc, char *argv[]) {
   parser.print_args();
   std::cout << "\n";
 
+  auto start_timestamp = std::chrono::high_resolution_clock::now();
+
   // load chiplet config
   try {
     ConfigRegistry::instance().add("Chiplet", "configs/Chiplet.yaml",
@@ -129,13 +131,18 @@ int sc_main(int argc, char *argv[]) {
     sc_start(sim_duration);
   }
 
+  auto stop_timestamp = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+      stop_timestamp - start_timestamp);
+
   // -------------------------------------------------------
   // statistics
   // -------------------------------------------------------
   std::cout << "=== Statistics ===" << std::endl;
   std::cout << "--- General ---" << std::endl;
-  // execution time
-  std::cout << "Execution Time: " << sc_time_stamp() << std::endl;
+  // times
+  std::cout << "Simulation Time: " << sc_time_stamp() << std::endl;
+  std::cout << "Execution Time: " << std::dec << duration.count() << " ms\n";
   // latencies
   std::cout << "Transaction Latencies:" << std::endl;
   LatencyTracker::instance().report();
