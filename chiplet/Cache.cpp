@@ -48,13 +48,6 @@ void chiplet::Cache::process_transaction() {
       SC_LOG_DEBUG(this, *transaction,
                    "Dynamic address or off-chip request -> skipping cache");
       send_to_bus(*transaction);
-    }
-    // TODO: fix this
-    // skip cache for larger than cache transactions
-    else if (data_size > cache_size) {
-      SC_LOG_DEBUG(this, *transaction,
-                   "Too large data request -> skipping cache");
-      send_to_bus(*transaction);
     } else {
       split_transaction(*transaction);
     }
@@ -77,33 +70,40 @@ void chiplet::Cache::split_transaction(tlm_generic_payload &transaction) {
   unsigned char *data_ptr = transaction.get_data_ptr();
   unsigned int data_size = transaction.get_data_length();
 
+  // track cache lines that were filled from RAM in this transaction
+  std::unordered_map<uint32_t, bool> updated_cache_indices;
+
   // process each block covered by the request
   unsigned int processed = 0;
   while (processed < data_size) {
-    uint32_t tag, index;
     // mask tag + index bits
     uint32_t block_address = (address + processed) & ~(block_size - 1);
     // mask offset bits
     uint32_t block_offset = (address + processed) & (block_size - 1);
+
+    // extract tag + index bits
+    // shift offset and index bits
+    uint32_t tag = block_address >> (static_cast<uint32_t>(log2(block_size)) +
+                                     static_cast<uint32_t>(log2(num_lines)));
+    // shift offset bits and mask index bits
+    uint32_t index =
+        (block_address >> static_cast<uint32_t>(log2(block_size))) % num_lines;
+
+    // data size to fit in cache line
     uint32_t length =
         std::min(block_size - block_offset, data_size - processed);
 
-    // extract tag + index bits
-    parse_address(block_address, tag, index);
-
     CacheLine &line = cache_lines[index];
 
-    // resize line data if needed
+    // resize cache line if needed
     if (line.data.size() != block_size) {
       line.data.resize(block_size, 0);
     }
 
     if (transaction.is_read()) {
-      // load whole block from RAM if invalid or wrong tag (cache miss)
+      // cache miss if invalid or wrong tag
       if (!(line.valid && line.tag == tag)) {
-        SC_LOG_DEBUG(this, transaction,
-                     "CACHE MISS: Loading data from RAM to cache");
-
+        SC_LOG_DEBUG(this, transaction, "CACHE MISS: Loading data from RAM");
         auto *tmp_trans =
             static_cast<ChipletPayload &>(transaction).clone_ext();
 
@@ -116,23 +116,43 @@ void chiplet::Cache::split_transaction(tlm_generic_payload &transaction) {
 
         send_to_bus(*tmp_trans);
 
-        // fill cache line
-        line.valid = true;
-        line.tag = tag;
-        std::memcpy(line.data.data(), tmp_data, block_size);
+        // only update cache line if index has NOT been filled already in this
+        // transaction
+        if (!updated_cache_indices[index]) {
+          // fill cache line
+          line.valid = true;
+          line.tag = tag;
+          std::memcpy(line.data.data(), tmp_data, block_size);
+
+          // mark as updated
+          updated_cache_indices[index] = true;
+        } else {
+          SC_LOG_DEBUG(
+              this, transaction,
+              "SKIPPING CACHE LINE UPDATE: Already loaded in this transaction");
+        }
+
+        // copy required block portion directly to transaction buffer
+        std::memcpy(data_ptr + processed, tmp_data + block_offset, length);
 
         delete tmp_trans;
-      }
+      } else {
+        // cache hit: use data from cache
+        SC_LOG_DEBUG(this, transaction, "CACHE HIT: Loading data from cache");
 
-      // copy data from cache to transaction buffer
-      std::memcpy(data_ptr + processed, &line.data[block_offset], length);
-      wait(get_cache_access_delay(*this, transaction, access_delay));
+        std::memcpy(data_ptr + processed, &line.data[block_offset], length);
+        wait(get_cache_access_delay(*this, transaction, access_delay));
+      }
     } else if (transaction.is_write()) {
-      // write data to cache if valid and correct tag (cache hit)
+      // cache hit if valid and correct tag
       if (line.valid && line.tag == tag) {
         SC_LOG_DEBUG(this, transaction, "CACHE HIT: Writing data to cache");
+
         std::memcpy(&line.data[block_offset], data_ptr + processed, length);
         wait(get_cache_access_delay(*this, transaction, access_delay));
+
+        // mark as updated
+        updated_cache_indices[index] = true;
       }
 
       // write-through: write data to RAM
@@ -154,15 +174,6 @@ void chiplet::Cache::split_transaction(tlm_generic_payload &transaction) {
 
     processed += length;
   }
-}
-
-void chiplet::Cache::parse_address(uint32_t address, uint32_t &tag,
-                                   uint32_t &index) {
-  // shift offset bits and mask lower index bits
-  index = (address >> static_cast<uint32_t>(log2(block_size))) % num_lines;
-  // shift offset and index bits
-  tag = address >> (static_cast<uint32_t>(log2(block_size)) +
-                    static_cast<uint32_t>(log2(num_lines)));
 }
 
 void chiplet::Cache::send_to_bus(tlm_generic_payload &transaction) {

@@ -35,7 +35,6 @@ private:
   const unsigned int chiplet_id;
 
   void split_transaction(tlm_generic_payload & transaction);
-  void parse_address(uint32_t address, uint32_t &tag, uint32_t &index);
   void send_to_bus(tlm_generic_payload & transaction);
 
   struct CacheLine {
