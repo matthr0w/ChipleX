@@ -7,12 +7,10 @@ using namespace tlm;
 
 FPGA::FPGA(sc_module_name name)
     : sc_module(name), bus("Bus", 0), generator("Generator", 0),
-      interconnectprotocol("InterconnectProtocol", 0),
+      cache("Cache", 0), interconnectprotocol("InterconnectProtocol", 0),
       memorycontroller("MemoryController"), ram("RAM") {
   for (unsigned int i = 0; i < num_chiplets; ++i) {
-    std::string name =
-        "Interconnect" +
-        std::to_string(i);
+    std::string name = "Interconnect" + std::to_string(i);
     interconnects.push_back(
         new fpga::Interconnect(name.c_str(), bandwidth_fpga, fpga_distance_mm));
   }
@@ -30,7 +28,9 @@ FPGA::~FPGA() {
 void FPGA::initialize() {
   // sockets
   // generator
-  generator.socket.bind(bus.generator_target_socket);
+  generator.socket.bind(cache.generator_target_socket);
+  // cache
+  cache.bus_initiator_socket.bind(bus.generator_target_socket);
   // interconnects
   bus.interconnect_initiator_socket.bind(
       interconnectprotocol.bus_target_socket);
@@ -54,9 +54,10 @@ void FPGA::initialize() {
         interconnectprotocol.interconnect_target_sockets[i]);
   }
 
-    // trackers
+  // trackers
   // utilization
   utilization_trackers.push_back(&generator.utilization_tracker);
+  utilization_trackers.push_back(&cache.utilization_tracker);
   utilization_trackers.push_back(&bus.utilization_tracker);
   utilization_trackers.push_back(&memorycontroller.utilization_tracker);
   utilization_trackers.push_back(&ram.utilization_tracker);

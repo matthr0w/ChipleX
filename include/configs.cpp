@@ -10,9 +10,13 @@ const std::set<std::string> ConfigRegistry::chiplet_specification = {
     "ram.access_delay"};
 
 const std::set<std::string> ConfigRegistry::fpga_specification = {
-    "cores.clk_cycle",       "bus.width",         "bus.clk_cycle",
-    "bus.arbitration_delay", "ram.size",          "ram.width",
-    "ram.clk_cycle",         "ram.address_delay", "ram.access_delay"};
+    "cores.clk_cycle",    "cache.size",
+    "cache.block_size",   "cache.arbitration_delay",
+    "cache.access_delay", "bus.width",
+    "bus.clk_cycle",      "bus.arbitration_delay",
+    "ram.size",           "ram.width",
+    "ram.clk_cycle",      "ram.address_delay",
+    "ram.access_delay"};
 
 const std::map<std::string, std::set<std::string>>
     ConfigRegistry::interconnect_specifications{

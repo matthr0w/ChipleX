@@ -200,6 +200,8 @@ int sc_main(int argc, char *argv[]) {
   for (unsigned int j = 0; j < fpga.utilization_trackers.size(); ++j) {
     fpga.utilization_trackers[j]->report();
   }
+  std::cout << "Generator Cache:" << std::endl;
+  fpga.cache.report_rates();
   std::cout << "RAM Usage:" << std::endl;
   fpga.ram.report_usage();
   std::cout << "Average Buffer Fill Levels:" << std::endl;
@@ -217,9 +219,9 @@ int sc_main(int argc, char *argv[]) {
          ++j) {
       chiplets[i]->utilization_trackers[j]->report();
     }
-    std::cout << "Core0.Cache:" << std::endl;
+    std::cout << "Core0 Cache:" << std::endl;
     chiplets[i]->cache0.report_rates();
-    std::cout << "Core1.Cache:" << std::endl;
+    std::cout << "Core1 Cache:" << std::endl;
     chiplets[i]->cache1.report_rates();
     std::cout << "RAM Usage:" << std::endl;
     chiplets[i]->ram.report_usage();

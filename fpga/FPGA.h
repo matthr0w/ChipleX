@@ -3,6 +3,7 @@
 #include <systemc>
 
 #include "Bus.h"
+#include "Cache.h"
 #include "Generator.h"
 #include "Interconnect.h"
 #include "InterconnectProtocol.h"
@@ -34,6 +35,7 @@ public:
   std::vector<UtilizationTracker *> utilization_trackers;
 
   fpga::Generator generator;
+  fpga::Cache cache;
   std::vector<fpga::Interconnect *> interconnects;
   fpga::RAM ram;
 

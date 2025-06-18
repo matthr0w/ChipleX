@@ -105,7 +105,7 @@ void fpga::Generator::send_random(unsigned int delay, double write_prob,
 
     auto response =
         send_request(do_write ? TLM_WRITE_COMMAND : TLM_READ_COMMAND, request,
-                     destination_id, address, true, data, data_size);
+                     destination_id, address, true, false, data, data_size);
 
     delete response;
 
@@ -115,9 +115,11 @@ void fpga::Generator::send_random(unsigned int delay, double write_prob,
   }
 }
 
-ChipletPayload *fpga::Generator::send_request(
-    tlm_command command, int request_id, int destination_id, uint32_t address,
-    bool fixed_address, unsigned char *data, unsigned int data_size) {
+ChipletPayload *
+fpga::Generator::send_request(tlm_command command, int request_id,
+                              int destination_id, uint32_t address,
+                              bool fixed_address, bool is_volatile,
+                              unsigned char *data, unsigned int data_size) {
   std::scoped_lock lock(request_mutex);
 
   auto *transaction = new ChipletPayload();
@@ -131,6 +133,7 @@ ChipletPayload *fpga::Generator::send_request(
   transaction->set_data_length(data_size);
 
   transaction->set_fixed_address(fixed_address);
+  transaction->set_volatile(is_volatile);
 
   if (command == TLM_WRITE_COMMAND) {
     if (fixed_address) {
@@ -210,19 +213,6 @@ tlm_sync_enum fpga::Generator::nb_transport_bw(tlm_generic_payload &transaction,
                                                tlm_phase &phase,
                                                sc_core::sc_time &delay) {
   if (phase == BEGIN_RESP) {
-    ChipletExtension *ext;
-
-    transaction.get_extension(ext);
-
-    if (ext->source_id == -1) {
-      delay += get_bus_transfer_bw_delay(*this, transaction, bus_clk_cycle,
-                                         bus_width);
-    } else {
-      // request to interconnect
-      // no direct data response -> no extra delay
-      delay += SC_ZERO_TIME;
-    }
-
     transaction_done.notify(delay);
 
     phase = END_RESP;
