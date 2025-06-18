@@ -65,6 +65,7 @@ using CoreKey = std::pair<int, int>;
 //                                 int destination_id,
 //                                 uint32_t address,
 //                                 bool fixed_address,
+//                                 bool is_volatile,
 //                                 unsigned char* data,
 //                                 unsigned int data_size);
 //
@@ -84,6 +85,10 @@ using CoreKey = std::pair<int, int>;
 //    - `fixed_address`: Indicates whether the write request should use the
 //       provided address (`true`) or allow the memory controller to allocate
 //       it dynamically (`false`). Ignored for read requests.
+//    - `is_volatile`: Indicates whether the data should bypass the cache.
+//       If set to `true`, the cache will be skipped during access. This is
+//       useful for frequently changing or time-sensitive data that should
+//       always be read directly from memory.
 //    - `data`: Must be allocated on the heap using `new`.
 //       - `TLM_WRITE_COMMAND`: the buffer contents will be sent to the target.
 //       - `TLM_READ_COMMAND`: an empty buffer of the appropriate size must
@@ -239,7 +244,7 @@ inline GeneratorFunctions generator_code = {
       std::strcpy(reinterpret_cast<char *>(buffer), str.c_str());
 
       auto response = gen.send_request(TLM_WRITE_COMMAND, 0, 1, 0x0, false,
-                                       buffer, str.length() + 1);
+                                       true, buffer, str.length() + 1);
 
       delete response;
 
@@ -256,8 +261,8 @@ inline GeneratorFunctions generator_code = {
 
       // read from FPGA RAM
       unsigned char *buffer = new unsigned char[len];
-      auto response =
-          gen.send_request(TLM_READ_COMMAND, 0, 0, addr, false, buffer, len);
+      auto response = gen.send_request(TLM_READ_COMMAND, 0, 0, addr, false,
+                                       true, buffer, len);
 
       // print result
       std::cout << "Output string: " << buffer << std::endl;
@@ -284,7 +289,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         // read from Chiplet1 RAM
         unsigned char *read_buffer = new unsigned char[len];
         auto response = core.send_request(TLM_READ_COMMAND, 0, 1, addr, false,
-                                          read_buffer, len);
+                                          true, read_buffer, len);
 
         // calculate data sizes
         const int max_compressed_size = LZ4_compressBound(len);
@@ -328,7 +333,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         // write to Chiplet2 RAM
         response =
-            core.send_request(TLM_WRITE_COMMAND, 1, 2, 0x0, false,
+            core.send_request(TLM_WRITE_COMMAND, 1, 2, 0x0, false, true,
                               resized_compressed_data, resized_data_size);
 
         delete response;
@@ -350,7 +355,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         // read from Chiplet2 RAM
         unsigned char *read_buffer = new unsigned char[len];
         auto response = core.send_request(TLM_READ_COMMAND, 0, 2, addr, false,
-                                          read_buffer, len);
+                                          true, read_buffer, len);
 
         // get original data size
         const int compressed_data_size = len - sizeof(unsigned int);
@@ -383,7 +388,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         wait(11445 * config.get<sc_time>("cores.clk_cycle"));
 
         // write to FPGA RAM
-        response = core.send_request(TLM_WRITE_COMMAND, 1, 0, 0x0, false,
+        response = core.send_request(TLM_WRITE_COMMAND, 1, 0, 0x0, false, true,
                                      decompressed_data, original_data_size);
 
         delete response;

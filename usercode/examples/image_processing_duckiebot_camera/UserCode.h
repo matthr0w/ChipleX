@@ -74,6 +74,7 @@ using CoreKey = std::pair<int, int>;
 //                                 int destination_id,
 //                                 uint32_t address,
 //                                 bool fixed_address,
+//                                 bool is_volatile,
 //                                 unsigned char* data,
 //                                 unsigned int data_size);
 //
@@ -93,6 +94,10 @@ using CoreKey = std::pair<int, int>;
 //    - `fixed_address`: Indicates whether the write request should use the
 //       provided address (`true`) or allow the memory controller to allocate
 //       it dynamically (`false`). Ignored for read requests.
+//    - `is_volatile`: Indicates whether the data should bypass the cache.
+//       If set to `true`, the cache will be skipped during access. This is
+//       useful for frequently changing or time-sensitive data that should
+//       always be read directly from memory.
 //    - `data`: Must be allocated on the heap using `new`.
 //       - `TLM_WRITE_COMMAND`: the buffer contents will be sent to the target.
 //       - `TLM_READ_COMMAND`: an empty buffer of the appropriate size must
@@ -263,7 +268,7 @@ inline GeneratorFunctions generator_code = {
 
         // write to Chiplet1 RAM
         auto response = gen.send_request(TLM_WRITE_COMMAND, request, 1, 0x0,
-                                         false, buffer, buffer_size);
+                                         false, true, buffer, buffer_size);
 
         delete response;
 
@@ -296,7 +301,7 @@ inline GeneratorFunctions generator_code = {
       // read from FPGA RAM
       unsigned char *buffer = new unsigned char[len];
       auto *response = gen.send_request(TLM_READ_COMMAND, request, 0, addr,
-                                        true, buffer, len);
+                                        true, true, buffer, len);
 
       ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
       uint32_t width = header->width;
@@ -335,7 +340,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         // read from Chiplet1 RAM
         unsigned char *read_buffer = new unsigned char[len];
         auto response = core.send_request(TLM_READ_COMMAND, request, 1, addr,
-                                          false, read_buffer, len);
+                                          false, true, read_buffer, len);
 
         // image header
         size_t header_size = sizeof(ImageHeader);
@@ -376,7 +381,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         // write to Chiplet2 RAM
         response = core.send_request(TLM_WRITE_COMMAND, request, 2, 0x0, false,
-                                     write_buffer, new_buffer_size);
+                                     true, write_buffer, new_buffer_size);
 
         delete response;
 
@@ -399,8 +404,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         // read from Chiplet2 RAM
         unsigned char *read_buffer = new unsigned char[len];
-        auto response = core.send_request(TLM_READ_COMMAND, request, 2, addr, false,
-                                          read_buffer, len);
+        auto response = core.send_request(TLM_READ_COMMAND, request, 2, addr,
+                                          false, true, read_buffer, len);
 
         // image header
         const size_t header_size = sizeof(ImageHeader);
@@ -441,7 +446,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         // write to FPGA RAM
         response = core.send_request(TLM_WRITE_COMMAND, request, 0, 0x0, false,
-                                     write_buffer, new_buffer_size);
+                                     true, write_buffer, new_buffer_size);
 
         delete response;
 

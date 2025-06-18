@@ -63,6 +63,7 @@ using CoreKey = std::pair<int, int>;
 //                                 int destination_id,
 //                                 uint32_t address,
 //                                 bool fixed_address,
+//                                 bool is_volatile,
 //                                 unsigned char* data,
 //                                 unsigned int data_size);
 //
@@ -82,6 +83,10 @@ using CoreKey = std::pair<int, int>;
 //    - `fixed_address`: Indicates whether the write request should use the
 //       provided address (`true`) or allow the memory controller to allocate
 //       it dynamically (`false`). Ignored for read requests.
+//    - `is_volatile`: Indicates whether the data should bypass the cache.
+//       If set to `true`, the cache will be skipped during access. This is
+//       useful for frequently changing or time-sensitive data that should
+//       always be read directly from memory.
 //    - `data`: Must be allocated on the heap using `new`.
 //       - `TLM_WRITE_COMMAND`: the buffer contents will be sent to the target.
 //       - `TLM_READ_COMMAND`: an empty buffer of the appropriate size must
@@ -268,7 +273,7 @@ inline GeneratorFunctions generator_code = {
       print_matrix(matrix, MATRIX_ROWS, MATRIX_COLS, "Input");
 
       auto *response = gen.send_request(TLM_WRITE_COMMAND, 0, 1, 0x0, false,
-                                        data, buffer_size);
+                                        true, data, buffer_size);
 
       delete response;
 
@@ -285,7 +290,7 @@ inline GeneratorFunctions generator_code = {
 
       // read from FPGA RAM
       auto *response = gen.send_request(TLM_READ_COMMAND, 1, 0, addr, true,
-                                        new unsigned char[len], len);
+                                        true, new unsigned char[len], len);
 
       // matrix header
       size_t header_size = sizeof(MatrixHeader);
@@ -321,7 +326,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         // read from Chiplet1 RAM
         auto *response = core.send_request(TLM_READ_COMMAND, 0, 1, addr, true,
-                                           new unsigned char[len], len);
+                                           true, new unsigned char[len], len);
 
         // matrix header
         size_t header_size = sizeof(MatrixHeader);
@@ -350,8 +355,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         // cycle count simulated with Spike
         wait(2243 * config.get<sc_time>("cores.clk_cycle"));
 
-        response =
-            core.send_request(TLM_WRITE_COMMAND, 1, 2, 0x0, false, data, len);
+        response = core.send_request(TLM_WRITE_COMMAND, 1, 2, 0x0, false, true,
+                                     data, len);
 
         delete response;
 
@@ -371,7 +376,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         // read from Chiplet2 RAM
         auto *response = core.send_request(TLM_READ_COMMAND, 0, 2, addr, true,
-                                           new unsigned char[len], len);
+                                           true, new unsigned char[len], len);
 
         // matrix header
         size_t header_size = sizeof(MatrixHeader);
@@ -400,8 +405,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         // cycle count simulated with Spike
         wait(2243 * config.get<sc_time>("cores.clk_cycle"));
 
-        response =
-            core.send_request(TLM_WRITE_COMMAND, 1, 3, 0x0, false, data, len);
+        response = core.send_request(TLM_WRITE_COMMAND, 1, 3, 0x0, false, true,
+                                     data, len);
 
         delete response;
 
@@ -421,7 +426,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         // read from Chiplet3 RAM
         auto *response = core.send_request(TLM_READ_COMMAND, 0, 3, addr, true,
-                                           new unsigned char[len], len);
+                                           true, new unsigned char[len], len);
 
         // matrix header
         size_t header_size = sizeof(MatrixHeader);
@@ -457,8 +462,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         // cycle count simulated with Spike
         wait(5516 * config.get<sc_time>("cores.clk_cycle"));
 
-        response =
-            core.send_request(TLM_WRITE_COMMAND, 1, 4, 0x0, false, data, len);
+        response = core.send_request(TLM_WRITE_COMMAND, 1, 4, 0x0, false, true,
+                                     data, len);
 
         delete response;
 
@@ -478,7 +483,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         // read from Chiplet4 RAM
         auto *response = core.send_request(TLM_READ_COMMAND, 0, 4, addr, true,
-                                           new unsigned char[len], len);
+                                           true, new unsigned char[len], len);
 
         // matrix header
         size_t header_size = sizeof(MatrixHeader);
@@ -506,8 +511,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         // cycle count simulated with Spike
         wait(2243 * config.get<sc_time>("cores.clk_cycle"));
 
-        response =
-            core.send_request(TLM_WRITE_COMMAND, 1, 0, 0x0, false, data, len);
+        response = core.send_request(TLM_WRITE_COMMAND, 1, 0, 0x0, false, true,
+                                     data, len);
 
         delete response;
 
