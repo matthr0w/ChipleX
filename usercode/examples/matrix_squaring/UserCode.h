@@ -227,14 +227,69 @@ using CoreKey = std::pair<int, int>;
 //
 // ============================================================
 
+static void matrix_multiply(chiplet::Core &core, uint32_t src_addr1,
+                            uint32_t src_addr2, uint32_t dest_addr) {
+  unsigned char *buf1 = new unsigned char[4 * sizeof(int)];
+  unsigned char *buf2 = new unsigned char[4 * sizeof(int)];
+
+  auto *rx1 = core.send_request(TLM_READ_COMMAND, 1, 1, src_addr1, true, true,
+                                buf1, 4 * sizeof(int));
+  // only initial matrix should be stored in cache
+  auto *rx2 = core.send_request(TLM_READ_COMMAND, 2, 1, src_addr2, true, false,
+                                buf2, 4 * sizeof(int));
+
+  int *A = reinterpret_cast<int *>(rx1->get_data_ptr());
+  int *B = reinterpret_cast<int *>(rx2->get_data_ptr());
+  int result[4];
+
+  result[0] = A[0] * B[0] + A[1] * B[2];
+  result[1] = A[0] * B[1] + A[1] * B[3];
+  result[2] = A[2] * B[0] + A[3] * B[2];
+  result[3] = A[2] * B[1] + A[3] * B[3];
+
+  auto *data = new unsigned char[4 * sizeof(int)];
+  memcpy(data, result, 4 * sizeof(int));
+  auto *tx = core.send_request(TLM_WRITE_COMMAND, 3, 1, dest_addr, true, true,
+                               data, 4 * sizeof(int));
+  delete tx;
+
+  delete rx1;
+  delete rx2;
+}
+
 inline GeneratorFunctions generator_code = {
     [](fpga::Generator &gen, UtilizationTracker *tracker) {
       // FPGA GENERATOR CODE BELOW
+      tracker->set_active();
+
+      // |1 2|
+      // |3 4|
+      int matrix[4] = {1, 2, 3, 4};
+      auto *data = new unsigned char[sizeof(matrix)];
+      memcpy(data, matrix, sizeof(matrix));
+
+      auto *tx = gen.send_request(TLM_WRITE_COMMAND, 0, 1, 0x0, false, true,
+                                  data, sizeof(matrix));
+      delete tx;
+
+      tracker->set_idle();
       // ------------------------------
     },
     [](fpga::Generator &gen, UtilizationTracker *tracker,
        tlm_generic_payload *transaction) {
       // FPGA INTERRUPT HANDLER CODE BELOW
+      tracker->set_active();
+
+      auto *data = new unsigned char[4 * sizeof(int)];
+      auto *rx =
+          gen.send_request(TLM_READ_COMMAND, 1, 0, transaction->get_address(),
+                           true, true, data, 4 * sizeof(int));
+      int *result = reinterpret_cast<int *>(data);
+
+      std::cout << "A^6 = [" << result[0] << " " << result[1] << " ; "
+                << result[2] << " " << result[3] << "]" << std::endl;
+
+      tracker->set_idle();
       // ------------------------------
     }};
 
@@ -243,5 +298,43 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
     {{1, 0},
      {[](chiplet::Core &core, UtilizationTracker *tracker) {},
       [](chiplet::Core &core, UtilizationTracker *tracker,
-         tlm_generic_payload *transaction) {}}},
+         tlm_generic_payload *transaction) {
+        static const Config &config = ConfigRegistry::instance().get("Chiplet");
+
+        tracker->set_active();
+
+        uint32_t matrix_addr = transaction->get_address();
+
+        matrix_multiply(core, matrix_addr, matrix_addr, 0x1000); // A^2 = A * A
+        // cycle count simulated with Spike
+        wait(58 * config.get<sc_time>("cores.clk_cycle"));
+        matrix_multiply(core, 0x1000, matrix_addr, 0x2000); // A^3 = A^2 * A
+        // cycle count simulated with Spike
+        wait(58 * config.get<sc_time>("cores.clk_cycle"));
+        matrix_multiply(core, 0x2000, matrix_addr, 0x3000); // A^4 = A^3 * A
+        // cycle count simulated with Spike
+        wait(58 * config.get<sc_time>("cores.clk_cycle"));
+        matrix_multiply(core, 0x3000, matrix_addr, 0x4000); // A^5 = A^4 * A
+        // cycle count simulated with Spike
+        wait(58 * config.get<sc_time>("cores.clk_cycle"));
+        matrix_multiply(core, 0x4000, matrix_addr, 0x5000); // A^6 = A^5 * A
+        // cycle count simulated with Spike
+        wait(58 * config.get<sc_time>("cores.clk_cycle"));
+
+        auto *data = new unsigned char[4 * sizeof(int)];
+        auto *rx = core.send_request(TLM_READ_COMMAND, 4, 1, 0x5000, true, true,
+                                     data, 4 * sizeof(int));
+
+        auto *result = new unsigned char[4 * sizeof(int)];
+        memcpy(result, data, 4 * sizeof(int));
+
+        delete rx;
+
+        auto *tx = core.send_request(TLM_WRITE_COMMAND, 5, 0, 0x0, false, true,
+                                     result, 4 * sizeof(int));
+
+        delete tx;
+
+        tracker->set_idle();
+      }}},
 };
