@@ -35,6 +35,7 @@ public:
       interrupt_fn;
 
   void core_thread();
+  void interrupt_thread();
 
   void send_random(unsigned int delay, double write_prob,
                    unsigned int destination_min, unsigned int destination_max,
@@ -51,6 +52,8 @@ private:
   sc_mutex request_mutex;
   unsigned int request;
 
+  std::deque<tlm_generic_payload *> irq_queue;
+
   // -------------------------------------------------------
   // config
   // -------------------------------------------------------
@@ -66,15 +69,10 @@ private:
       interconnect_config.get<sc_time>("interconnect_protocol.irq_delay");
 
   // -------------------------------------------------------
-  // peqs
-  // -------------------------------------------------------
-  peq_with_get<tlm_generic_payload> irq_peq;
-  void handle_interrupt();
-
-  // -------------------------------------------------------
   // events
   // -------------------------------------------------------
   sc_event transaction_done;
+  sc_event irq_event;
 
   // -------------------------------------------------------
   // transport functions

@@ -13,16 +13,13 @@
 chiplet::Core::Core(sc_module_name name, unsigned int chiplet_id,
                     unsigned int core_id)
     : sc_module(name), utilization_tracker(this->name()),
-      chiplet_id(chiplet_id), core_id(core_id), request(0), socket("socket"),
-      irq_peq("irq_peq") {
+      chiplet_id(chiplet_id), core_id(core_id), request(0), socket("socket") {
   socket.register_nb_transport_bw(this, &chiplet::Core::nb_transport_bw);
   irq_socket.register_nb_transport_fw(this,
                                       &chiplet::Core::nb_transport_fw_irq);
 
   SC_THREAD(core_thread);
-
-  SC_THREAD(handle_interrupt);
-  sensitive << irq_peq.get_event();
+  SC_THREAD(interrupt_thread);
 }
 
 void chiplet::Core::core_thread() {
@@ -31,7 +28,7 @@ void chiplet::Core::core_thread() {
   }
 }
 
-void chiplet::Core::handle_interrupt() {
+void chiplet::Core::interrupt_thread() {
   tlm_generic_payload *transaction;
   ChipletExtension *ext;
   tlm_phase phase;
@@ -39,15 +36,18 @@ void chiplet::Core::handle_interrupt() {
   tlm_sync_enum tlm_resp;
 
   while (true) {
-    wait();
+    wait(irq_event);
 
-    transaction = irq_peq.get_next_transaction();
+    while (!irq_queue.empty()) {
+      transaction = irq_queue.front();
+      irq_queue.pop_front();
 
-    if (interrupt_fn) {
-      interrupt_fn(*this, &utilization_tracker, transaction);
+      if (interrupt_fn) {
+        interrupt_fn(*this, &utilization_tracker, transaction);
+      }
+
+      delete transaction;
     }
-
-    delete transaction;
   }
 }
 
@@ -201,7 +201,8 @@ chiplet::Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();
 
-    irq_peq.notify(*transaction_copy, delay);
+    irq_queue.push_back(transaction_copy);
+    irq_event.notify(delay);
 
     phase = END_REQ;
     return TLM_COMPLETED;
