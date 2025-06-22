@@ -32,7 +32,28 @@ public:
 private:
   uint32_t offchip_base_address;
   std::map<uint32_t, unsigned int> allocated_ranges;
-  std::unordered_map<int, uint32_t> pending_flit_writes;
+
+  struct FlitKey {
+    int request_id;
+    int source_id;
+    int core_id;
+
+    bool operator==(const FlitKey &other) const {
+      return request_id == other.request_id && source_id == other.source_id &&
+             core_id == other.core_id;
+    }
+  };
+
+  struct FlitKeyHash {
+    std::size_t operator()(const FlitKey &key) const {
+      std::size_t h1 = std::hash<int>()(key.request_id);
+      std::size_t h2 = std::hash<int>()(key.source_id);
+      std::size_t h3 = std::hash<int>()(key.core_id);
+      return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+  };
+
+  std::unordered_map<FlitKey, uint32_t, FlitKeyHash> pending_flit_writes;
 
   void set_address(tlm_generic_payload & transaction);
   void set_flit_address(tlm_generic_payload & transaction);

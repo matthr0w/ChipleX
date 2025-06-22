@@ -131,6 +131,11 @@ void fpga::MemoryController::set_flit_address(
   transaction.get_extension(ext);
 
   int request_id = ext->request_id;
+  int source_id = ext->source_id;
+  int core_id = ext->core_id;
+
+  FlitKey flit_key = {request_id, source_id, core_id};
+
   unsigned int flit_data_size = get_available_data_bytes_per_flit(transaction);
   unsigned int request_data_size = flit_data_size * ext->flit_count;
 
@@ -138,11 +143,11 @@ void fpga::MemoryController::set_flit_address(
     // allocate dynamic address range with first flit
     uint32_t flit_base_address =
         allocate_dynamic_address(transaction, false, request_data_size);
-    pending_flit_writes[request_id] = flit_base_address;
+    pending_flit_writes[flit_key] = flit_base_address;
     transaction.set_address(flit_base_address);
   } else {
     // increment dynamic address for upcoming flits
-    auto it = pending_flit_writes.find(request_id);
+    auto it = pending_flit_writes.find(flit_key);
 
     uint32_t flit_base_address = it->second;
     uint32_t flit_address = flit_base_address + ext->flit_id * flit_data_size;
