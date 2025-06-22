@@ -142,7 +142,7 @@ void chiplet::Bus::process_queue() {
                                     bus_arbitration_delay);
 
   SC_LOG_DEBUG(this, *next_transaction,
-               "Granting bus access to " << modules[current_owner]
+               "Granting Bus access to " << modules[current_owner]
                                          << " from queue");
 
   peq_fw.notify(*next_transaction, delay);
@@ -192,7 +192,7 @@ tlm_sync_enum chiplet::Bus::nb_transport_fw(int id,
   if (current_owner == 0 && request_queue.empty()) {
     // bus is free and queue is empty: grant access immediately
     SC_LOG_DEBUG(this, transaction,
-                 "Bus is empty -> granting bus access to " << modules[id]);
+                 "Bus is empty -> granting Bus access to " << modules[id]);
 
     current_owner = id;
 

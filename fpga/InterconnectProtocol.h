@@ -39,7 +39,18 @@ public:
 private:
   const unsigned int fpga_id;
 
-  std::map<tlm::tlm_generic_payload *, int> transaction_id_map;
+  int current_interconnect;
+
+  struct InterconnectRequest {
+    int interconnect_id;
+    tlm_generic_payload *transaction;
+  };
+
+  std::deque<InterconnectRequest> request_queue;
+
+  void process_bus_transaction();
+  void process_phy_transaction();
+  void process_queue();
 
   void send_flits(tlm_generic_payload & transaction);
   void send_to_phy(tlm_generic_payload & transaction);
@@ -71,9 +82,7 @@ private:
   // peqs
   // -------------------------------------------------------
   peq_with_get<tlm_generic_payload> peq_bus;
-  void process_bus_transaction();
   peq_with_get<tlm_generic_payload> peq_phy;
-  void process_phy_transaction();
 
   // -------------------------------------------------------
   // events

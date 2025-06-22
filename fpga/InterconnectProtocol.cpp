@@ -15,7 +15,7 @@ fpga::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
       bus_target_socket("bus_target_socket"),
       bus_initiator_socket("bus_initiator_socket"),
       generator_irq_initiator_socket("generator_irq_initiator_socket"),
-      peq_bus("peq_bus"), peq_phy("peq_phy") {
+      peq_bus("peq_bus"), peq_phy("peq_phy"), current_interconnect(-1) {
   bus_target_socket.register_nb_transport_fw(
       this, &fpga::InterconnectProtocol::nb_transport_fw_bus);
   bus_initiator_socket.register_nb_transport_bw(
@@ -91,8 +91,6 @@ void fpga::InterconnectProtocol::process_phy_transaction() {
   while (true) {
     wait();
 
-    utilization_tracker.set_active();
-
     transaction = peq_phy.get_next_transaction();
     transaction->get_extension(ext);
 
@@ -145,19 +143,22 @@ void fpga::InterconnectProtocol::process_phy_transaction() {
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
 
-    // find interconnect id
-    int id = -1;
-    auto it = transaction_id_map.find(transaction);
-    if (it != transaction_id_map.end()) {
-      id = it->second;
-    }
-    transaction_id_map.erase(transaction);
-
-    tlm_resp = interconnect_target_sockets[id]->nb_transport_bw(*transaction,
-                                                                phase, delay);
+    tlm_resp =
+        interconnect_target_sockets[current_interconnect]->nb_transport_bw(
+            *transaction, phase, delay);
 
     if (tlm_resp == TLM_COMPLETED) {
       wait(delay);
+
+      // release protocol layer
+      current_interconnect = -1;
+
+      utilization_tracker.set_idle();
+
+      // process queue
+      if (!request_queue.empty()) {
+        process_queue();
+      }
     }
 
     utilization_tracker.set_idle();
@@ -275,7 +276,7 @@ void fpga::InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
   irq->set_source_id(ext->source_id);
   irq->set_destination_id(ext->destination_id);
 
-  SC_LOG_DEBUG(this, transaction, "Sending IRQ to generator");
+  SC_LOG_DEBUG(this, transaction, "Sending IRQ to Generator");
   tlm_resp =
       generator_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
 
@@ -283,9 +284,42 @@ void fpga::InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
     wait(delay);
   }
 
-  SC_LOG_DEBUG(this, transaction, "Sending IRQ to generator done");
+  SC_LOG_DEBUG(this, transaction, "Sending IRQ to Generator done");
 
   delete irq;
+}
+
+void fpga::InterconnectProtocol::process_queue() {
+  tlm_generic_payload *next_transaction;
+  ChipletExtension *ext;
+  tlm_phase phase;
+  sc_time delay;
+  tlm_sync_enum tlm_resp;
+
+  // dequeue next waiting request
+  InterconnectRequest next_request = request_queue.front();
+  request_queue.pop_front();
+
+  // grant access
+  current_interconnect = next_request.interconnect_id;
+  next_transaction = next_request.transaction;
+  next_transaction->get_extension(ext);
+
+  delay = get_interconnect2protocol_process_delay(*this, *next_transaction,
+                                                  post_delay);
+
+  SC_LOG_DEBUG(this, *next_transaction,
+               "Granting Protocol Layer access to Interconnect"
+                   << current_interconnect << " from queue");
+
+  peq_phy.notify(*next_transaction, delay);
+
+  phase = END_REQ;
+  delay = SC_ZERO_TIME;
+
+  // end request
+  interconnect_target_sockets[current_interconnect]->nb_transport_bw(
+      *next_transaction, phase, delay);
 }
 
 // -------------------------------------------------------
@@ -311,16 +345,35 @@ tlm_sync_enum fpga::InterconnectProtocol::nb_transport_fw_interconnect(
   SC_LOG_DEBUG(this, transaction,
                "PROTOCOL: Received request from Interconnect" << id);
 
-  // add interconnect to protocol layer process delay
-  delay +=
-      get_interconnect2protocol_process_delay(*this, transaction, post_delay);
+  utilization_tracker.set_active();
 
-  transaction_id_map[&transaction] = id;
+  if (current_interconnect == -1 && request_queue.empty()) {
+    // protocol layer is free and queue is empty: grant access immediately
+    SC_LOG_DEBUG(this, transaction,
+                 "Protocol Layer is empty -> granting access to Interconnect"
+                     << id);
 
-  peq_phy.notify(transaction, delay);
+    current_interconnect = id;
 
-  phase = END_REQ;
-  return TLM_UPDATED;
+    // add interconnect to protocol layer process delay
+    delay +=
+        get_interconnect2protocol_process_delay(*this, transaction, post_delay);
+
+    peq_phy.notify(transaction, delay);
+
+    phase = END_REQ;
+    return TLM_UPDATED;
+  } else {
+    // protocol layer is busy or queue is not empty: enqueue request
+    SC_LOG_DEBUG(this, transaction,
+                 "Protocol Layer is busy with Interconnect"
+                     << current_interconnect
+                     << " -> enqueuing request from Interconnect" << id);
+
+    request_queue.push_back({id, &transaction});
+
+    return TLM_ACCEPTED;
+  }
 }
 
 tlm_sync_enum fpga::InterconnectProtocol::nb_transport_bw_bus(
