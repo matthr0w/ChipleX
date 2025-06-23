@@ -17,8 +17,8 @@ get_available_data_bytes_per_flit(tlm_generic_payload &transaction) {
 
   static const unsigned int flit_size =
       interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
-  static const unsigned int header_size = interconnect_config.get<unsigned int>(
-      "interconnect_protocol.header_size");
+  static const unsigned int overhead_size = interconnect_config.get<unsigned int>(
+      "interconnect_protocol.overhead_size");
 
   switch (connection_type) {
   case ConnectionType::SPI:
@@ -29,8 +29,8 @@ get_available_data_bytes_per_flit(tlm_generic_payload &transaction) {
 
     unsigned int size = flit_size;
 
-    // flit header
-    size -= header_size;
+    // flit overhead
+    size -= overhead_size;
 
     // flit metadata
     size -= ext->get_flitext_size_bytes();

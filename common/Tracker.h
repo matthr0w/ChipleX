@@ -79,8 +79,8 @@ private:
 
   const unsigned int flit_size =
       interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
-  const unsigned int header_size = interconnect_config.get<unsigned int>(
-      "interconnect_protocol.header_size");
+  const unsigned int overhead_size = interconnect_config.get<unsigned int>(
+      "interconnect_protocol.overhead_size");
   const double efficiency =
       interconnect_config.get<double>("interconnect.efficiency");
 
@@ -91,7 +91,7 @@ private:
 
   double calculate_overhead() {
     double overhead =
-        static_cast<double>(header_size) / static_cast<double>(flit_size) * 100;
+        static_cast<double>(overhead_size) / static_cast<double>(flit_size) * 100;
     return overhead;
   }
 

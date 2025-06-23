@@ -70,8 +70,8 @@ private:
   const unsigned int ram_size = chiplet_config.get<unsigned int>("ram.size");
   const unsigned int flit_size =
       interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
-  const unsigned int header_size = interconnect_config.get<unsigned int>(
-      "interconnect_protocol.header_size");
+  const unsigned int overhead_size = interconnect_config.get<unsigned int>(
+      "interconnect_protocol.overhead_size");
   const sc_time pre_delay =
       interconnect_config.get<sc_time>("interconnect_protocol.pre_delay");
   const sc_time post_delay =
