@@ -42,7 +42,7 @@ inline sc_time get_extension_cycles_delay(tlm_generic_payload &transaction,
 
 inline sc_time get_bandwidth_transfer_delay(unsigned int size_bytes,
                                             double bandwidth) {
-  return sc_time(static_cast<double>(size_bytes) * 8.0 / bandwidth, SC_NS);
+  return sc_time(static_cast<double>(size_bytes) / bandwidth, SC_NS);
 }
 
 // -------------------------------------------------------
