@@ -25,7 +25,7 @@ const char *to_string(ConnectionType type) {
 std::vector<unsigned int> connections = {1, 2};
 
 double chiplet_distance_um = 100;
-double fpga_distance_mm = 5000;
+double fpga_distance_mm = 50;
 double wire_ps_per_mm = 5.0;
 
 double bit_error_rate = 1e-12;
