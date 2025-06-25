@@ -106,11 +106,11 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
   // Bus Transfer Backward Delay
   // -----------------------------------------------
   // read operation:
-  //      - no address cycle delay
+  //      + address cycle delay
   //      + data cycles delay
   //      + extension cycles delay
   // write operation:
-  //      - no address cycle delay
+  //      + address cycle delay
   //      - no data cycles delay
   //      - extension cycles delay
 
@@ -120,12 +120,12 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
   sc_time extension_cycles_delay = SC_ZERO_TIME;
 
   if (transaction.get_command() == TLM_READ_COMMAND) {
-    address_cycle_delay = SC_ZERO_TIME;
+    address_cycle_delay = clk_cycle;
     data_cycles_delay = get_data_cycles_delay(transaction, width, clk_cycle);
     extension_cycles_delay =
         get_extension_cycles_delay(transaction, width, clk_cycle);
   } else if (transaction.get_command() == TLM_WRITE_COMMAND) {
-    address_cycle_delay = SC_ZERO_TIME;
+    address_cycle_delay = clk_cycle;
     data_cycles_delay = SC_ZERO_TIME;
     extension_cycles_delay = SC_ZERO_TIME;
   }
