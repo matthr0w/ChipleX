@@ -1,5 +1,5 @@
 interconnect_protocol:
-  flit_size: 256 # bytes
+  flit_size: 68 # bytes
   overhead_size: 4 # bytes
   pre_delay: 1.0 # ns
   post_delay: 1.0 # ns

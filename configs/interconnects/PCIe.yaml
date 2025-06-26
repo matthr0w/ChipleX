@@ -14,4 +14,4 @@ interconnect:
   bandwidth_chiplets: 128.0 # GB/s
   bandwidth_fpga: 128.0 # GB/s
   # https://pcisig.com/pcie%C2%AE-60-specification-webinar-qa-leveling-l0p
-  efficiency: 10.0 # pJ/bit
+  efficiency: 5.0 # pJ/bit
