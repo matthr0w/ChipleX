@@ -293,7 +293,8 @@ inline sc_time get_die2die_transfer_delay(sc_module &module,
   switch (connection_type) {
   case ConnectionType::UCIe:
     max_attempts =
-        interconnect_config.get<unsigned int>("interconnect_protocol.retries");
+        interconnect_config.get<unsigned int>("interconnect_protocol.retries") +
+        1; // + 1 for first try
     break;
   default:
     break;
