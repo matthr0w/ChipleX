@@ -245,7 +245,7 @@ inline GeneratorFunctions generator_code = {
       static sc_time request_delay(8, SC_MS); // approximately 120 fps
 
       int width, height, channels;
-      unsigned char *input_img = stbi_load("configs/duckiebot_input.jpg",
+      unsigned char *input_img = stbi_load("usercode/duckiebot_input.jpg",
                                            &width, &height, &channels, 3);
 
       size_t header_size = sizeof(ImageHeader);
@@ -311,7 +311,7 @@ inline GeneratorFunctions generator_code = {
       unsigned char *img_data = buffer + sizeof(ImageHeader);
 
       std::string filename =
-          "configs/duckiebot_output" + std::to_string(request) + ".jpg";
+          "usercode/duckiebot_output" + std::to_string(request) + ".jpg";
 
       stbi_write_jpg(filename.c_str(), width, height, channels, img_data, 100);
 

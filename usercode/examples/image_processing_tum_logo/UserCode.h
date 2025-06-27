@@ -244,7 +244,7 @@ inline GeneratorFunctions generator_code = {
 
       int width, height, channels;
       unsigned char *input_img =
-          stbi_load("configs/tum_input.jpg", &width, &height, &channels, 3);
+          stbi_load("usercode/tum_input.jpg", &width, &height, &channels, 3);
 
       size_t header_size = sizeof(ImageHeader);
       size_t img_size = width * height * channels;
@@ -288,7 +288,7 @@ inline GeneratorFunctions generator_code = {
 
       unsigned char *img_data = buffer + sizeof(ImageHeader);
 
-      stbi_write_jpg("configs/tum_output.jpg", width, height, 3, img_data, 100);
+      stbi_write_jpg("usercode/tum_output.jpg", width, height, 3, img_data, 100);
 
       delete response;
 
