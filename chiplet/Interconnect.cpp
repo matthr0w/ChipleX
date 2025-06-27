@@ -145,7 +145,7 @@ void chiplet::Interconnect::process_rx_buffer() {
     wait(rx_buffer_in_event);
 
     while (!rx_buffer.empty()) {
-      utilization_tracker.set_active();
+      utilization_tracker.set_idle();
 
       tlm_generic_payload *transaction = rx_buffer.front();
       tlm_phase phase = BEGIN_REQ;
@@ -168,8 +168,6 @@ void chiplet::Interconnect::process_rx_buffer() {
       rx_buffer_out_event.notify();
 
       delete transaction;
-
-      utilization_tracker.set_idle();
     }
   }
 }
@@ -206,6 +204,8 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_interconnect(
     SC_LOG_WARN(this, transaction, "Rx buffer full -> waiting...");
     wait(rx_buffer_out_event);
   }
+
+  utilization_tracker.set_active();
 
   // add die to die transfer delay
   delay += get_die2die_transfer_delay(*this, transaction, bandwidth, distance,
