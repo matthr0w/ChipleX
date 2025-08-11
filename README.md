@@ -1,6 +1,6 @@
-# High Level Simulation
+# Simulation Environment for Chiplet-Based Systems
 
-This project provides a high-level simulation environment using SystemC.
+This project provides a high-level simulation environment for chiplet-based systems using SystemC.
 
 ## SystemC Installation
 
@@ -61,11 +61,6 @@ export SYSTEMC_PATH=/path/to/systemc/install
 export LD_LIBRARY_PATH=$SYSTEMC_PATH/lib:$LD_LIBRARY_PATH
 ```
 
-
-```bash
-source ~/.bashrc
-```
-
 ## Building
 
 ```bash
@@ -73,6 +68,34 @@ make
 ```
 
 ## Model Information
+
+### Planned
+
+- AXI4-like system bus with bursts and congestion handling
+
+- Interconnect protocol extensions:
+
+  - DMA support
+  - Read/write to non-main memories
+  - Smart protocol controller features
+
+- Inter-chiplet routing overhaul
+
+- Hardware accelerator modules with local memory
+
+- Expanded configuration options:
+  
+  - Selectable chiplet components (e.g., pure memory)
+  - Flexible interconnect types between chiplets and FPGA
+  - Custom connection topologies
+
+- New user applications using accelerators and multi-core
+
+- Improved statistics collection, processing, and visualization
+
+- Streamlined user code workflow
+
+- Graphical user interface
 
 ### Overview
 
