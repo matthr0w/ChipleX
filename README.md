@@ -80,7 +80,7 @@ make
 
 The figure above illustrates the basic structure of the system. It consists of a configurable number of chiplets connected in a ring topology (blue arrows) and an FPGA. When only two chiplets are present, they are linked by a single bidirectional connection. The FPGA module is similar to the chiplet modules, and its connections to the chiplets (green arrows) can be configured via the command-line interface (see [Usage](#usage)).
 
-**Chiplet**
+**Chiplet [DEPRECATED]**
 
 ![Chiplet.png](/docs/Chiplet.png)
 
@@ -96,7 +96,7 @@ The interconnect structure – comprising the protocol layer and the various int
 
 Interconnect0 connects to the FPGA, Interconnect1 to Chiplet *n–1*, and Interconnect2 to Chiplet *n+1*.
 
-**FPGA**
+**FPGA [DEPRECATED]**
 
 ![FPGA.png](/docs/FPGA.png)
 
@@ -132,7 +132,7 @@ The model is highly configurable. All configuration files are located in the `co
 
 The `usercode` directory contains the `UserCode.h` file, which allows the user to program the cores and the FPGA data generator. Detailed instructions on how to do this are provided within the file itself. Examples can be found in the `examples` subdirectory.
 
-### Message Sequence Diagrams
+### Message Sequence Diagrams [DEPRECATED]
 
 The following subsections present message sequence diagrams for the various operations. Note that the diagrams are simplified for clarity. In the actual implementation, the model follows the TLM 2.0 standard, using both request and response phases.
 
