@@ -73,6 +73,8 @@ make
 
 - AXI4-like system bus with bursts and congestion handling
 
+- Improved RAM model
+
 - Interconnect protocol extensions:
 
   - DMA support
