@@ -7,13 +7,10 @@
 
 #include "common/Tracker.h"
 
-#include "include/configs.h"
-
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-namespace chiplet {
 SC_MODULE(RAM) {
 public:
   // -------------------------------------------------------
@@ -26,26 +23,24 @@ public:
   // -------------------------------------------------------
   simple_target_socket<RAM> socket;
 
-  SC_CTOR(RAM);
+  RAM(sc_module_name name, unsigned int ram_size, unsigned int ram_width,
+      sc_time ram_clk_cycle, sc_time ram_address_delay,
+      sc_time ram_access_delay);
 
   void report_usage();
 
 private:
-  // -------------------------------------------------------
-  // config
-  // -------------------------------------------------------
-  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
-
-  const unsigned int ram_size = chiplet_config.get<unsigned int>("ram.size");
-  const unsigned int ram_width = chiplet_config.get<unsigned int>("ram.width");
-  const sc_time ram_clk_cycle = chiplet_config.get<sc_time>("ram.clk_cycle");
-  const sc_time ram_address_delay =
-      chiplet_config.get<sc_time>("ram.address_delay");
-  const sc_time ram_access_delay =
-      chiplet_config.get<sc_time>("ram.access_delay");
-
   std::vector<uint8_t> mem;
   std::vector<bool> written_flags;
+
+  // -------------------------------------------------------
+  // parameters
+  // -------------------------------------------------------
+  const unsigned int ram_size;
+  const unsigned int ram_width;
+  const sc_time ram_clk_cycle;
+  const sc_time ram_address_delay;
+  const sc_time ram_access_delay;
 
   // -------------------------------------------------------
   // peqs
@@ -59,4 +54,3 @@ private:
   tlm_sync_enum nb_transport_fw(tlm_generic_payload & transaction,
                                 tlm_phase & phase, sc_time & delay);
 };
-}; // namespace chiplet

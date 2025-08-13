@@ -8,13 +8,10 @@
 
 #include "common/Tracker.h"
 
-#include "include/configs.h"
-
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-namespace chiplet {
 SC_MODULE(Bus) {
 public:
   // -------------------------------------------------------
@@ -25,21 +22,15 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket_tagged<Bus> core0_target_socket;
-  simple_target_socket_tagged<Bus> core1_target_socket;
-  simple_target_socket_tagged<Bus> interconnect_target_socket;
-  simple_initiator_socket_tagged<Bus> interconnect_initiator_socket;
-  simple_initiator_socket_tagged<Bus> ram_initiator_socket;
+  simple_target_socket_tagged<Bus> *master_target_sockets;
+  simple_initiator_socket_tagged<Bus> *slave_initiator_sockets;
 
-  Bus(sc_module_name name, unsigned int chiplet_id);
+  Bus(sc_module_name name, unsigned int chip_id, unsigned int num_masters,
+      unsigned int num_slaves, sc_time bus_arbitration_delay);
+  ~Bus();
 
 private:
-  const unsigned int chiplet_id;
-
-  unsigned int current_owner;
-
-  const std::array<std::string, 5> modules = {"Unassigned", "Core0", "Core1",
-                                              "Interconnect", "RAM"};
+  int current_owner;
 
   struct BusRequest {
     int module;
@@ -53,12 +44,10 @@ private:
   void process_queue();
 
   // -------------------------------------------------------
-  // config
+  // parameters
   // -------------------------------------------------------
-  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
-
-  const sc_time bus_arbitration_delay =
-      chiplet_config.get<sc_time>("bus.arbitration_delay");
+  const unsigned int chip_id;
+  const sc_time bus_arbitration_delay;
 
   // -------------------------------------------------------
   // peqs
@@ -74,4 +63,3 @@ private:
   tlm_sync_enum nb_transport_bw(int id, tlm_generic_payload &transaction,
                                 tlm_phase &phase, sc_time &delay);
 };
-}; // namespace chiplet

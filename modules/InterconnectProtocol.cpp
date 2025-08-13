@@ -8,30 +8,37 @@
 
 #include "include/logging.h"
 
-chiplet::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
-                                                    unsigned int chiplet_id)
-    : sc_module(name), utilization_tracker(this->name()),
-      chiplet_id(chiplet_id), bus_target_socket("bus_target_socket"),
-      bus_initiator_socket("bus_initiator_socket"),
-      core0_irq_initiator_socket("core0_irq_initiator_socket"),
-      core1_irq_initiator_socket("core1_irq_initiator_socket"),
-      peq_bus("peq_bus"), peq_phy("peq_phy"), current_interconnect(-1) {
+InterconnectProtocol::InterconnectProtocol(
+    sc_module_name name, unsigned int chip_id, unsigned int num_cores,
+    unsigned int num_interconnects, unsigned int flit_size,
+    unsigned int overhead_size, sc_time pre_delay, sc_time post_delay,
+    sc_time irq_delay, unsigned int bus_width, sc_time bus_clk_cycle)
+    : sc_module(name), chip_id(chip_id), flit_size(flit_size),
+      overhead_size(overhead_size), pre_delay(pre_delay),
+      post_delay(post_delay), irq_delay(irq_delay), bus_width(bus_width),
+      bus_clk_cycle(bus_clk_cycle), utilization_tracker(this->name()),
+      bus_target_socket("bus_target_socket"),
+      bus_initiator_socket("bus_initiator_socket"), peq_bus("peq_bus"),
+      peq_phy("peq_phy"), current_interconnect(-1) {
   bus_target_socket.register_nb_transport_fw(
-      this, &chiplet::InterconnectProtocol::nb_transport_fw_bus);
+      this, &InterconnectProtocol::nb_transport_fw_bus);
   bus_initiator_socket.register_nb_transport_bw(
-      this, &chiplet::InterconnectProtocol::nb_transport_bw_bus);
+      this, &InterconnectProtocol::nb_transport_bw_bus);
 
   interconnect_target_sockets =
-      new simple_target_socket_tagged<chiplet::InterconnectProtocol>[3];
-  interconnect_initiator_sockets =
-      new simple_initiator_socket_tagged<chiplet::InterconnectProtocol>[3];
+      new simple_target_socket_tagged<InterconnectProtocol>[num_interconnects];
+  interconnect_initiator_sockets = new simple_initiator_socket_tagged<
+      InterconnectProtocol>[num_interconnects];
 
-  for (unsigned int i = 0; i < 3; ++i) {
+  for (unsigned int i = 0; i < num_interconnects; ++i) {
     interconnect_target_sockets[i].register_nb_transport_fw(
-        this, &chiplet::InterconnectProtocol::nb_transport_fw_interconnect, i);
+        this, &InterconnectProtocol::nb_transport_fw_interconnect, i);
     interconnect_initiator_sockets[i].register_nb_transport_bw(
-        this, &chiplet::InterconnectProtocol::nb_transport_bw_interconnect, i);
+        this, &InterconnectProtocol::nb_transport_bw_interconnect, i);
   }
+
+  irq_initiator_sockets =
+      new simple_initiator_socket_tagged<InterconnectProtocol>[num_cores];
 
   SC_THREAD(process_bus_transaction);
   sensitive << peq_bus.get_event();
@@ -39,12 +46,12 @@ chiplet::InterconnectProtocol::InterconnectProtocol(sc_module_name name,
   sensitive << peq_phy.get_event();
 }
 
-chiplet::InterconnectProtocol::~InterconnectProtocol() {
+InterconnectProtocol::~InterconnectProtocol() {
   delete[] interconnect_target_sockets;
   delete[] interconnect_initiator_sockets;
 }
 
-void chiplet::InterconnectProtocol::process_bus_transaction() {
+void InterconnectProtocol::process_bus_transaction() {
   ChipletExtension *ext;
   tlm_generic_payload *transaction;
   tlm_phase phase;
@@ -61,7 +68,7 @@ void chiplet::InterconnectProtocol::process_bus_transaction() {
 
     // set source id
     if (ext->source_id == -1) {
-      static_cast<ChipletPayload *>(transaction)->set_source_id(chiplet_id);
+      static_cast<ChipletPayload *>(transaction)->set_source_id(chip_id);
     }
 
     // send flits
@@ -81,7 +88,7 @@ void chiplet::InterconnectProtocol::process_bus_transaction() {
   }
 }
 
-void chiplet::InterconnectProtocol::process_phy_transaction() {
+void InterconnectProtocol::process_phy_transaction() {
   ChipletExtension *ext;
   tlm_generic_payload *transaction;
   tlm_phase phase;
@@ -94,8 +101,8 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
     transaction = peq_phy.get_next_transaction();
     transaction->get_extension(ext);
 
-    bool at_source = ext->source_id == chiplet_id;
-    bool at_destination = ext->destination_id == chiplet_id;
+    bool at_source = ext->source_id == chip_id;
+    bool at_destination = ext->destination_id == chip_id;
 
     bool read_op = transaction->get_command() == TLM_READ_COMMAND;
     bool write_op = transaction->get_command() == TLM_WRITE_COMMAND;
@@ -168,8 +175,7 @@ void chiplet::InterconnectProtocol::process_phy_transaction() {
 // -------------------------------------------------------
 // sender functions
 // -------------------------------------------------------
-void chiplet::InterconnectProtocol::send_flits(
-    tlm_generic_payload &transaction) {
+void InterconnectProtocol::send_flits(tlm_generic_payload &transaction) {
   uint32_t address = transaction.get_address();
   unsigned char *data_ptr = transaction.get_data_ptr();
   unsigned int data_size = transaction.get_data_length();
@@ -206,8 +212,7 @@ void chiplet::InterconnectProtocol::send_flits(
   }
 }
 
-void chiplet::InterconnectProtocol::send_to_phy(
-    tlm_generic_payload &transaction) {
+void InterconnectProtocol::send_to_phy(tlm_generic_payload &transaction) {
   ChipletExtension *ext;
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
@@ -215,13 +220,13 @@ void chiplet::InterconnectProtocol::send_to_phy(
 
   transaction.get_extension(ext);
 
-  int route = RoutingTable::get_route(chiplet_id, ext->destination_id);
+  int route = RoutingTable::get_route(chip_id, ext->destination_id);
 
   if (route != -1) {
     SC_LOG_DEBUG(this, transaction,
-                 "ROUTING: Chiplet ID " << chiplet_id << " Destination "
-                                        << ext->destination_id
-                                        << " Route to Interconnect" << route);
+                 "ROUTING: Chip ID " << chip_id << " Destination "
+                                     << ext->destination_id
+                                     << " Route to Interconnect" << route);
 
     tlm_resp = interconnect_initiator_sockets[route]->nb_transport_fw(
         transaction, phase, delay);
@@ -238,8 +243,7 @@ void chiplet::InterconnectProtocol::send_to_phy(
   }
 }
 
-void chiplet::InterconnectProtocol::send_to_bus(
-    tlm_generic_payload &transaction) {
+void InterconnectProtocol::send_to_bus(tlm_generic_payload &transaction) {
   ChipletExtension *ext;
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
@@ -254,8 +258,8 @@ void chiplet::InterconnectProtocol::send_to_bus(
   wait(bus_transaction_done);
 }
 
-void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
-                                             tlm_command command) {
+void InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
+                                    tlm_command command) {
   ChipletExtension *ext;
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
@@ -282,17 +286,12 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
   if (command == TLM_READ_COMMAND) {
     // send read IRQs to request core
     SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core" << ext->core_id);
-    if (ext->core_id == 0) {
-      tlm_resp =
-          core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
-    } else if (ext->core_id == 1) {
-      tlm_resp =
-          core1_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
-    }
+    tlm_resp = irq_initiator_sockets[ext->core_id]->nb_transport_fw(*irq, phase,
+                                                                    delay);
   } else {
     // send write IRQs to Core0
     SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core0");
-    tlm_resp = core0_irq_initiator_socket->nb_transport_fw(*irq, phase, delay);
+    tlm_resp = irq_initiator_sockets[0]->nb_transport_fw(*irq, phase, delay);
   }
 
   if (tlm_resp == TLM_COMPLETED) {
@@ -304,7 +303,7 @@ void chiplet::InterconnectProtocol::send_irq(tlm_generic_payload &transaction,
   delete irq;
 }
 
-void chiplet::InterconnectProtocol::process_queue() {
+void InterconnectProtocol::process_queue() {
   tlm_generic_payload *next_transaction;
   ChipletExtension *ext;
   tlm_phase phase;
@@ -340,8 +339,9 @@ void chiplet::InterconnectProtocol::process_queue() {
 // -------------------------------------------------------
 // transport functions
 // -------------------------------------------------------
-tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
-    tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum
+InterconnectProtocol::nb_transport_fw_bus(tlm_generic_payload &transaction,
+                                          tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received request from Bus");
 
   // add bus transfer delay
@@ -354,7 +354,7 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_bus(
   return TLM_UPDATED;
 }
 
-tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_interconnect(
+tlm_sync_enum InterconnectProtocol::nb_transport_fw_interconnect(
     int id, tlm_generic_payload &transaction, tlm_phase &phase,
     sc_time &delay) {
   SC_LOG_DEBUG(this, transaction,
@@ -390,8 +390,9 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_fw_interconnect(
   }
 }
 
-tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_bus(
-    tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum
+InterconnectProtocol::nb_transport_bw_bus(tlm_generic_payload &transaction,
+                                          tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received response from Bus");
 
@@ -407,7 +408,7 @@ tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_bus(
   return TLM_ACCEPTED;
 }
 
-tlm_sync_enum chiplet::InterconnectProtocol::nb_transport_bw_interconnect(
+tlm_sync_enum InterconnectProtocol::nb_transport_bw_interconnect(
     int id, tlm_generic_payload &transaction, tlm_phase &phase,
     sc_time &delay) {
   if (phase == BEGIN_RESP) {

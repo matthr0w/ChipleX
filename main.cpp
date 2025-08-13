@@ -1,17 +1,17 @@
 #include <systemc>
 #include <vector>
 
-#include "chiplet/Chiplet.h"
-#include "common/Tracker.h"
-#include "fpga/FPGA.h"
-
-#include "usercode/UserCode.h"
-
 #include "common/RoutingTable.h"
+#include "common/Tracker.h"
 
 #include "include/configs.h"
 #include "include/globals.h"
 #include "include/parser.h"
+
+#include "modules/Chiplet.h"
+#include "modules/FPGA.h"
+
+#include "usercode/UserCode.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -97,8 +97,11 @@ int sc_main(int argc, char *argv[]) {
     }
   }
   // FPGA
-  fpga.generator.gen_fn = generator_code.first;
-  fpga.generator.interrupt_fn = generator_code.second;
+  auto it_core = core_code.find({0, 0});
+  if (it_core != core_code.end()) {
+    fpga.core.thread_fn = it_core->second.first;
+    fpga.core.interrupt_fn = it_core->second.second;
+  }
 
   // connect chiplets in a ring topology
   for (unsigned int i = 0; i < num_chiplets; ++i) {
@@ -232,7 +235,7 @@ int sc_main(int argc, char *argv[]) {
   }
   std::cout << "\n";
 
-  // clean up chiplets
+  // clean up
   for (auto *chiplet : chiplets) {
     delete chiplet;
   }

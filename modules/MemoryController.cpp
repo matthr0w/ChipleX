@@ -8,14 +8,16 @@
 
 #include "include/logging.h"
 
-fpga::MemoryController::MemoryController(sc_module_name name)
-    : sc_module(name), utilization_tracker(this->name()),
+MemoryController::MemoryController(sc_module_name name, unsigned int bus_width,
+                                   sc_time bus_clk_cycle, unsigned int ram_size)
+    : sc_module(name), bus_width(bus_width), bus_clk_cycle(bus_clk_cycle),
+      ram_size(ram_size), utilization_tracker(this->name()),
       bus_target_socket("bus_target_socket"),
       ram_initiator_socket("ram_initiator_socket"), peq("peq") {
   bus_target_socket.register_nb_transport_fw(
-      this, &fpga::MemoryController::nb_transport_fw);
+      this, &MemoryController::nb_transport_fw);
   ram_initiator_socket.register_nb_transport_bw(
-      this, &fpga::MemoryController::nb_transport_bw);
+      this, &MemoryController::nb_transport_bw);
 
   offchip_base_address = (ram_size * 1024) / 2;
 
@@ -23,7 +25,7 @@ fpga::MemoryController::MemoryController(sc_module_name name)
   sensitive << peq.get_event();
 }
 
-void fpga::MemoryController::process_transaction() {
+void MemoryController::process_transaction() {
   ChipletExtension *ext;
   tlm_generic_payload *transaction;
   tlm_phase phase;
@@ -57,7 +59,7 @@ void fpga::MemoryController::process_transaction() {
   }
 }
 
-void fpga::MemoryController::send_to_ram(tlm_generic_payload &transaction) {
+void MemoryController::send_to_ram(tlm_generic_payload &transaction) {
   ChipletExtension *ext;
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
@@ -72,8 +74,7 @@ void fpga::MemoryController::send_to_ram(tlm_generic_payload &transaction) {
   wait(ram_transaction_done);
 }
 
-void fpga::MemoryController::set_address(
-    tlm::tlm_generic_payload &transaction) {
+void MemoryController::set_address(tlm::tlm_generic_payload &transaction) {
   ChipletExtension *ext;
   transaction.get_extension(ext);
 
@@ -125,8 +126,7 @@ void fpga::MemoryController::set_address(
   }
 }
 
-void fpga::MemoryController::set_flit_address(
-    tlm_generic_payload &transaction) {
+void MemoryController::set_flit_address(tlm_generic_payload &transaction) {
   ChipletExtension *ext;
   transaction.get_extension(ext);
 
@@ -166,8 +166,9 @@ void fpga::MemoryController::set_flit_address(
   }
 }
 
-uint32_t fpga::MemoryController::allocate_dynamic_address(
-    tlm_generic_payload &transaction, bool onchip, uint32_t size) {
+uint32_t
+MemoryController::allocate_dynamic_address(tlm_generic_payload &transaction,
+                                           bool onchip, uint32_t size) {
   uint32_t base_address = onchip ? 0 : offchip_base_address;
   uint32_t max_address = onchip ? offchip_base_address : ram_size * 1024;
 
@@ -192,7 +193,7 @@ uint32_t fpga::MemoryController::allocate_dynamic_address(
   return address;
 }
 
-void fpga::MemoryController::deallocate_dynamic_address(
+void MemoryController::deallocate_dynamic_address(
     tlm_generic_payload &transaction, uint32_t address, unsigned int size) {
   auto it = allocated_ranges.lower_bound(address);
   if (it != allocated_ranges.begin() &&
@@ -235,8 +236,8 @@ void fpga::MemoryController::deallocate_dynamic_address(
 // transport functions
 // -------------------------------------------------------
 tlm_sync_enum
-fpga::MemoryController::nb_transport_fw(tlm_generic_payload &transaction,
-                                        tlm_phase &phase, sc_time &delay) {
+MemoryController::nb_transport_fw(tlm_generic_payload &transaction,
+                                  tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received request from Bus");
 
   // add address assignment delay
@@ -250,8 +251,8 @@ fpga::MemoryController::nb_transport_fw(tlm_generic_payload &transaction,
 }
 
 tlm_sync_enum
-fpga::MemoryController::nb_transport_bw(tlm_generic_payload &transaction,
-                                        tlm_phase &phase, sc_time &delay) {
+MemoryController::nb_transport_bw(tlm_generic_payload &transaction,
+                                  tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received response from RAM");
 

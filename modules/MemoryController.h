@@ -7,13 +7,10 @@
 
 #include "common/Tracker.h"
 
-#include "include/configs.h"
-
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-namespace chiplet {
 SC_MODULE(MemoryController) {
 public:
   // -------------------------------------------------------
@@ -27,7 +24,8 @@ public:
   simple_target_socket<MemoryController> bus_target_socket;
   simple_initiator_socket<MemoryController> ram_initiator_socket;
 
-  SC_CTOR(MemoryController);
+  MemoryController(sc_module_name name, unsigned int bus_width,
+                   sc_time bus_clk_cycle, unsigned int ram_size);
 
 private:
   uint32_t offchip_base_address;
@@ -66,13 +64,11 @@ private:
   void send_to_ram(tlm_generic_payload & transaction);
 
   // -------------------------------------------------------
-  // config
+  // parameters
   // -------------------------------------------------------
-  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
-
-  const unsigned int bus_width = chiplet_config.get<unsigned int>("bus.width");
-  const sc_time bus_clk_cycle = chiplet_config.get<sc_time>("bus.clk_cycle");
-  const unsigned int ram_size = chiplet_config.get<unsigned int>("ram.size");
+  const unsigned int bus_width;
+  const sc_time bus_clk_cycle;
+  const unsigned int ram_size;
 
   // -------------------------------------------------------
   // peqs
@@ -94,4 +90,3 @@ private:
   tlm_sync_enum nb_transport_bw(tlm_generic_payload & transaction,
                                 tlm_phase & phase, sc_time & delay);
 };
-}; // namespace chiplet

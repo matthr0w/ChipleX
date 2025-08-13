@@ -7,13 +7,10 @@
 
 #include "common/Tracker.h"
 
-#include "include/configs.h"
-
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-namespace chiplet {
 SC_MODULE(InterconnectProtocol) {
 public:
   // -------------------------------------------------------
@@ -24,22 +21,24 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
+  simple_target_socket<InterconnectProtocol> bus_target_socket;
+  simple_initiator_socket<InterconnectProtocol> bus_initiator_socket;
+
   simple_target_socket_tagged<InterconnectProtocol>
       *interconnect_target_sockets;
   simple_initiator_socket_tagged<InterconnectProtocol>
       *interconnect_initiator_sockets;
 
-  simple_target_socket<InterconnectProtocol> bus_target_socket;
-  simple_initiator_socket<InterconnectProtocol> bus_initiator_socket;
-  simple_initiator_socket<InterconnectProtocol> core0_irq_initiator_socket;
-  simple_initiator_socket<InterconnectProtocol> core1_irq_initiator_socket;
+  simple_initiator_socket_tagged<InterconnectProtocol> *irq_initiator_sockets;
 
-  InterconnectProtocol(sc_core::sc_module_name name, unsigned int chiplet_id);
+  InterconnectProtocol(sc_module_name name, unsigned int chip_id,
+                       unsigned int num_cores, unsigned int num_interconnects,
+                       unsigned int flit_size, unsigned int overhead_size,
+                       sc_time pre_delay, sc_time post_delay, sc_time irq_delay,
+                       unsigned int bus_width, sc_time bus_clk_cycle);
   ~InterconnectProtocol();
 
 private:
-  const unsigned int chiplet_id;
-
   int current_interconnect;
 
   struct InterconnectRequest {
@@ -59,25 +58,16 @@ private:
   void send_irq(tlm_generic_payload & transaction, tlm_command command);
 
   // -------------------------------------------------------
-  // config
+  // parameters
   // -------------------------------------------------------
-  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
-  const Config &interconnect_config =
-      ConfigRegistry::instance().get("Interconnect");
-
-  const unsigned int bus_width = chiplet_config.get<unsigned int>("bus.width");
-  const sc_time bus_clk_cycle = chiplet_config.get<sc_time>("bus.clk_cycle");
-  const unsigned int ram_size = chiplet_config.get<unsigned int>("ram.size");
-  const unsigned int flit_size =
-      interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
-  const unsigned int overhead_size = interconnect_config.get<unsigned int>(
-      "interconnect_protocol.overhead_size");
-  const sc_time pre_delay =
-      interconnect_config.get<sc_time>("interconnect_protocol.pre_delay");
-  const sc_time post_delay =
-      interconnect_config.get<sc_time>("interconnect_protocol.post_delay");
-  const sc_time irq_delay =
-      interconnect_config.get<sc_time>("interconnect_protocol.irq_delay");
+  const unsigned int chip_id;
+  const unsigned int flit_size;
+  const unsigned int overhead_size;
+  const sc_time pre_delay;
+  const sc_time post_delay;
+  const sc_time irq_delay;
+  const unsigned int bus_width;
+  const sc_time bus_clk_cycle;
 
   // -------------------------------------------------------
   // peqs
@@ -108,4 +98,3 @@ private:
                                              tlm_generic_payload &transaction,
                                              tlm_phase &phase, sc_time &delay);
 };
-}; // namespace chiplet

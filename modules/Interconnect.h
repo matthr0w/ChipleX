@@ -8,13 +8,10 @@
 
 #include "common/Tracker.h"
 
-#include "include/configs.h"
-
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-namespace fpga {
 SC_MODULE(Interconnect) {
 public:
   // -------------------------------------------------------
@@ -33,12 +30,12 @@ public:
   simple_target_socket<Interconnect> interconnect_target_socket;
   simple_initiator_socket<Interconnect> interconnect_initiator_socket;
 
-  Interconnect(sc_module_name name, double bandwidth, double distance);
+  Interconnect(sc_module_name name, unsigned int buffer_size,
+               unsigned int flit_size, unsigned int overhead_size,
+               sc_time pre_delay, sc_time post_delay, sc_time irq_delay,
+               double bandwidth, double distance);
 
 private:
-  double bandwidth;
-  double distance;
-
   void process_tx_buffer();
   void process_rx_buffer();
 
@@ -48,23 +45,16 @@ private:
   unsigned int rx_buffer_used_bytes;
 
   // -------------------------------------------------------
-  // config
+  // parameters
   // -------------------------------------------------------
-  const Config &interconnect_config =
-      ConfigRegistry::instance().get("Interconnect");
-
-  const unsigned int buffer_size =
-      interconnect_config.get<unsigned int>("interconnect.buffer_size");
-  const unsigned int flit_size =
-      interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
-  const unsigned int overhead_size = interconnect_config.get<unsigned int>(
-      "interconnect_protocol.overhead_size");
-  const sc_time pre_delay =
-      interconnect_config.get<sc_time>("interconnect_protocol.pre_delay");
-  const sc_time post_delay =
-      interconnect_config.get<sc_time>("interconnect_protocol.post_delay");
-  const sc_time irq_delay =
-      interconnect_config.get<sc_time>("interconnect_protocol.irq_delay");
+  const unsigned int buffer_size;
+  const unsigned int flit_size;
+  const unsigned int overhead_size;
+  const sc_time pre_delay;
+  const sc_time post_delay;
+  const sc_time irq_delay;
+  double bandwidth;
+  double distance;
 
   // -------------------------------------------------------
   // peqs
@@ -99,4 +89,3 @@ private:
   tlm_sync_enum nb_transport_bw_interconnect(
       tlm_generic_payload & transaction, tlm_phase & phase, sc_time & delay);
 };
-}; // namespace fpga

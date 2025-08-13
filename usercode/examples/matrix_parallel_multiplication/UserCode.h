@@ -4,39 +4,30 @@
 #include <map>
 #include <utility>
 
-#include "chiplet/Core.h"
-#include "fpga/Generator.h"
-
 #include "common/Tracker.h"
 
 #include "include/configs.h"
 #include "include/globals.h"
 #include "include/logging.h"
 
-using GeneratorFunctions = std::pair<
-    std::function<void(fpga::Generator &, UtilizationTracker *)>, // main thread
-    std::function<void(fpga::Generator &, UtilizationTracker *,
-                       tlm_generic_payload *)> // interrupt handler
-    >;
+#include "modules/Core.h"
 
-using CoreFunctions = std::pair<
-    std::function<void(chiplet::Core &, UtilizationTracker *)>, // main thread
-    std::function<void(chiplet::Core &, UtilizationTracker *,
-                       tlm_generic_payload *)> // interrupt handler
-    >;
+using CoreFunctions =
+    std::pair<std::function<void(Core &, UtilizationTracker *)>, // main thread
+              std::function<void(Core &, UtilizationTracker *,
+                                 tlm_generic_payload *)> // interrupt handler
+              >;
 using CoreKey = std::pair<int, int>;
 
-// DO NOT EDIT CODE ABOVE THIS LINE
-
 // =========================================================================
-// This file allows you to program the FPGA generator and the chiplet cores.
+// This file allows you to program the FPGA and chiplet cores.
 //
-// Each module supports two user-defined functions:
+// Each core supports two user-defined functions:
 //   - Main thread function (runs once at simulation start; you may use an
 //     infinite loop with wait() if it should remain active)
-//   - Interrupt handler (called when the module receives an IRQ)
+//   - Interrupt handler (called when the core receives an IRQ)
 //
-// If no user code is provided for a module, it will remain idle.
+// If no user code is provided for a core, it will remain idle.
 // =========================================================================
 //
 // -----------------------------
@@ -174,19 +165,25 @@ using CoreKey = std::pair<int, int>;
 //  Code Instructions:
 // -----------------------------
 //
-// FPGA Generator:
-// Implement your logic inside the blocks highlighted in the code below.
+// Use the following format to define behavior per core in the `core_code`:
 //
-// Chiplet Cores:
-// Use the following format to define behavior per chiplet/core in the
-// `core_code`:
+//     // FPGA Core0
+//     {{0, 0},
+//      {[](Core &core, UtilizationTracker *tracker) {
+//           // MAIN THREAD CODE
+//       },
+//       [](Core &core, UtilizationTracker *tracker,
+//          tlm_generic_payload *transaction) {
+//           // INTERRUPT HANDLER CODE
+//       }}},
 //
 //     // ChipletX CoreY
 //     {{X, Y},
-//      {[](chiplet::Core &core) {
+//      {[](Core &core, UtilizationTracker *tracker) {
 //           // MAIN THREAD CODE
 //       },
-//       [](chiplet::Core &core, tlm_generic_payload *transaction) {
+//       [](Core &core, UtilizationTracker *tracker,
+//          tlm_generic_payload *transaction) {
 //           // INTERRUPT HANDLER CODE
 //       }}},
 //
@@ -197,7 +194,7 @@ using CoreKey = std::pair<int, int>;
 // Core Code Example:
 // // Chiplet1 Core0
 // {{1, 0},
-//  {[](chiplet::Core &core, UtilizationTracker *tracker) {
+//  {[](Core &core, UtilizationTracker *tracker) {
 //     SC_LOG_DEBUG_NO_TX(&core, "Starting Core Logic");
 //     tracker.set_active();
 //     uint32_t *data = new uint32_t(0xABCD);
@@ -208,7 +205,7 @@ using CoreKey = std::pair<int, int>;
 //     delete response;
 //     tracker.set_idle();
 //   },
-//   [](chiplet::Core &core, UtilizationTracker *tracker,
+//   [](Core &core, UtilizationTracker *tracker,
 //      tlm_generic_payload *transaction) {
 //     auto *ext = transaction->get_extension<ChipletExtension>();
 //     if (ext) {
@@ -237,73 +234,69 @@ const int matrixA[MATRIX_SIZE][MATRIX_SIZE] = {
 const int matrixB[MATRIX_SIZE][MATRIX_SIZE] = {
     {17, 18, 19, 20}, {21, 22, 23, 24}, {25, 26, 27, 28}, {29, 30, 31, 32}};
 
-inline GeneratorFunctions generator_code = {
-    [](fpga::Generator &gen, UtilizationTracker *tracker) {
-      // FPGA GENERATOR CODE BELOW
-      tracker->set_active();
-
-      // one row of matrix A plus complete matrix B
-      int data_size = ROW_SIZE + MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE;
-
-      for (int chiplet = 1; chiplet <= 4; chiplet++) {
-        unsigned char *data = new unsigned char[data_size];
-
-        memcpy(data, &matrixA[chiplet - 1][0], ROW_SIZE);
-        memcpy(data + ROW_SIZE, &matrixB[0][0],
-               MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE);
-
-        auto tx = gen.send_request(TLM_WRITE_COMMAND, chiplet * 10, chiplet,
-                                   0x0, false, true, data, data_size);
-        delete tx;
-      }
-
-      tracker->set_idle();
-      // ------------------------------
-    },
-    [](fpga::Generator &gen, UtilizationTracker *tracker,
-       tlm_generic_payload *transaction) {
-      // FPGA INTERRUPT HANDLER CODE BELOW
-      tracker->set_active();
-      auto *ext = transaction->get_extension<ChipletExtension>();
-
-      // save result in static variable
-      static int resultC[MATRIX_SIZE][MATRIX_SIZE];
-
-      int chiplet_id = ext->source_id;
-
-      uint32_t address = transaction->get_address();
-      unsigned int data_size = transaction->get_data_length();
-
-      unsigned char *buffer = new unsigned char[data_size];
-
-      auto resp = gen.send_request(TLM_READ_COMMAND, chiplet_id * 100, 0,
-                                   address, true, true, buffer, data_size);
-
-      int *row_result = reinterpret_cast<int *>(resp->get_data_ptr());
-
-      memcpy(&resultC[chiplet_id - 1][0], row_result, ROW_SIZE);
-
-      delete resp;
-
-      std::cout << "Temporary Matrix Result" << std::endl;
-      for (int i = 0; i < MATRIX_SIZE; i++) {
-        std::stringstream ss;
-        for (int j = 0; j < MATRIX_SIZE; j++) {
-          ss << resultC[i][j] << " ";
-        }
-        std::cout << ss.str() << std::endl;
-      }
-      std::cout << std::endl;
-
-      tracker->set_idle();
-      // ------------------------------
-    }};
-
 inline std::map<CoreKey, CoreFunctions> core_code = {
+    // FPGA Core0
+    {{0, 0},
+     {[](Core &core, UtilizationTracker *tracker) {
+        tracker->set_active();
+
+        // one row of matrix A plus complete matrix B
+        int data_size = ROW_SIZE + MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE;
+
+        for (int chiplet = 1; chiplet <= 4; chiplet++) {
+          unsigned char *data = new unsigned char[data_size];
+
+          memcpy(data, &matrixA[chiplet - 1][0], ROW_SIZE);
+          memcpy(data + ROW_SIZE, &matrixB[0][0],
+                 MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE);
+
+          auto tx = core.send_request(TLM_WRITE_COMMAND, chiplet * 10, chiplet,
+                                      0x0, false, true, data, data_size);
+          delete tx;
+        }
+
+        tracker->set_idle();
+      },
+      [](Core &core, UtilizationTracker *tracker,
+         tlm_generic_payload *transaction) {
+        tracker->set_active();
+        auto *ext = transaction->get_extension<ChipletExtension>();
+
+        // save result in static variable
+        static int resultC[MATRIX_SIZE][MATRIX_SIZE];
+
+        int chiplet_id = ext->source_id;
+
+        uint32_t address = transaction->get_address();
+        unsigned int data_size = transaction->get_data_length();
+
+        unsigned char *buffer = new unsigned char[data_size];
+
+        auto resp = core.send_request(TLM_READ_COMMAND, chiplet_id * 100, 0,
+                                     address, true, true, buffer, data_size);
+
+        int *row_result = reinterpret_cast<int *>(resp->get_data_ptr());
+
+        memcpy(&resultC[chiplet_id - 1][0], row_result, ROW_SIZE);
+
+        delete resp;
+
+        std::cout << "Temporary Matrix Result" << std::endl;
+        for (int i = 0; i < MATRIX_SIZE; i++) {
+          std::stringstream ss;
+          for (int j = 0; j < MATRIX_SIZE; j++) {
+            ss << resultC[i][j] << " ";
+          }
+          std::cout << ss.str() << std::endl;
+        }
+        std::cout << std::endl;
+
+        tracker->set_idle();
+      }}},
     // Chiplet1 Core0
     {{1, 0},
-     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
-      [](chiplet::Core &core, UtilizationTracker *tracker,
+     {[](Core &core, UtilizationTracker *tracker) {},
+      [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {
         static const Config &config = ConfigRegistry::instance().get("Chiplet");
 
@@ -342,8 +335,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
       }}},
     // Chiplet2 Core0
     {{2, 0},
-     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
-      [](chiplet::Core &core, UtilizationTracker *tracker,
+     {[](Core &core, UtilizationTracker *tracker) {},
+      [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {
         static const Config &config = ConfigRegistry::instance().get("Chiplet");
 
@@ -382,8 +375,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
       }}},
     // Chiplet3 Core0
     {{3, 0},
-     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
-      [](chiplet::Core &core, UtilizationTracker *tracker,
+     {[](Core &core, UtilizationTracker *tracker) {},
+      [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {
         static const Config &config = ConfigRegistry::instance().get("Chiplet");
 
@@ -422,8 +415,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
       }}},
     // Chiplet4 Core0
     {{4, 0},
-     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
-      [](chiplet::Core &core, UtilizationTracker *tracker,
+     {[](Core &core, UtilizationTracker *tracker) {},
+      [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {
         static const Config &config = ConfigRegistry::instance().get("Chiplet");
 

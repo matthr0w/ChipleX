@@ -6,12 +6,16 @@
 
 #include "include/logging.h"
 
-chiplet::Interconnect::Interconnect(sc_module_name name, double bandwidth,
-                                    double distance)
-    : sc_module(name), utilization_tracker(this->name()),
+Interconnect::Interconnect(sc_module_name name, unsigned int buffer_size,
+                           unsigned int flit_size, unsigned int overhead_size,
+                           sc_time pre_delay, sc_time post_delay,
+                           sc_time irq_delay, double bandwidth, double distance)
+    : sc_module(name), buffer_size(buffer_size), flit_size(flit_size),
+      overhead_size(overhead_size), pre_delay(pre_delay),
+      post_delay(post_delay), irq_delay(irq_delay), bandwidth(bandwidth),
+      distance(distance), utilization_tracker(this->name()),
       tx_tracker(this->name() + std::string(" Tx Buffer")),
-      rx_tracker(this->name() + std::string(" Rx Buffer")),
-      bandwidth(bandwidth), distance(distance), incoming_flits(0),
+      rx_tracker(this->name() + std::string(" Rx Buffer")), incoming_flits(0),
       protocol_target_socket("protocol_target_socket"),
       protocol_initiator_socket("protocol_initiator_socket"),
       interconnect_target_socket("interconnect_target_socket"),
@@ -19,14 +23,14 @@ chiplet::Interconnect::Interconnect(sc_module_name name, double bandwidth,
       peq_protocol("peq_protocol"), peq_interconnect("peq_interconnect"),
       tx_buffer_used_bytes(0), rx_buffer_used_bytes(0) {
   protocol_target_socket.register_nb_transport_fw(
-      this, &chiplet::Interconnect::nb_transport_fw_protocol);
+      this, &Interconnect::nb_transport_fw_protocol);
   protocol_initiator_socket.register_nb_transport_bw(
-      this, &chiplet::Interconnect::nb_transport_bw_protocol);
+      this, &Interconnect::nb_transport_bw_protocol);
 
   interconnect_target_socket.register_nb_transport_fw(
-      this, &chiplet::Interconnect::nb_transport_fw_interconnect);
+      this, &Interconnect::nb_transport_fw_interconnect);
   interconnect_initiator_socket.register_nb_transport_bw(
-      this, &chiplet::Interconnect::nb_transport_bw_interconnect);
+      this, &Interconnect::nb_transport_bw_interconnect);
 
   SC_THREAD(process_protocol_transaction);
   sensitive << peq_protocol.get_event();
@@ -37,7 +41,7 @@ chiplet::Interconnect::Interconnect(sc_module_name name, double bandwidth,
   SC_THREAD(process_rx_buffer);
 }
 
-void chiplet::Interconnect::process_protocol_transaction() {
+void Interconnect::process_protocol_transaction() {
   tlm_generic_payload *transaction;
   tlm_phase phase;
   sc_time delay;
@@ -69,7 +73,7 @@ void chiplet::Interconnect::process_protocol_transaction() {
   }
 }
 
-void chiplet::Interconnect::process_interconnect_transaction() {
+void Interconnect::process_interconnect_transaction() {
   tlm_generic_payload *transaction;
   ChipletExtension *ext;
   tlm_phase phase;
@@ -106,7 +110,7 @@ void chiplet::Interconnect::process_interconnect_transaction() {
   }
 }
 
-void chiplet::Interconnect::process_tx_buffer() {
+void Interconnect::process_tx_buffer() {
   while (true) {
     wait(tx_buffer_in_event);
 
@@ -140,7 +144,7 @@ void chiplet::Interconnect::process_tx_buffer() {
   }
 }
 
-void chiplet::Interconnect::process_rx_buffer() {
+void Interconnect::process_rx_buffer() {
   while (true) {
     wait(rx_buffer_in_event);
 
@@ -175,8 +179,9 @@ void chiplet::Interconnect::process_rx_buffer() {
 // -------------------------------------------------------
 // transport functions
 // -------------------------------------------------------
-tlm_sync_enum chiplet::Interconnect::nb_transport_fw_protocol(
-    tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum
+Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
+                                       tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction,
                "PROTOCOL: Received request from Protocol Layer");
 
@@ -195,8 +200,9 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_protocol(
   return TLM_UPDATED;
 }
 
-tlm_sync_enum chiplet::Interconnect::nb_transport_fw_interconnect(
-    tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum
+Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
+                                           tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction,
                "PROTOCOL: Received request from Interconnect");
 
@@ -217,8 +223,9 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_fw_interconnect(
   return TLM_UPDATED;
 }
 
-tlm_sync_enum chiplet::Interconnect::nb_transport_bw_protocol(
-    tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum
+Interconnect::nb_transport_bw_protocol(tlm_generic_payload &transaction,
+                                       tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction,
                  "PROTOCOL: Received response from Protocol Layer");
@@ -232,8 +239,9 @@ tlm_sync_enum chiplet::Interconnect::nb_transport_bw_protocol(
   return TLM_ACCEPTED;
 }
 
-tlm_sync_enum chiplet::Interconnect::nb_transport_bw_interconnect(
-    tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum
+Interconnect::nb_transport_bw_interconnect(tlm_generic_payload &transaction,
+                                           tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_RESP) {
     SC_LOG_DEBUG(this, transaction,
                  "PROTOCOL: Received response from Interconnect");

@@ -2,10 +2,10 @@
 
 #include <systemc>
 
-#include "protocol/ChipletExtension.h"
-
 #include "include/configs.h"
 #include "include/globals.h"
+
+#include "protocol/ChipletExtension.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -17,8 +17,9 @@ get_available_data_bytes_per_flit(tlm_generic_payload &transaction) {
 
   static const unsigned int flit_size =
       interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
-  static const unsigned int overhead_size = interconnect_config.get<unsigned int>(
-      "interconnect_protocol.overhead_size");
+  static const unsigned int overhead_size =
+      interconnect_config.get<unsigned int>(
+          "interconnect_protocol.overhead_size");
 
   switch (connection_type) {
   case ConnectionType::SPI:
