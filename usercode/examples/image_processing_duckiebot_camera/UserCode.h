@@ -4,14 +4,13 @@
 #include <map>
 #include <utility>
 
-#include "chiplet/Core.h"
-#include "fpga/Generator.h"
-
 #include "common/Tracker.h"
 
 #include "include/configs.h"
 #include "include/globals.h"
 #include "include/logging.h"
+
+#include "modules/Core.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -24,30 +23,22 @@ struct ImageHeader {
   uint32_t channels;
 };
 
-using GeneratorFunctions = std::pair<
-    std::function<void(fpga::Generator &, UtilizationTracker *)>, // main thread
-    std::function<void(fpga::Generator &, UtilizationTracker *,
-                       tlm_generic_payload *)> // interrupt handler
-    >;
-
-using CoreFunctions = std::pair<
-    std::function<void(chiplet::Core &, UtilizationTracker *)>, // main thread
-    std::function<void(chiplet::Core &, UtilizationTracker *,
-                       tlm_generic_payload *)> // interrupt handler
-    >;
+using CoreFunctions =
+    std::pair<std::function<void(Core &, UtilizationTracker *)>, // main thread
+              std::function<void(Core &, UtilizationTracker *,
+                                 tlm_generic_payload *)> // interrupt handler
+              >;
 using CoreKey = std::pair<int, int>;
 
-// DO NOT EDIT CODE ABOVE THIS LINE
-
 // =========================================================================
-// This file allows you to program the FPGA generator and the chiplet cores.
+// This file allows you to program the FPGA and chiplet cores.
 //
-// Each module supports two user-defined functions:
+// Each core supports two user-defined functions:
 //   - Main thread function (runs once at simulation start; you may use an
 //     infinite loop with wait() if it should remain active)
-//   - Interrupt handler (called when the module receives an IRQ)
+//   - Interrupt handler (called when the core receives an IRQ)
 //
-// If no user code is provided for a module, it will remain idle.
+// If no user code is provided for a core, it will remain idle.
 // =========================================================================
 //
 // -----------------------------
@@ -185,19 +176,25 @@ using CoreKey = std::pair<int, int>;
 //  Code Instructions:
 // -----------------------------
 //
-// FPGA Generator:
-// Implement your logic inside the blocks highlighted in the code below.
+// Use the following format to define behavior per core in the `core_code`:
 //
-// Chiplet Cores:
-// Use the following format to define behavior per chiplet/core in the
-// `core_code`:
+//     // FPGA Core0
+//     {{0, 0},
+//      {[](Core &core, UtilizationTracker *tracker) {
+//           // MAIN THREAD CODE
+//       },
+//       [](Core &core, UtilizationTracker *tracker,
+//          tlm_generic_payload *transaction) {
+//           // INTERRUPT HANDLER CODE
+//       }}},
 //
 //     // ChipletX CoreY
 //     {{X, Y},
-//      {[](chiplet::Core &core) {
+//      {[](Core &core, UtilizationTracker *tracker) {
 //           // MAIN THREAD CODE
 //       },
-//       [](chiplet::Core &core, tlm_generic_payload *transaction) {
+//       [](Core &core, UtilizationTracker *tracker,
+//          tlm_generic_payload *transaction) {
 //           // INTERRUPT HANDLER CODE
 //       }}},
 //
@@ -208,7 +205,7 @@ using CoreKey = std::pair<int, int>;
 // Core Code Example:
 // // Chiplet1 Core0
 // {{1, 0},
-//  {[](chiplet::Core &core, UtilizationTracker *tracker) {
+//  {[](Core &core, UtilizationTracker *tracker) {
 //     SC_LOG_DEBUG_NO_TX(&core, "Starting Core Logic");
 //     tracker.set_active();
 //     uint32_t *data = new uint32_t(0xABCD);
@@ -219,7 +216,7 @@ using CoreKey = std::pair<int, int>;
 //     delete response;
 //     tracker.set_idle();
 //   },
-//   [](chiplet::Core &core, UtilizationTracker *tracker,
+//   [](Core &core, UtilizationTracker *tracker,
 //      tlm_generic_payload *transaction) {
 //     auto *ext = transaction->get_extension<ChipletExtension>();
 //     if (ext) {
@@ -238,96 +235,93 @@ using CoreKey = std::pair<int, int>;
 //
 // ============================================================
 
-inline GeneratorFunctions generator_code = {
-    [](fpga::Generator &gen, UtilizationTracker *tracker) {
-      // FPGA GENERATOR CODE BELOW
-      static unsigned int request = 0;
-      static sc_time request_delay(8, SC_MS); // approximately 120 fps
+inline std::map<CoreKey, CoreFunctions> core_code = {
+    // FPGA Core0
+    {{0, 0},
+     {[](Core &core, UtilizationTracker *tracker) {
+        static unsigned int request = 0;
+        static sc_time request_delay(8, SC_MS); // approximately 120 fps
 
-      int width, height, channels;
-      unsigned char *input_img = stbi_load("usercode/duckiebot_input.jpg",
-                                           &width, &height, &channels, 3);
+        int width, height, channels;
+        unsigned char *input_img = stbi_load("usercode/duckiebot_input.jpg",
+                                             &width, &height, &channels, 3);
 
-      size_t header_size = sizeof(ImageHeader);
-      size_t img_size = width * height * channels;
-      size_t buffer_size = header_size + img_size;
+        size_t header_size = sizeof(ImageHeader);
+        size_t img_size = width * height * channels;
+        size_t buffer_size = header_size + img_size;
 
-      while (true) {
+        while (true) {
+          tracker->set_active();
+
+          unsigned char *buffer = new unsigned char[buffer_size];
+
+          ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
+          header->width = width;
+          header->height = height;
+          header->channels = channels;
+
+          std::memcpy(buffer + header_size, input_img, img_size);
+
+          sc_time request_start_stamp = sc_time_stamp();
+
+          // write to Chiplet1 RAM
+          auto response = core.send_request(TLM_WRITE_COMMAND, request, 1, 0x0,
+                                            false, true, buffer, buffer_size);
+
+          delete response;
+
+          sc_time request_end_stamp = sc_time_stamp();
+
+          ++request;
+
+          tracker->set_idle();
+
+          if (request == 10) {
+            break;
+          }
+
+          wait(request_delay - (request_end_stamp - request_start_stamp));
+        }
+
+        stbi_image_free(input_img);
+      },
+      [](Core &core, UtilizationTracker *tracker,
+         tlm_generic_payload *transaction) {
+        static unsigned int request = 0;
+
         tracker->set_active();
 
-        unsigned char *buffer = new unsigned char[buffer_size];
+        auto addr = transaction->get_address();
+        auto len = transaction->get_data_length();
+
+        // read from FPGA RAM
+        unsigned char *buffer = new unsigned char[len];
+        auto *response = core.send_request(TLM_READ_COMMAND, request, 0, addr,
+                                           true, true, buffer, len);
 
         ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
-        header->width = width;
-        header->height = height;
-        header->channels = channels;
+        uint32_t width = header->width;
+        uint32_t height = header->height;
+        uint32_t channels = header->channels;
 
-        std::memcpy(buffer + header_size, input_img, img_size);
+        unsigned char *img_data = buffer + sizeof(ImageHeader);
 
-        sc_time request_start_stamp = sc_time_stamp();
+        std::string filename =
+            "usercode/duckiebot_output" + std::to_string(request) + ".jpg";
 
-        // write to Chiplet1 RAM
-        auto response = gen.send_request(TLM_WRITE_COMMAND, request, 1, 0x0,
-                                         false, true, buffer, buffer_size);
+        stbi_write_jpg(filename.c_str(), width, height, channels, img_data,
+                       100);
 
         delete response;
-
-        sc_time request_end_stamp = sc_time_stamp();
 
         ++request;
 
         tracker->set_idle();
-
-        if (request == 10) {
-          break;
-        }
-
-        wait(request_delay - (request_end_stamp - request_start_stamp));
-      }
-
-      stbi_image_free(input_img);
-      // ------------------------------
-    },
-    [](fpga::Generator &gen, UtilizationTracker *tracker,
-       tlm_generic_payload *transaction) {
-      // FPGA INTERRUPT HANDLER CODE BELOW
-      static unsigned int request = 0;
-
-      tracker->set_active();
-
-      auto addr = transaction->get_address();
-      auto len = transaction->get_data_length();
-
-      // read from FPGA RAM
-      unsigned char *buffer = new unsigned char[len];
-      auto *response = gen.send_request(TLM_READ_COMMAND, request, 0, addr,
-                                        true, true, buffer, len);
-
-      ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
-      uint32_t width = header->width;
-      uint32_t height = header->height;
-      uint32_t channels = header->channels;
-
-      unsigned char *img_data = buffer + sizeof(ImageHeader);
-
-      std::string filename =
-          "usercode/duckiebot_output" + std::to_string(request) + ".jpg";
-
-      stbi_write_jpg(filename.c_str(), width, height, channels, img_data, 100);
-
-      delete response;
-
-      ++request;
-
-      tracker->set_idle();
-      // ------------------------------
-    }};
-
-inline std::map<CoreKey, CoreFunctions> core_code = {
+      }}},
     // Chiplet1 Core0
     {{1, 0},
-     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
-      [](chiplet::Core &core, UtilizationTracker *tracker,
+     {[](Core &core, UtilizationTracker *tracker) {},
+      [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {
         static const Config &config = ConfigRegistry::instance().get("Chiplet");
         static unsigned int request = 0;
@@ -391,8 +385,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
       }}},
     // Chiplet2 Core0
     {{2, 0},
-     {[](chiplet::Core &core, UtilizationTracker *tracker) {},
-      [](chiplet::Core &core, UtilizationTracker *tracker,
+     {[](Core &core, UtilizationTracker *tracker) {},
+      [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {
         static const Config &config = ConfigRegistry::instance().get("Chiplet");
         static unsigned int request = 0;
