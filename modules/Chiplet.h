@@ -32,7 +32,12 @@ private:
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
-  // chiplet
+  const unsigned int num_cores = 2;
+  const unsigned int num_bus_masters = 3;
+  const unsigned int num_bus_slaves = 2;
+  const unsigned int num_interconnects = 3;
+
+  // chiplet config
   const sc_time chiplet_cores_clk_cycle =
       chiplet_config.get<sc_time>("cores.clk_cycle");
 
@@ -63,10 +68,10 @@ private:
   const sc_time chiplet_ram_access_delay =
       chiplet_config.get<sc_time>("ram.access_delay");
 
-  // FPGA
+  // FPGA config
   const unsigned int fpga_ram_size = fpga_config.get<unsigned int>("ram.size");
 
-  // interconnect
+  // interconnect config
   const unsigned int interconnect_flit_size =
       interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
   const unsigned int interconnect_overhead_size =

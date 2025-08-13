@@ -16,17 +16,18 @@ Chiplet::Chiplet(sc_module_name name)
       cache1("Cache1", chiplet_id, chiplet_cache_size, chiplet_cache_block_size,
              chiplet_cache_arbitration_delay, chiplet_cache_access_delay,
              chiplet_bus_width, chiplet_bus_clk_cycle),
-      bus("Bus", chiplet_id, 3, 2, chiplet_bus_arbitration_delay),
-      interconnectprotocol("InterconnectProtocol", chiplet_id, 2, 3,
-                           interconnect_flit_size, interconnect_overhead_size,
-                           interconnect_pre_delay, interconnect_post_delay,
-                           interconnect_irq_delay, chiplet_bus_width,
-                           chiplet_bus_clk_cycle),
+      bus("Bus", chiplet_id, num_bus_masters, num_bus_slaves,
+          chiplet_bus_arbitration_delay),
+      interconnectprotocol("InterconnectProtocol", chiplet_id, num_cores,
+                           num_interconnects, interconnect_flit_size,
+                           interconnect_overhead_size, interconnect_pre_delay,
+                           interconnect_post_delay, interconnect_irq_delay,
+                           chiplet_bus_width, chiplet_bus_clk_cycle),
       memorycontroller("MemoryController", chiplet_bus_width,
                        chiplet_bus_clk_cycle, chiplet_ram_size),
       ram("RAM", chiplet_ram_size, chiplet_ram_width, chiplet_ram_clk_cycle,
           chiplet_ram_address_delay, chiplet_ram_access_delay) {
-  for (unsigned int i = 0; i < 3; ++i) {
+  for (unsigned int i = 0; i < num_interconnects; ++i) {
     std::string name = "Interconnect" + std::to_string(i);
 
     if (i == 0) { // interconnect to FPGA
@@ -94,12 +95,12 @@ void Chiplet::initialize() {
   utilization_trackers.push_back(&ram.utilization_tracker);
   utilization_trackers.push_back(&interconnectprotocol.utilization_tracker);
 
-  for (unsigned int i = 0; i < 3; ++i) {
+  for (unsigned int i = 0; i < num_interconnects; ++i) {
     utilization_trackers.push_back(&interconnects[i]->utilization_tracker);
   }
 
   // buffer usages
-  for (unsigned int i = 0; i < 3; ++i) {
+  for (unsigned int i = 0; i < num_interconnects; ++i) {
     buffer_trackers.push_back(&interconnects[i]->tx_tracker);
     buffer_trackers.push_back(&interconnects[i]->rx_tracker);
   }

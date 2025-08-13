@@ -12,12 +12,16 @@
 
 #include "common/Tracker.h"
 
+#include "include/globals.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
 SC_MODULE(FPGA) {
 private:
+  const unsigned int fpga_id;
+
   // -------------------------------------------------------
   // configs
   // -------------------------------------------------------
@@ -29,7 +33,12 @@ private:
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
-  // FPGA
+  const unsigned int num_cores = 1;
+  const unsigned int num_bus_masters = 2;
+  const unsigned int num_bus_slaves = 2;
+  const unsigned int num_interconnects = num_chiplets;
+
+  // FPGA config
   const sc_time fpga_cores_clk_cycle =
       fpga_config.get<sc_time>("cores.clk_cycle");
 
@@ -44,27 +53,24 @@ private:
 
   const unsigned int fpga_bus_width =
       fpga_config.get<unsigned int>("bus.width");
-  const sc_time fpga_bus_clk_cycle =
-      fpga_config.get<sc_time>("bus.clk_cycle");
+  const sc_time fpga_bus_clk_cycle = fpga_config.get<sc_time>("bus.clk_cycle");
   const sc_time fpga_bus_arbitration_delay =
       fpga_config.get<sc_time>("bus.arbitration_delay");
 
-  const unsigned int fpga_ram_size =
-      fpga_config.get<unsigned int>("ram.size");
+  const unsigned int fpga_ram_size = fpga_config.get<unsigned int>("ram.size");
   const unsigned int fpga_ram_width =
       fpga_config.get<unsigned int>("ram.width");
-  const sc_time fpga_ram_clk_cycle =
-      fpga_config.get<sc_time>("ram.clk_cycle");
+  const sc_time fpga_ram_clk_cycle = fpga_config.get<sc_time>("ram.clk_cycle");
   const sc_time fpga_ram_address_delay =
       fpga_config.get<sc_time>("ram.address_delay");
   const sc_time fpga_ram_access_delay =
       fpga_config.get<sc_time>("ram.access_delay");
 
-  // chiplet
+  // chiplet config
   const unsigned int chiplet_ram_size =
       chiplet_config.get<unsigned int>("ram.size");
 
-  // interconnect
+  // interconnect config
   const unsigned int interconnect_flit_size =
       interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
   const unsigned int interconnect_overhead_size =
