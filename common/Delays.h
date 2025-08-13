@@ -2,13 +2,13 @@
 
 #include <systemc>
 
-#include "Tracker.h"
-#include "protocol/ChipletExtension.h"
-#include "protocol/ChipletPayload.h"
-
 #include "include/configs.h"
 #include "include/globals.h"
 #include "include/logging.h"
+
+#include "Tracker.h"
+#include "protocol/ChipletExtension.h"
+#include "protocol/ChipletPayload.h"
 
 using namespace sc_core;
 using namespace tlm;

@@ -10,25 +10,27 @@
 #include "include/globals.h"
 #include "include/logging.h"
 
-chiplet::Core::Core(sc_module_name name, unsigned int chiplet_id,
-                    unsigned int core_id)
-    : sc_module(name), utilization_tracker(this->name()),
-      chiplet_id(chiplet_id), core_id(core_id), request(0), socket("socket") {
-  socket.register_nb_transport_bw(this, &chiplet::Core::nb_transport_bw);
-  irq_socket.register_nb_transport_fw(this,
-                                      &chiplet::Core::nb_transport_fw_irq);
+Core::Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
+           unsigned int chiplet_ram_size, unsigned int fpga_ram_size,
+           sc_time irq_delay)
+    : sc_module(name), chip_id(chip_id), core_id(core_id),
+      chiplet_ram_size(chiplet_ram_size), fpga_ram_size(fpga_ram_size),
+      irq_delay(irq_delay), utilization_tracker(this->name()), socket("socket"),
+      request(0) {
+  socket.register_nb_transport_bw(this, &Core::nb_transport_bw);
+  irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
 
   SC_THREAD(core_thread);
   SC_THREAD(interrupt_thread);
 }
 
-void chiplet::Core::core_thread() {
+void Core::core_thread() {
   if (thread_fn) {
     thread_fn(*this, &utilization_tracker);
   }
 }
 
-void chiplet::Core::interrupt_thread() {
+void Core::interrupt_thread() {
   tlm_generic_payload *transaction;
   ChipletExtension *ext;
   tlm_phase phase;
@@ -51,10 +53,9 @@ void chiplet::Core::interrupt_thread() {
   }
 }
 
-void chiplet::Core::send_random(unsigned int delay, double write_prob,
-                                unsigned int destination_min,
-                                unsigned int destination_max,
-                                size_t data_size) {
+void Core::send_random(unsigned int delay, double write_prob,
+                       unsigned int destination_min,
+                       unsigned int destination_max, size_t data_size) {
   if (destination_max > num_chiplets) {
     destination_max = num_chiplets;
   }
@@ -117,11 +118,11 @@ void chiplet::Core::send_random(unsigned int delay, double write_prob,
   }
 }
 
-ChipletPayload *
-chiplet::Core::send_request(tlm_command command, int request_id,
-                            int destination_id, uint32_t address,
-                            bool fixed_address, bool is_volatile,
-                            unsigned char *data, unsigned int data_size) {
+ChipletPayload *Core::send_request(tlm_command command, int request_id,
+                                   int destination_id, uint32_t address,
+                                   bool fixed_address, bool is_volatile,
+                                   unsigned char *data,
+                                   unsigned int data_size) {
   std::scoped_lock lock(request_mutex);
 
   auto *transaction = new ChipletPayload();
@@ -178,7 +179,7 @@ chiplet::Core::send_request(tlm_command command, int request_id,
   wait(transaction_done);
 
   // on-chip requests: request done
-  if (destination_id == chiplet_id) {
+  if (destination_id == chip_id) {
     transaction->get_extension(ext);
     sc_time latency = sc_time_stamp() - ext->start_time;
     LatencyTracker::instance().record(latency);
@@ -192,9 +193,9 @@ chiplet::Core::send_request(tlm_command command, int request_id,
 // -------------------------------------------------------
 // transport functions
 // -------------------------------------------------------
-tlm_sync_enum
-chiplet::Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
-                                   tlm_phase &phase, sc_core::sc_time &delay) {
+tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
+                                        tlm_phase &phase,
+                                        sc_core::sc_time &delay) {
   if (phase == BEGIN_REQ) {
     delay += get_irq_transfer_delay(*this, transaction, irq_delay);
 
@@ -211,9 +212,8 @@ chiplet::Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
   return TLM_ACCEPTED;
 }
 
-tlm_sync_enum chiplet::Core::nb_transport_bw(tlm_generic_payload &transaction,
-                                             tlm_phase &phase,
-                                             sc_core::sc_time &delay) {
+tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
+                                    tlm_phase &phase, sc_core::sc_time &delay) {
   if (phase == BEGIN_RESP) {
     transaction_done.notify(delay);
 

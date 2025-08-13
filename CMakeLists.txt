@@ -27,15 +27,13 @@ FetchContent_MakeAvailable(yaml-cpp)
 file(GLOB COMMON_SOURCES ${PROJECT_SOURCE_DIR}/common/*.cpp)
 # include sources
 file(GLOB INCLUDE_SOURCES ${PROJECT_SOURCE_DIR}/include/*.cpp)
-# chiplet sources
-file(GLOB CHIPLET_SOURCES ${PROJECT_SOURCE_DIR}/chiplet/*.cpp)
-# fpga sources
-file(GLOB FPGA_SOURCES ${PROJECT_SOURCE_DIR}/fpga/*.cpp)
+# modules sources
+file(GLOB MODULES_SOURCES ${PROJECT_SOURCE_DIR}/modules/*.cpp)
 # usercode sources
 file(GLOB USERCODE_SOURCES ${PROJECT_SOURCE_DIR}/usercode/*.c ${PROJECT_SOURCE_DIR}/usercode/*.cpp)
 
 # add source files
-add_executable(sim main.cpp ${COMMON_SOURCES} ${INCLUDE_SOURCES} ${CHIPLET_SOURCES} ${FPGA_SOURCES} ${USERCODE_SOURCES})
+add_executable(sim main.cpp ${COMMON_SOURCES} ${INCLUDE_SOURCES} ${MODULES_SOURCES} ${USERCODE_SOURCES})
 
 # include SystemC headers
 target_include_directories(sim PRIVATE $ENV{SYSTEMC_PATH}/include)

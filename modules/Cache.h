@@ -9,13 +9,10 @@
 
 #include "common/Tracker.h"
 
-#include "include/configs.h"
-
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-namespace chiplet {
 SC_MODULE(Cache) {
 public:
   // -------------------------------------------------------
@@ -29,13 +26,14 @@ public:
   simple_target_socket<Cache> core_target_socket;
   simple_initiator_socket<Cache> bus_initiator_socket;
 
-  Cache(sc_module_name name, unsigned int chiplet_id);
+  Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
+        unsigned int cache_block_size, sc_time cache_arbitration_delay,
+        sc_time cache_access_delay, unsigned int bus_width,
+        sc_time bus_clk_cycle);
 
   void report_rates();
 
 private:
-  const unsigned int chiplet_id;
-
   void split_transaction(tlm_generic_payload & transaction);
   void send_to_bus(tlm_generic_payload & transaction);
 
@@ -54,20 +52,15 @@ private:
   unsigned int num_misses;
 
   // -------------------------------------------------------
-  // config
+  // parameters
   // -------------------------------------------------------
-  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
-
-  const unsigned int cache_size =
-      chiplet_config.get<unsigned int>("cache.size");
-  const unsigned int block_size =
-      chiplet_config.get<unsigned int>("cache.block_size");
-  const sc_time arbitration_delay =
-      chiplet_config.get<sc_time>("cache.arbitration_delay");
-  const sc_time access_delay =
-      chiplet_config.get<sc_time>("cache.access_delay");
-  const unsigned int bus_width = chiplet_config.get<unsigned int>("bus.width");
-  const sc_time bus_clk_cycle = chiplet_config.get<sc_time>("bus.clk_cycle");
+  const unsigned int chip_id;
+  const unsigned int cache_size;
+  const unsigned int cache_block_size;
+  const sc_time cache_arbitration_delay;
+  const sc_time cache_access_delay;
+  const unsigned int bus_width;
+  const sc_time bus_clk_cycle;
 
   // -------------------------------------------------------
   // peqs
@@ -89,4 +82,3 @@ private:
   tlm_sync_enum nb_transport_bw(tlm_generic_payload & transaction,
                                 tlm_phase & phase, sc_time & delay);
 };
-}; // namespace chiplet

@@ -1,22 +1,29 @@
 #include "RAM.h"
 
 #include "common/Delays.h"
+#include "common/Tracker.h"
+#include "common/protocol/ChipletExtension.h"
 
 #include "include/logging.h"
 
 using namespace sc_core;
 using namespace tlm;
 
-fpga::RAM::RAM(sc_module_name name)
-    : sc_module(name), utilization_tracker(this->name()), socket("socket"),
-      peq("peq"), mem(ram_size * 1024, 0), written_flags(mem.size(), false) {
-  socket.register_nb_transport_fw(this, &fpga::RAM::nb_transport_fw);
+RAM::RAM(sc_module_name name, unsigned int ram_size, unsigned int ram_width,
+         sc_time ram_clk_cycle, sc_time ram_address_delay,
+         sc_time ram_access_delay)
+    : sc_module(name), ram_size(ram_size), ram_width(ram_width),
+      ram_clk_cycle(ram_clk_cycle), ram_address_delay(ram_address_delay),
+      ram_access_delay(ram_access_delay), utilization_tracker(this->name()),
+      socket("socket"), peq("peq"), mem(ram_size * 1024, 0),
+      written_flags(mem.size(), false) {
+  socket.register_nb_transport_fw(this, &RAM::nb_transport_fw);
 
   SC_THREAD(process_transaction);
   sensitive << peq.get_event();
 }
 
-void fpga::RAM::process_transaction() {
+void RAM::process_transaction() {
   tlm_generic_payload *transaction;
   ChipletExtension *ext;
   tlm_phase phase;
@@ -77,7 +84,7 @@ void fpga::RAM::process_transaction() {
   }
 }
 
-void fpga::RAM::report_usage() {
+void RAM::report_usage() {
   size_t written_bytes =
       std::count(written_flags.begin(), written_flags.end(), true);
 
@@ -88,8 +95,8 @@ void fpga::RAM::report_usage() {
 // -------------------------------------------------------
 // transport functions
 // -------------------------------------------------------
-tlm_sync_enum fpga::RAM::nb_transport_fw(tlm_generic_payload &transaction,
-                                         tlm_phase &phase, sc_time &delay) {
+tlm_sync_enum RAM::nb_transport_fw(tlm_generic_payload &transaction,
+                                   tlm_phase &phase, sc_time &delay) {
   if (phase == BEGIN_REQ) {
     delay +=
         get_mem_address_assignment_delay(*this, transaction, ram_address_delay);
