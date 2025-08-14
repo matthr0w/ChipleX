@@ -33,8 +33,8 @@ private:
   // parameters
   // -------------------------------------------------------
   const unsigned int num_cores = 2;
-  const unsigned int num_bus_masters = 3;
-  const unsigned int num_bus_slaves = 2;
+  const unsigned int num_bus_managers = 3;
+  const unsigned int num_bus_subordinates = 2;
   const unsigned int num_interconnects = 3;
 
   // chiplet config

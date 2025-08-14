@@ -11,7 +11,7 @@ FPGA::FPGA(sc_module_name name)
       cache("Cache", fpga_id, fpga_cache_size, fpga_cache_block_size,
             fpga_cache_arbitration_delay, fpga_cache_access_delay,
             fpga_bus_width, fpga_bus_clk_cycle),
-      bus("Bus", fpga_id, num_bus_masters, num_bus_slaves,
+      bus("Bus", fpga_id, num_bus_managers, num_bus_subordinates,
           fpga_bus_arbitration_delay),
       interconnectprotocol("InterconnectProtocol", fpga_id, num_cores,
                            num_interconnects, interconnect_flit_size,
@@ -46,12 +46,12 @@ void FPGA::initialize() {
   // core
   core.socket.bind(cache.core_target_socket);
   // cache
-  cache.bus_initiator_socket.bind(bus.master_target_sockets[0]);
+  cache.bus_initiator_socket.bind(bus.manager_target_sockets[0]);
   // interconnects
-  bus.slave_initiator_sockets[0].bind(interconnectprotocol.bus_target_socket);
-  interconnectprotocol.bus_initiator_socket.bind(bus.master_target_sockets[1]);
+  bus.subordinate_initiator_sockets[0].bind(interconnectprotocol.bus_target_socket);
+  interconnectprotocol.bus_initiator_socket.bind(bus.manager_target_sockets[1]);
   // memory controller
-  bus.slave_initiator_sockets[1].bind(memorycontroller.bus_target_socket);
+  bus.subordinate_initiator_sockets[1].bind(memorycontroller.bus_target_socket);
   // RAM
   memorycontroller.ram_initiator_socket.bind(ram.socket);
 

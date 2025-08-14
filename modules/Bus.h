@@ -22,11 +22,11 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket_tagged<Bus> *master_target_sockets;
-  simple_initiator_socket_tagged<Bus> *slave_initiator_sockets;
+  simple_target_socket_tagged<Bus> *manager_target_sockets;
+  simple_initiator_socket_tagged<Bus> *subordinate_initiator_sockets;
 
-  Bus(sc_module_name name, unsigned int chip_id, unsigned int num_masters,
-      unsigned int num_slaves, sc_time bus_arbitration_delay);
+  Bus(sc_module_name name, unsigned int chip_id, unsigned int num_managers,
+      unsigned int num_subordinates, sc_time bus_arbitration_delay);
   ~Bus();
 
 private:

@@ -16,7 +16,7 @@ Chiplet::Chiplet(sc_module_name name)
       cache1("Cache1", chiplet_id, chiplet_cache_size, chiplet_cache_block_size,
              chiplet_cache_arbitration_delay, chiplet_cache_access_delay,
              chiplet_bus_width, chiplet_bus_clk_cycle),
-      bus("Bus", chiplet_id, num_bus_masters, num_bus_slaves,
+      bus("Bus", chiplet_id, num_bus_managers, num_bus_subordinates,
           chiplet_bus_arbitration_delay),
       interconnectprotocol("InterconnectProtocol", chiplet_id, num_cores,
                            num_interconnects, interconnect_flit_size,
@@ -61,13 +61,13 @@ void Chiplet::initialize() {
   core0.socket.bind(cache0.core_target_socket);
   core1.socket.bind(cache1.core_target_socket);
   // caches
-  cache0.bus_initiator_socket.bind(bus.master_target_sockets[0]);
-  cache1.bus_initiator_socket.bind(bus.master_target_sockets[1]);
+  cache0.bus_initiator_socket.bind(bus.manager_target_sockets[0]);
+  cache1.bus_initiator_socket.bind(bus.manager_target_sockets[1]);
   // interconnects
-  bus.slave_initiator_sockets[0].bind(interconnectprotocol.bus_target_socket);
-  interconnectprotocol.bus_initiator_socket.bind(bus.master_target_sockets[2]);
+  bus.subordinate_initiator_sockets[0].bind(interconnectprotocol.bus_target_socket);
+  interconnectprotocol.bus_initiator_socket.bind(bus.manager_target_sockets[2]);
   // memory controller
-  bus.slave_initiator_sockets[1].bind(memorycontroller.bus_target_socket);
+  bus.subordinate_initiator_sockets[1].bind(memorycontroller.bus_target_socket);
   // RAM
   memorycontroller.ram_initiator_socket.bind(ram.socket);
 

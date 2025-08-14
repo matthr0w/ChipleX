@@ -34,8 +34,8 @@ private:
   // parameters
   // -------------------------------------------------------
   const unsigned int num_cores = 1;
-  const unsigned int num_bus_masters = 2;
-  const unsigned int num_bus_slaves = 2;
+  const unsigned int num_bus_managers = 2;
+  const unsigned int num_bus_subordinates = 2;
   const unsigned int num_interconnects = num_chiplets;
 
   // FPGA config

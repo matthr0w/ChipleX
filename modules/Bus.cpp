@@ -7,22 +7,22 @@
 
 #include "include/logging.h"
 
-Bus::Bus(sc_module_name name, unsigned int chip_id, unsigned int num_masters,
-         unsigned int num_slaves, sc_time bus_arbitration_delay)
+Bus::Bus(sc_module_name name, unsigned int chip_id, unsigned int num_managers,
+         unsigned int num_subordinates, sc_time bus_arbitration_delay)
     : sc_module(name), chip_id(chip_id),
       bus_arbitration_delay(bus_arbitration_delay),
       utilization_tracker(this->name()), peq_fw("peq_fw"), peq_bw("peq_bw"),
       current_owner(-1) {
-  master_target_sockets = new simple_target_socket_tagged<Bus>[num_masters];
-  slave_initiator_sockets = new simple_initiator_socket_tagged<Bus>[num_slaves];
+  manager_target_sockets = new simple_target_socket_tagged<Bus>[num_managers];
+  subordinate_initiator_sockets = new simple_initiator_socket_tagged<Bus>[num_subordinates];
 
-  for (unsigned int i = 0; i < num_masters; ++i) {
-    master_target_sockets[i].register_nb_transport_fw(this,
+  for (unsigned int i = 0; i < num_managers; ++i) {
+    manager_target_sockets[i].register_nb_transport_fw(this,
                                                       &Bus::nb_transport_fw, i);
   }
 
-  for (unsigned int i = 0; i < num_slaves; ++i) {
-    slave_initiator_sockets[i].register_nb_transport_bw(
+  for (unsigned int i = 0; i < num_subordinates; ++i) {
+    subordinate_initiator_sockets[i].register_nb_transport_bw(
         this, &Bus::nb_transport_bw, i);
   }
 
@@ -33,8 +33,8 @@ Bus::Bus(sc_module_name name, unsigned int chip_id, unsigned int num_masters,
 }
 
 Bus::~Bus() {
-  delete[] master_target_sockets;
-  delete[] slave_initiator_sockets;
+  delete[] manager_target_sockets;
+  delete[] subordinate_initiator_sockets;
 }
 
 void Bus::process_transaction_fw() {
@@ -58,7 +58,7 @@ void Bus::process_transaction_fw() {
                    "PROTOCOL: Forwarding BEGIN_REQ for " << current_owner
                                                          << " to Interconnect");
 
-      tlm_resp = slave_initiator_sockets[0]->nb_transport_fw(*transaction,
+      tlm_resp = subordinate_initiator_sockets[0]->nb_transport_fw(*transaction,
                                                              phase, delay);
 
       if (tlm_resp == TLM_UPDATED) {
@@ -69,7 +69,7 @@ void Bus::process_transaction_fw() {
                    "PROTOCOL: Forwarding BEGIN_REQ for " << current_owner
                                                          << " to RAM");
 
-      tlm_resp = slave_initiator_sockets[1]->nb_transport_fw(*transaction,
+      tlm_resp = subordinate_initiator_sockets[1]->nb_transport_fw(*transaction,
                                                              phase, delay);
 
       if (tlm_resp == TLM_UPDATED) {
@@ -97,7 +97,7 @@ void Bus::process_transaction_bw() {
                  "PROTOCOL: Backwarding BEGIN_RESP to " << current_owner);
 
     // begin response
-    tlm_resp = master_target_sockets[current_owner]->nb_transport_bw(
+    tlm_resp = manager_target_sockets[current_owner]->nb_transport_bw(
         *transaction, phase, delay);
 
     if (tlm_resp == TLM_COMPLETED) {
@@ -144,7 +144,7 @@ void Bus::process_queue() {
   delay = SC_ZERO_TIME;
 
   // end request
-  tlm_resp = master_target_sockets[current_owner]->nb_transport_bw(
+  tlm_resp = manager_target_sockets[current_owner]->nb_transport_bw(
       *next_transaction, phase, delay);
 }
 
