@@ -66,10 +66,6 @@ private:
   const sc_time fpga_ram_access_delay =
       fpga_config.get<sc_time>("ram.access_delay");
 
-  // chiplet config
-  const unsigned int chiplet_ram_size =
-      chiplet_config.get<unsigned int>("ram.size");
-
   // interconnect config
   const unsigned int interconnect_flit_size =
       interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");

@@ -28,6 +28,8 @@ public:
                    sc_time bus_clk_cycle, unsigned int ram_size);
 
 private:
+  sc_mutex mutex;
+
   uint32_t offchip_base_address;
   std::map<uint32_t, unsigned int> allocated_ranges;
 
@@ -61,7 +63,8 @@ private:
   void deallocate_dynamic_address(tlm_generic_payload & transaction,
                                   uint32_t address, unsigned int size);
 
-  void send_to_ram(tlm_generic_payload & transaction);
+  void send_to_ram(tlm_generic_payload & transaction, tlm_phase & phase,
+                   sc_time & delay);
 
   // -------------------------------------------------------
   // parameters
@@ -69,12 +72,6 @@ private:
   const unsigned int bus_width;
   const sc_time bus_clk_cycle;
   const unsigned int ram_size;
-
-  // -------------------------------------------------------
-  // peqs
-  // -------------------------------------------------------
-  peq_with_get<tlm_generic_payload> peq;
-  void process_transaction();
 
   // -------------------------------------------------------
   // events

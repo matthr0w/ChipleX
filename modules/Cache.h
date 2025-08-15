@@ -34,8 +34,12 @@ public:
   void report_rates();
 
 private:
-  void split_transaction(tlm_generic_payload & transaction);
-  void send_to_bus(tlm_generic_payload & transaction);
+  void process_cache(tlm_generic_payload & transaction, tlm_phase & phase,
+                     sc_time & delay);
+  void split_transaction(tlm_generic_payload & transaction, tlm_phase & phase,
+                         sc_time & delay);
+  void send_to_bus(tlm_generic_payload & transaction, tlm_phase & phase,
+                   sc_time & delay);
 
   struct CacheLine {
     bool valid = false;
@@ -61,12 +65,6 @@ private:
   const sc_time cache_access_delay;
   const unsigned int bus_width;
   const sc_time bus_clk_cycle;
-
-  // -------------------------------------------------------
-  // peqs
-  // -------------------------------------------------------
-  peq_with_get<tlm_generic_payload> peq;
-  void process_transaction();
 
   // -------------------------------------------------------
   // events

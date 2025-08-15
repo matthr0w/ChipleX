@@ -31,7 +31,16 @@ public:
 
 private:
   std::vector<uint8_t> mem;
-  std::vector<bool> written_flags;
+  std::vector<bool> write_flags;
+
+  struct Request {
+    tlm_generic_payload *transaction;
+    tlm_phase *phase;
+    sc_time *delay;
+  };
+
+  std::deque<Request> requests_queue;
+  void process_queue();
 
   // -------------------------------------------------------
   // parameters
@@ -41,6 +50,12 @@ private:
   const sc_time ram_clk_cycle;
   const sc_time ram_address_delay;
   const sc_time ram_access_delay;
+
+  // -------------------------------------------------------
+  // events
+  // -------------------------------------------------------
+  sc_event request_issued;
+  sc_event transaction_done;
 
   // -------------------------------------------------------
   // peqs

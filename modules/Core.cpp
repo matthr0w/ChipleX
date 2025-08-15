@@ -1,22 +1,16 @@
 #include "Core.h"
 
-#include <random>
-
 #include "common/Delays.h"
 #include "common/Tracker.h"
 #include "common/protocol/ChipletExtension.h"
 #include "common/protocol/ChipletPayload.h"
 
-#include "include/globals.h"
 #include "include/logging.h"
 
 Core::Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
-           unsigned int chiplet_ram_size, unsigned int fpga_ram_size,
            sc_time irq_delay)
-    : sc_module(name), chip_id(chip_id), core_id(core_id),
-      chiplet_ram_size(chiplet_ram_size), fpga_ram_size(fpga_ram_size),
-      irq_delay(irq_delay), utilization_tracker(this->name()), socket("socket"),
-      request(0) {
+    : sc_module(name), chip_id(chip_id), core_id(core_id), irq_delay(irq_delay),
+      utilization_tracker(this->name()), request(0) {
   socket.register_nb_transport_bw(this, &Core::nb_transport_bw);
   irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
 
@@ -38,7 +32,7 @@ void Core::interrupt_thread() {
   tlm_sync_enum tlm_resp;
 
   while (true) {
-    wait(irq_event);
+    wait(interrupt_request);
 
     while (!irq_queue.empty()) {
       transaction = irq_queue.front();
@@ -53,78 +47,12 @@ void Core::interrupt_thread() {
   }
 }
 
-void Core::send_random(unsigned int delay, double write_prob,
-                       unsigned int destination_min,
-                       unsigned int destination_max, size_t data_size) {
-  if (destination_max > num_chiplets) {
-    destination_max = num_chiplets;
-  }
-
-  // address space separation
-  size_t total_bytes_fpga = fpga_ram_size * 1024;
-  size_t half_bytes_fpga = total_bytes_fpga / 2;
-  size_t total_bytes_chiplet = chiplet_ram_size * 1024;
-  size_t half_bytes_chiplet = total_bytes_chiplet / 2;
-
-  // random number distributions
-  thread_local std::mt19937 gen(std::random_device{}());
-
-  std::bernoulli_distribution write_dist(write_prob);
-
-  std::uniform_int_distribution<uint32_t> destination_dist(destination_min,
-                                                           destination_max);
-
-  std::uniform_int_distribution<uint32_t> address_dist_fpga(
-      0, half_bytes_fpga - data_size - 1);
-  std::uniform_int_distribution<uint32_t> address_dist_chiplet(
-      0, half_bytes_chiplet - data_size - 1);
-
-  std::uniform_int_distribution<unsigned short> byte_dist(0, 255);
-  while (true) {
-    wait(delay, SC_NS);
-
-    utilization_tracker.set_active();
-
-    // read or write
-    bool do_write = write_dist(gen);
-
-    // random destination id
-    uint32_t destination_id = destination_dist(gen);
-
-    // random RAM address
-    uint32_t address;
-
-    if (destination_id == 0) {
-      address = address_dist_fpga(gen);
-    } else {
-      address = address_dist_chiplet(gen);
-    }
-
-    // random data buffer
-    unsigned char *data = new unsigned char[data_size];
-    for (size_t i = 0; i < data_size; ++i) {
-      data[i] = static_cast<unsigned char>(byte_dist(gen));
-    }
-
-    auto response =
-        send_request(do_write ? TLM_WRITE_COMMAND : TLM_READ_COMMAND, request,
-                     destination_id, address, true, false, data, data_size);
-
-    delete response;
-
-    request += 1;
-
-    utilization_tracker.set_idle();
-  }
-}
-
-ChipletPayload *Core::send_request(tlm_command command, int request_id,
-                                   int destination_id, uint32_t address,
-                                   bool fixed_address, bool is_volatile,
-                                   unsigned char *data,
-                                   unsigned int data_size) {
-  std::scoped_lock lock(request_mutex);
-
+Core::RequestHandle *Core::send_request(tlm_command command, int request_id,
+                                        int destination_id, uint32_t address,
+                                        bool fixed_address, bool is_volatile,
+                                        unsigned char *data,
+                                        unsigned int data_size) {
+  auto *h = new RequestHandle();
   auto *transaction = new ChipletPayload();
   ChipletExtension *ext;
   tlm_phase phase;
@@ -148,6 +76,7 @@ ChipletPayload *Core::send_request(tlm_command command, int request_id,
     transaction->set_address(address);
   }
 
+  transaction->set_core_id(core_id);
   transaction->set_request_id(request_id);
   transaction->set_destination_id(destination_id);
 
@@ -164,30 +93,24 @@ ChipletPayload *Core::send_request(tlm_command command, int request_id,
     }
   }
 
+  h->transaction = transaction;
+  request_handles[transaction] = h;
+
   phase = BEGIN_REQ;
   delay = SC_ZERO_TIME;
 
   tlm_resp = socket->nb_transport_fw(*transaction, phase, delay);
 
-  if (tlm_resp == TLM_UPDATED) {
-    // bus processes the request
-    wait(delay);
-  } else if (tlm_resp == TLM_ACCEPTED) {
-    // bus accepted the request but is busy (queued)
-  }
-
-  wait(transaction_done);
+  wait(request_accepted);
 
   // on-chip requests: request done
-  if (destination_id == chip_id) {
-    transaction->get_extension(ext);
-    sc_time latency = sc_time_stamp() - ext->start_time;
-    LatencyTracker::instance().record(latency);
-  }
+  // if (destination_id == chip_id) {
+  //   transaction->get_extension(ext);
+  //   sc_time latency = sc_time_stamp() - ext->start_time;
+  //   LatencyTracker::instance().record(latency);
+  // }
 
-  SC_LOG_INFO(this, *transaction, "Transaction successful");
-
-  return transaction;
+  return h;
 }
 
 // -------------------------------------------------------
@@ -196,14 +119,15 @@ ChipletPayload *Core::send_request(tlm_command command, int request_id,
 tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                         tlm_phase &phase,
                                         sc_core::sc_time &delay) {
-  if (phase == BEGIN_REQ) {
+  switch (phase) {
+  case BEGIN_REQ:
     delay += get_irq_transfer_delay(*this, transaction, irq_delay);
 
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();
 
     irq_queue.push_back(transaction_copy);
-    irq_event.notify(delay);
+    interrupt_request.notify(delay);
 
     phase = END_REQ;
     return TLM_COMPLETED;
@@ -214,8 +138,19 @@ tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
 
 tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
                                     tlm_phase &phase, sc_core::sc_time &delay) {
-  if (phase == BEGIN_RESP) {
-    transaction_done.notify(delay);
+  SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase);
+
+  switch (phase) {
+  case END_REQ:
+    request_accepted.notify(delay);
+
+    phase = END_REQ;
+    return TLM_ACCEPTED;
+  case BEGIN_RESP:
+    Core::RequestHandle *h = request_handles.find(&transaction)->second;
+    request_handles.erase(&transaction);
+
+    h->notify(delay);
 
     phase = END_RESP;
     return TLM_COMPLETED;

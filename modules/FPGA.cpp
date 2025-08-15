@@ -6,8 +6,8 @@ using namespace sc_core;
 using namespace tlm;
 
 FPGA::FPGA(sc_module_name name)
-    : sc_module(name), fpga_id(0), core("Core", fpga_id, 0, chiplet_ram_size,
-                                        fpga_ram_size, interconnect_irq_delay),
+    : sc_module(name), fpga_id(0),
+      core("Core", fpga_id, 0, interconnect_irq_delay),
       cache("Cache", fpga_id, fpga_cache_size, fpga_cache_block_size,
             fpga_cache_arbitration_delay, fpga_cache_access_delay,
             fpga_bus_width, fpga_bus_clk_cycle),
@@ -19,7 +19,7 @@ FPGA::FPGA(sc_module_name name)
                            interconnect_post_delay, interconnect_irq_delay,
                            fpga_bus_width, fpga_bus_clk_cycle),
       memorycontroller("MemoryController", fpga_bus_width, fpga_bus_clk_cycle,
-                       chiplet_ram_size),
+                       fpga_ram_size),
       ram("RAM", fpga_ram_size, fpga_ram_width, fpga_ram_clk_cycle,
           fpga_ram_address_delay, fpga_ram_access_delay) {
   for (unsigned int i = 0; i < num_interconnects; ++i) {
@@ -48,7 +48,8 @@ void FPGA::initialize() {
   // cache
   cache.bus_initiator_socket.bind(bus.manager_target_sockets[0]);
   // interconnects
-  bus.subordinate_initiator_sockets[0].bind(interconnectprotocol.bus_target_socket);
+  bus.subordinate_initiator_sockets[0].bind(
+      interconnectprotocol.bus_target_socket);
   interconnectprotocol.bus_initiator_socket.bind(bus.manager_target_sockets[1]);
   // memory controller
   bus.subordinate_initiator_sockets[1].bind(memorycontroller.bus_target_socket);

@@ -14,9 +14,7 @@ Cache::Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
       cache_block_size(cache_block_size),
       cache_arbitration_delay(cache_arbitration_delay),
       cache_access_delay(cache_access_delay), bus_width(bus_width),
-      bus_clk_cycle(bus_clk_cycle), utilization_tracker(this->name()),
-      core_target_socket("core_target_socket"),
-      bus_initiator_socket("bus_initiator_socket"), peq("peq") {
+      bus_clk_cycle(bus_clk_cycle), utilization_tracker(this->name()) {
   if (cache_size % cache_block_size != 0) {
     SC_REPORT_ERROR("Cache", "Cache size must be multiple of block size.");
   }
@@ -30,53 +28,35 @@ Cache::Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
 
   core_target_socket.register_nb_transport_fw(this, &Cache::nb_transport_fw);
   bus_initiator_socket.register_nb_transport_bw(this, &Cache::nb_transport_bw);
-
-  SC_THREAD(process_transaction);
-  sensitive << peq.get_event();
 }
 
-void Cache::process_transaction() {
-  tlm_generic_payload *transaction;
+void Cache::process_cache(tlm_generic_payload &transaction, tlm_phase &phase,
+                          sc_time &delay) {
   ChipletExtension *ext;
-  tlm_phase phase;
-  sc_time delay;
   tlm_sync_enum tlm_resp;
 
-  while (true) {
-    wait();
+  transaction.get_extension(ext);
 
-    transaction = peq.get_next_transaction();
-    transaction->get_extension(ext);
+  uint32_t address = transaction.get_address();
+  unsigned char *data = transaction.get_data_ptr();
+  unsigned int data_size = transaction.get_data_length();
 
-    uint32_t address = transaction->get_address();
-    unsigned char *data = transaction->get_data_ptr();
-    unsigned int data_size = transaction->get_data_length();
-
-    // skip cache for dynamic, volatile or off-chip transactions
-    if (!ext->fixed_address || ext->is_volatile ||
-        ext->destination_id != chip_id) {
-      SC_LOG_DEBUG(
-          this, *transaction,
-          "Dynamic address, volatile or off-chip request -> skipping cache");
-      send_to_bus(*transaction);
-    } else {
-      utilization_tracker.set_active();
-      split_transaction(*transaction);
-      utilization_tracker.set_idle();
-    }
-
-    phase = BEGIN_RESP;
-    delay = SC_ZERO_TIME;
-
-    tlm_resp = core_target_socket->nb_transport_bw(*transaction, phase, delay);
-
-    if (tlm_resp == TLM_COMPLETED) {
-      wait(delay);
-    }
+  // skip cache for dynamic, volatile or off-chip transactions
+  if (!ext->fixed_address || ext->is_volatile ||
+      ext->destination_id != chip_id) {
+    SC_LOG_DEBUG(
+        this, transaction,
+        "Dynamic address, volatile or off-chip request -> skipping cache");
+    send_to_bus(transaction, phase, delay);
+  } else {
+    utilization_tracker.set_active();
+    split_transaction(transaction, phase, delay);
+    utilization_tracker.set_idle();
   }
 }
 
-void Cache::split_transaction(tlm_generic_payload &transaction) {
+void Cache::split_transaction(tlm_generic_payload &transaction,
+                              tlm_phase &phase, sc_time &delay) {
   uint32_t address = transaction.get_address();
   unsigned char *data_ptr = transaction.get_data_ptr();
   unsigned int data_size = transaction.get_data_length();
@@ -132,7 +112,7 @@ void Cache::split_transaction(tlm_generic_payload &transaction) {
         tmp_trans->set_data_ptr(tmp_data);
         tmp_trans->set_data_length(cache_block_size);
 
-        send_to_bus(*tmp_trans);
+        send_to_bus(*tmp_trans, phase, delay);
 
         // only update cache line if index has NOT been filled already in this
         // transaction
@@ -194,7 +174,7 @@ void Cache::split_transaction(tlm_generic_payload &transaction) {
       tmp_trans->set_data_ptr(tmp_data);
       tmp_trans->set_data_length(length);
 
-      send_to_bus(*tmp_trans);
+      send_to_bus(*tmp_trans, phase, delay);
 
       delete tmp_trans;
     }
@@ -203,21 +183,9 @@ void Cache::split_transaction(tlm_generic_payload &transaction) {
   }
 }
 
-void Cache::send_to_bus(tlm_generic_payload &transaction) {
-  tlm_phase phase;
-  sc_time delay;
-  tlm_sync_enum tlm_resp;
-
-  phase = BEGIN_REQ;
-  delay = SC_ZERO_TIME;
-
-  tlm_resp = bus_initiator_socket->nb_transport_fw(transaction, phase, delay);
-
-  if (tlm_resp == TLM_UPDATED) {
-    wait(delay);
-  }
-
-  wait(bus_transaction_done);
+void Cache::send_to_bus(tlm_generic_payload &transaction, tlm_phase &phase,
+                        sc_time &delay) {
+  bus_initiator_socket->nb_transport_fw(transaction, phase, delay);
 }
 
 void Cache::report_rates() {
@@ -239,10 +207,9 @@ tlm_sync_enum Cache::nb_transport_fw(tlm_generic_payload &transaction,
     delay += get_cache_arbitration_delay(*this, transaction,
                                          cache_arbitration_delay);
 
-    peq.notify(transaction, delay);
+    process_cache(transaction, phase, delay);
 
-    phase = END_REQ;
-    return TLM_UPDATED;
+    return TLM_ACCEPTED;
   }
 
   return TLM_ACCEPTED;
@@ -250,9 +217,10 @@ tlm_sync_enum Cache::nb_transport_fw(tlm_generic_payload &transaction,
 
 tlm_sync_enum Cache::nb_transport_bw(tlm_generic_payload &transaction,
                                      tlm_phase &phase, sc_time &delay) {
-  if (phase == BEGIN_RESP) {
-    SC_LOG_DEBUG(this, transaction, "PROTOCOL: Received response from Bus");
+  SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase);
 
+  switch (phase) {
+  case BEGIN_RESP:
     ChipletExtension *ext;
 
     transaction.get_extension(ext);
@@ -265,12 +233,7 @@ tlm_sync_enum Cache::nb_transport_bw(tlm_generic_payload &transaction,
       // no direct data response -> no extra delay
       delay += SC_ZERO_TIME;
     }
-
-    bus_transaction_done.notify(delay);
-
-    phase = END_RESP;
-    return TLM_COMPLETED;
   }
 
-  return TLM_ACCEPTED;
+  return core_target_socket->nb_transport_bw(transaction, phase, delay);
 }

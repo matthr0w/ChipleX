@@ -6,10 +6,8 @@ unsigned int Chiplet::instance = 1; // id == 0 is reserved for FPGA
 
 Chiplet::Chiplet(sc_module_name name)
     : sc_module(name), chiplet_id(Chiplet::instance++),
-      core0("Core0", chiplet_id, 0, chiplet_ram_size, fpga_ram_size,
-            interconnect_irq_delay),
-      core1("Core1", chiplet_id, 1, chiplet_ram_size, fpga_ram_size,
-            interconnect_irq_delay),
+      core0("Core0", chiplet_id, 0, interconnect_irq_delay),
+      core1("Core1", chiplet_id, 1, interconnect_irq_delay),
       cache0("Cache0", chiplet_id, chiplet_cache_size, chiplet_cache_block_size,
              chiplet_cache_arbitration_delay, chiplet_cache_access_delay,
              chiplet_bus_width, chiplet_bus_clk_cycle),
@@ -23,6 +21,8 @@ Chiplet::Chiplet(sc_module_name name)
                            interconnect_overhead_size, interconnect_pre_delay,
                            interconnect_post_delay, interconnect_irq_delay,
                            chiplet_bus_width, chiplet_bus_clk_cycle),
+      memorycontroller_axi("MemoryControllerAXI", 32, 32, sc_time(5, SC_NS),
+                           sc_time(5, SC_NS)),
       memorycontroller("MemoryController", chiplet_bus_width,
                        chiplet_bus_clk_cycle, chiplet_ram_size),
       ram("RAM", chiplet_ram_size, chiplet_ram_width, chiplet_ram_clk_cycle,
@@ -61,13 +61,18 @@ void Chiplet::initialize() {
   core0.socket.bind(cache0.core_target_socket);
   core1.socket.bind(cache1.core_target_socket);
   // caches
-  cache0.bus_initiator_socket.bind(bus.manager_target_sockets[0]);
-  cache1.bus_initiator_socket.bind(bus.manager_target_sockets[1]);
+  dummy_initiator0.bind(bus.manager_target_sockets[0]);
+  dummy_initiator1.bind(bus.manager_target_sockets[1]);
+  cache0.bus_initiator_socket.bind(memorycontroller_axi.read_target_socket);
+  cache1.bus_initiator_socket.bind(memorycontroller_axi.read_target_socket);
   // interconnects
-  bus.subordinate_initiator_sockets[0].bind(interconnectprotocol.bus_target_socket);
+  bus.subordinate_initiator_sockets[0].bind(
+      interconnectprotocol.bus_target_socket);
   interconnectprotocol.bus_initiator_socket.bind(bus.manager_target_sockets[2]);
   // memory controller
-  bus.subordinate_initiator_sockets[1].bind(memorycontroller.bus_target_socket);
+  bus.subordinate_initiator_sockets[1].bind(dummy_target);
+  memorycontroller_axi.read_initiator_socket.bind(
+      memorycontroller.bus_target_socket);
   // RAM
   memorycontroller.ram_initiator_socket.bind(ram.socket);
 

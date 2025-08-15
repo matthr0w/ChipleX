@@ -13,6 +13,32 @@ using namespace tlm;
 using namespace tlm_utils;
 
 SC_MODULE(Core) {
+private:
+  struct RequestHandle {
+    ChipletPayload *transaction;
+    sc_event done;
+    bool ready = false;
+
+    RequestHandle() : transaction(nullptr) {}
+    ~RequestHandle() { delete transaction; }
+
+    void notify(sc_time delay) {
+      ready = true;
+      done.notify(delay);
+    }
+
+    void wait() {
+      if (!ready) {
+        ::wait(done);
+      }
+    }
+
+    ChipletPayload *get_payload() const { return transaction; }
+  };
+
+  std::unordered_map<tlm::tlm_generic_payload *, RequestHandle *>
+      request_handles;
+
 public:
   // -------------------------------------------------------
   // trackers
@@ -26,7 +52,6 @@ public:
   simple_target_socket<Core> irq_socket;
 
   Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
-       unsigned int chiplet_ram_size, unsigned int fpga_ram_size,
        sc_time irq_delay);
 
   std::function<void(Core &, UtilizationTracker *)> thread_fn;
@@ -36,13 +61,10 @@ public:
   void core_thread();
   void interrupt_thread();
 
-  void send_random(unsigned int delay, double write_prob,
-                   unsigned int destination_min, unsigned int destination_max,
-                   size_t data_size);
-  ChipletPayload *send_request(tlm_command command, int request_id,
-                               int destination_id, uint32_t address,
-                               bool fixed_address, bool is_volatile,
-                               unsigned char *data, unsigned int data_size);
+  RequestHandle *send_request(tlm_command command, int request_id,
+                              int destination_id, uint32_t address,
+                              bool fixed_address, bool is_volatile,
+                              unsigned char *data, unsigned int data_size);
 
 private:
   sc_mutex request_mutex;
@@ -55,15 +77,13 @@ private:
   // -------------------------------------------------------
   const unsigned int chip_id;
   const unsigned int core_id;
-  const unsigned int chiplet_ram_size;
-  const unsigned int fpga_ram_size;
   const sc_time irq_delay;
 
   // -------------------------------------------------------
   // events
   // -------------------------------------------------------
-  sc_event transaction_done;
-  sc_event irq_event;
+  sc_event request_accepted;
+  sc_event interrupt_request;
 
   // -------------------------------------------------------
   // transport functions

@@ -2,6 +2,7 @@
 
 #include <systemc>
 
+#include "AXI.h"
 #include "Bus.h"
 #include "Cache.h"
 #include "Core.h"
@@ -18,6 +19,12 @@ using namespace tlm_utils;
 
 SC_MODULE(Chiplet) {
 private:
+  // FOR TESTING
+  simple_initiator_socket<Chiplet> dummy_initiator0;
+  simple_initiator_socket<Chiplet> dummy_initiator1;
+  simple_target_socket<Chiplet> dummy_target;
+  //
+
   static unsigned int instance;
   const unsigned int chiplet_id;
 
@@ -68,9 +75,6 @@ private:
   const sc_time chiplet_ram_access_delay =
       chiplet_config.get<sc_time>("ram.access_delay");
 
-  // FPGA config
-  const unsigned int fpga_ram_size = fpga_config.get<unsigned int>("ram.size");
-
   // interconnect config
   const unsigned int interconnect_flit_size =
       interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
@@ -111,6 +115,7 @@ private:
   Bus bus;
   InterconnectProtocol interconnectprotocol;
   MemoryController memorycontroller;
+  AXI memorycontroller_axi;
 
   void initialize();
 };

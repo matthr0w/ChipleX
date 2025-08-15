@@ -232,7 +232,31 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
          tlm_generic_payload *transaction) {}}},
     // Chiplet1 Core0
     {{1, 0},
-     {[](Core &core, UtilizationTracker *tracker) {},
+     {[](Core &core, UtilizationTracker *tracker) {
+        uint32_t *data = new uint32_t();
+        auto h1 = core.send_request(TLM_READ_COMMAND, 0, 0, 0x1000, true, true,
+                                    reinterpret_cast<unsigned char *>(data), 4);
+        SC_LOG_DEBUG_NO_TX(&core, "Core0 can continue...");
+        h1->wait();
+        uint32_t data1 =
+            *reinterpret_cast<uint32_t *>(h1->transaction->get_data_ptr());
+        std::cout << sc_time_stamp() << " Read Core0 complete: " << std::hex
+                  << data1 << "\n";
+      },
+      [](Core &core, UtilizationTracker *tracker,
+         tlm_generic_payload *transaction) {}}},
+    {{1, 1},
+     {[](Core &core, UtilizationTracker *tracker) {
+        uint32_t *data = new uint32_t();
+        auto h1 = core.send_request(TLM_READ_COMMAND, 1, 0, 0x1000, true, true,
+                                    reinterpret_cast<unsigned char *>(data), 4);
+        SC_LOG_DEBUG_NO_TX(&core, "Core1 can continue...");
+        h1->wait();
+        uint32_t data1 =
+            *reinterpret_cast<uint32_t *>(h1->transaction->get_data_ptr());
+        std::cout << sc_time_stamp() << " Read Core1 complete: " << std::hex
+                  << data1 << "\n";
+      },
       [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {}}},
 };

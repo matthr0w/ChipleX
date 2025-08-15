@@ -15,9 +15,10 @@ RAM::RAM(sc_module_name name, unsigned int ram_size, unsigned int ram_width,
     : sc_module(name), ram_size(ram_size), ram_width(ram_width),
       ram_clk_cycle(ram_clk_cycle), ram_address_delay(ram_address_delay),
       ram_access_delay(ram_access_delay), utilization_tracker(this->name()),
-      socket("socket"), peq("peq"), mem(ram_size * 1024, 0),
-      written_flags(mem.size(), false) {
+      peq("peq"), mem(ram_size * 1024, 0), write_flags(mem.size(), false) {
   socket.register_nb_transport_fw(this, &RAM::nb_transport_fw);
+
+  SC_THREAD(process_queue);
 
   SC_THREAD(process_transaction);
   sensitive << peq.get_event();
@@ -53,40 +54,57 @@ void RAM::process_transaction() {
 
         // set written flags
         for (unsigned int i = 0; i < data_size; ++i) {
-          written_flags[address + i] = true;
+          write_flags[address + i] = true;
         }
       }
     }
 
-    // RAM access delay
-    wait(get_mem_access_delay(*this, *transaction, ram_clk_cycle,
-                              ram_access_delay, ram_width));
-
     // off-chip requests: request done on last flit
-    if (transaction->get_command() == TLM_WRITE_COMMAND) {
-      transaction->get_extension(ext);
-      if (ext->flit_id == ext->flit_count - 1) {
-        sc_time latency = sc_time_stamp() - ext->start_time;
-        LatencyTracker::instance().record(latency);
-      }
-    }
+    // if (transaction->get_command() == TLM_WRITE_COMMAND) {
+    //   transaction->get_extension(ext);
+    //   if (ext->flit_id == ext->flit_count - 1) {
+    //     sc_time latency = sc_time_stamp() - ext->start_time;
+    //     LatencyTracker::instance().record(latency);
+    //   }
+    // }
+
+    utilization_tracker.set_idle();
 
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
 
-    tlm_resp = socket->nb_transport_bw(*transaction, phase, delay);
+    socket->nb_transport_bw(*transaction, phase, delay);
 
-    if (tlm_resp == TLM_COMPLETED) {
-      wait(delay);
+    wait(delay);
+
+    transaction_done.notify(SC_ZERO_TIME);
+  }
+}
+
+void RAM::process_queue() {
+  while (true) {
+    wait(request_issued);
+
+    while (!requests_queue.empty()) {
+      Request request = requests_queue.front();
+      requests_queue.pop_front();
+
+      tlm_generic_payload *transaction = request.transaction;
+      tlm_phase phase = END_REQ;
+      sc_time delay = *request.delay;
+
+      socket->nb_transport_bw(*transaction, phase, delay);
+
+      peq.notify(*transaction, delay);
+
+      wait(transaction_done);
     }
-
-    utilization_tracker.set_idle();
   }
 }
 
 void RAM::report_usage() {
   size_t written_bytes =
-      std::count(written_flags.begin(), written_flags.end(), true);
+      std::count(write_flags.begin(), write_flags.end(), true);
 
   std::cout << "  Used Bytes: " << written_bytes << " / " << mem.size() << " ("
             << (100.0 * written_bytes / mem.size()) << "%)\n";
@@ -97,14 +115,17 @@ void RAM::report_usage() {
 // -------------------------------------------------------
 tlm_sync_enum RAM::nb_transport_fw(tlm_generic_payload &transaction,
                                    tlm_phase &phase, sc_time &delay) {
-  if (phase == BEGIN_REQ) {
-    delay +=
-        get_mem_address_assignment_delay(*this, transaction, ram_address_delay);
+  SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase);
 
-    peq.notify(transaction, delay);
+  switch (phase) {
+  case BEGIN_REQ:
+    delay += get_mem_access_delay(*this, transaction, ram_clk_cycle,
+                                  ram_access_delay, ram_width);
 
-    phase = END_REQ;
-    return TLM_UPDATED;
+    requests_queue.push_back({&transaction, &phase, &delay});
+    request_issued.notify(SC_ZERO_TIME);
+
+    return TLM_ACCEPTED;
   }
 
   return TLM_ACCEPTED;
