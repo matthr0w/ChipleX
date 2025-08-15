@@ -116,7 +116,7 @@
         _sc_idstream << "no-extension";                                        \
       }                                                                        \
       _sc_stream << std::setw(25) << _sc_idstream.str();                       \
-      _sc_stream << " | DELAY: " << type << ": " << value;                     \
+      _sc_stream << " | " << type << ": " << value;                            \
       std::cout << _sc_stream.str() << std::endl;                              \
     }                                                                          \
   } while (0)
