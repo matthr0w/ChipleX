@@ -63,15 +63,15 @@ void Chiplet::initialize() {
   // caches
   dummy_initiator0.bind(bus.manager_target_sockets[0]);
   dummy_initiator1.bind(bus.manager_target_sockets[1]);
-  cache0.bus_initiator_socket.bind(memorycontroller_axi.read_target_socket);
-  cache1.bus_initiator_socket.bind(memorycontroller_axi.read_target_socket);
+  cache0.bus_initiator_socket.bind(memorycontroller_axi.target_socket);
+  cache1.bus_initiator_socket.bind(memorycontroller_axi.target_socket);
   // interconnects
   bus.subordinate_initiator_sockets[0].bind(
       interconnectprotocol.bus_target_socket);
   interconnectprotocol.bus_initiator_socket.bind(bus.manager_target_sockets[2]);
   // memory controller
   bus.subordinate_initiator_sockets[1].bind(dummy_target);
-  memorycontroller_axi.read_initiator_socket.bind(
+  memorycontroller_axi.initiator_socket.bind(
       memorycontroller.bus_target_socket);
   // RAM
   memorycontroller.ram_initiator_socket.bind(ram.socket);

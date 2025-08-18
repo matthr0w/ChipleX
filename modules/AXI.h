@@ -15,8 +15,8 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  multi_passthrough_target_socket<AXI> read_target_socket;
-  simple_initiator_socket<AXI> read_initiator_socket;
+  multi_passthrough_target_socket<AXI> target_socket;
+  simple_initiator_socket<AXI> initiator_socket;
 
   AXI(sc_module_name name, unsigned int read_channel_width,
       unsigned int write_channel_width, sc_time read_channel_clk_cycle,
@@ -33,13 +33,11 @@ private:
     sc_time *delay;
   };
 
-  sc_mutex read_request_mutex;
+  sc_mutex request_mutex;
+  std::unordered_map<tlm::tlm_generic_payload *, int> requests_map;
 
   std::deque<Request> read_channel;
   std::deque<Request> write_channel;
-
-  std::unordered_map<tlm::tlm_generic_payload *, int> read_requests;
-
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
@@ -52,19 +50,14 @@ private:
   // events
   // -------------------------------------------------------
   sc_event read_request_issued;
+  sc_event write_request_issued;
 
   // -------------------------------------------------------
   // transport functions
   // -------------------------------------------------------
-  tlm_sync_enum nb_transport_fw_read(int id, tlm_generic_payload &transaction,
-                                     tlm_phase &phase, sc_time &delay);
+  tlm_sync_enum nb_transport_fw(int id, tlm_generic_payload &transaction,
+                                tlm_phase &phase, sc_time &delay);
 
-  tlm_sync_enum nb_transport_bw_read(tlm_generic_payload & transaction,
-                                     tlm_phase & phase, sc_time & delay);
-
-  tlm_sync_enum nb_transport_fw_write(int id, tlm_generic_payload &transaction,
-                                      tlm_phase &phase, sc_time &delay);
-
-  tlm_sync_enum nb_transport_bw_write(tlm_generic_payload & transaction,
-                                      tlm_phase & phase, sc_time & delay);
+  tlm_sync_enum nb_transport_bw(tlm_generic_payload & transaction,
+                                tlm_phase & phase, sc_time & delay);
 };

@@ -18,7 +18,6 @@ using namespace tlm;
 using namespace tlm_utils;
 
 // TODO:
-// + add write operation
 // + fix cache handling
 // + update interconnect
 // + add bursts
