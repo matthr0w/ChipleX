@@ -37,24 +37,54 @@ void RAM::process_transaction() {
     utilization_tracker.set_active();
 
     transaction = peq.get_next_transaction();
+    transaction->get_extension(ext);
 
     uint32_t address = transaction->get_address();
     unsigned char *data = transaction->get_data_ptr();
-    unsigned int data_size = transaction->get_data_length();
+    unsigned int len = transaction->get_data_length();
 
-    // read or write data
-    if (address + data_size > mem.size()) {
-      transaction->set_response_status(TLM_ADDRESS_ERROR_RESPONSE);
-      SC_LOG_ERROR(this, *transaction, "Out of bounds RAM access");
-    } else {
+    unsigned int num_transfers = ext->axi_length;
+    unsigned int beat_bytes = ext->axi_size;
+
+    for (unsigned int beat = 0; beat < num_transfers; ++beat) {
+      uint32_t beat_addr = address;
+
+      switch (ext->axi_burst) {
+      // FIXED
+      case 0:
+        break;
+      // INCR
+      case 1:
+        beat_addr = address + beat * beat_bytes;
+        break;
+      // WRAP
+      case 2: {
+        unsigned int burst_size_bytes = num_transfers * beat_bytes;
+        uint32_t base = (address / burst_size_bytes) * burst_size_bytes;
+        uint32_t offset = (address + beat * beat_bytes) % burst_size_bytes;
+        beat_addr = base + offset;
+        break;
+      }
+      default:
+        transaction->set_response_status(TLM_BURST_ERROR_RESPONSE);
+        SC_LOG_ERROR(this, *transaction, "Unsupported AXI burst type");
+        return;
+      }
+
+      if (beat_addr + beat_bytes > mem.size()) {
+        transaction->set_response_status(TLM_ADDRESS_ERROR_RESPONSE);
+        SC_LOG_ERROR(this, *transaction, "Out of bounds RAM access");
+        return;
+      }
+
       if (transaction->get_command() == TLM_READ_COMMAND) {
-        std::memcpy(data, &mem[address], data_size);
+        std::memcpy(&data[beat * beat_bytes], &mem[beat_addr], beat_bytes);
       } else if (transaction->get_command() == TLM_WRITE_COMMAND) {
-        std::memcpy(&mem[address], data, data_size);
+        std::memcpy(&mem[beat_addr], &data[beat * beat_bytes], beat_bytes);
 
         // set written flags
-        for (unsigned int i = 0; i < data_size; ++i) {
-          write_flags[address + i] = true;
+        for (unsigned int i = 0; i < beat_bytes; ++i) {
+          write_flags[beat_addr + i] = true;
         }
       }
     }
@@ -75,9 +105,7 @@ void RAM::process_transaction() {
 
     socket->nb_transport_bw(*transaction, phase, delay);
 
-    wait(delay);
-
-    transaction_done.notify(SC_ZERO_TIME);
+    transaction_done.notify(delay);
   }
 }
 

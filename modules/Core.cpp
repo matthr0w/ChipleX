@@ -47,11 +47,12 @@ void Core::interrupt_thread() {
   }
 }
 
-Core::RequestHandle *Core::send_request(tlm_command command, int request_id,
-                                        int destination_id, uint32_t address,
-                                        bool fixed_address, bool is_volatile,
-                                        unsigned char *data,
-                                        unsigned int data_size) {
+Core::RequestHandle *
+Core::send_request(tlm_command command, int request_id, int destination_id,
+                   uint32_t address, bool fixed_address, bool is_volatile,
+                   unsigned char *data, unsigned int data_len,
+                   unsigned int axi_length, unsigned int axi_size,
+                   unsigned int axi_burst) {
   auto *h = new RequestHandle();
   auto *transaction = new ChipletPayload();
   ChipletExtension *ext;
@@ -61,7 +62,11 @@ Core::RequestHandle *Core::send_request(tlm_command command, int request_id,
 
   transaction->set_command(command);
   transaction->set_data_ptr(data);
-  transaction->set_data_length(data_size);
+  transaction->set_data_length(data_len);
+
+  transaction->set_axi_length(axi_length);
+  transaction->set_axi_size(axi_size);
+  transaction->set_axi_burst(axi_burst);
 
   transaction->set_fixed_address(fixed_address);
   transaction->set_volatile(is_volatile);

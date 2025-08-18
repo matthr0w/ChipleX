@@ -79,14 +79,27 @@ public:
     return ext;
   }
 
+  // AXI metadata
+  void set_axi_length(unsigned int value) {
+    ensure_extension()->axi_length = value;
+  }
+  void set_axi_size(unsigned int value) {
+    ensure_extension()->axi_size = value;
+  }
+  void set_axi_burst(unsigned int value) {
+    ensure_extension()->axi_burst = value;
+  }
+  // chiplet metadata
   void set_request_id(int id) { ensure_extension()->request_id = id; }
   void set_core_id(int id) { ensure_extension()->core_id = id; }
   void set_source_id(int id) { ensure_extension()->source_id = id; }
   void set_destination_id(int id) { ensure_extension()->destination_id = id; }
   void set_fixed_address(int flag) { ensure_extension()->fixed_address = flag; }
   void set_volatile(int flag) { ensure_extension()->is_volatile = flag; }
+  // flit metadata
   void set_flit_count(int count) { ensure_extension()->flit_count = count; }
   void set_flit_id(int id) { ensure_extension()->flit_id = id; }
   void set_flit_padding(int count) { ensure_extension()->flit_padding = count; }
+  // transfer result
   void set_transfer_result(bool flag) { ensure_extension()->success = flag; }
 };

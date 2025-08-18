@@ -233,30 +233,52 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
     // Chiplet1 Core0
     {{1, 0},
      {[](Core &core, UtilizationTracker *tracker) {
-        uint32_t *data = new uint32_t(0x1234);
+        const size_t num_bytes = 32;
+        uint8_t *data = new uint8_t[num_bytes];
+
+        for (size_t i = 0; i < num_bytes; ++i) {
+          data[i] = static_cast<uint8_t>(i);
+        }
+
+        std::cout << "Buffer contents (" << num_bytes
+                  << " bytes):" << std::endl;
+        for (size_t i = 0; i < num_bytes; ++i) {
+          std::cout << "data[" << i << "] = " << static_cast<unsigned>(data[i])
+                    << std::endl;
+        }
+
         auto h1 = core.send_request(TLM_WRITE_COMMAND, 0, 0, 0x1000, true, true,
-                                    reinterpret_cast<unsigned char *>(data), 4);
+                                    reinterpret_cast<unsigned char *>(data), num_bytes,
+                                    2, 16, 0);
         SC_LOG_DEBUG_NO_TX(&core, "Core0 can continue...");
+
         h1->wait();
-        uint32_t data1 =
-            *reinterpret_cast<uint32_t *>(h1->transaction->get_data_ptr());
-        std::cout << sc_time_stamp() << " Write Core0 complete: " << std::hex
-                  << data1 << "\n";
+
+        delete h1;
       },
       [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {}}},
     {{1, 1},
      {[](Core &core, UtilizationTracker *tracker) {
         wait(10, SC_NS);
-        uint32_t *data = new uint32_t();
-        auto h1 = core.send_request(TLM_READ_COMMAND, 1, 0, 0x1000, true, true,
-                                    reinterpret_cast<unsigned char *>(data), 4);
+        const size_t num_bytes = 32;
+        uint8_t *data = new uint8_t[num_bytes];
+
+        auto h1 =
+            core.send_request(TLM_READ_COMMAND, 1, 0, 0x1000, true, true,
+                              reinterpret_cast<unsigned char *>(data), num_bytes, 4, 8, 1);
         SC_LOG_DEBUG_NO_TX(&core, "Core1 can continue...");
+
         h1->wait();
-        uint32_t data1 =
-            *reinterpret_cast<uint32_t *>(h1->transaction->get_data_ptr());
-        std::cout << sc_time_stamp() << " Read Core1 complete: " << std::hex
-                  << data1 << "\n";
+
+        std::cout << "Buffer contents (" << num_bytes
+                  << " bytes):" << std::endl;
+        for (size_t i = 0; i < num_bytes; ++i) {
+          std::cout << "data[" << i << "] = " << static_cast<unsigned>(data[i])
+                    << std::endl;
+        }
+
+        delete h1;
       },
       [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {}}},
