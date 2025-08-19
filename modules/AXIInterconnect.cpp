@@ -7,19 +7,18 @@ AXIInterconnect::AXIInterconnect(sc_module_name name, unsigned int chip_id,
                                  sc_time axi_arbitration_delay)
     : sc_module(name), chip_id(chip_id), axi_clk_cycle(axi_clk_cycle),
       axi_arbitration_delay(axi_arbitration_delay) {
-  tsockets =
-      new simple_target_socket_tagged<AXIInterconnect>[num_managers];
+  tsockets = new simple_target_socket_tagged<AXIInterconnect>[num_managers];
   isockets =
       new simple_initiator_socket_tagged<AXIInterconnect>[num_subordinates];
 
   for (unsigned int i = 0; i < num_managers; ++i) {
-    tsockets[i].register_nb_transport_fw(
-        this, &AXIInterconnect::nb_transport_fw, i);
+    tsockets[i].register_nb_transport_fw(this,
+                                         &AXIInterconnect::nb_transport_fw, i);
   }
 
   for (unsigned int i = 0; i < num_subordinates; ++i) {
-    isockets[i].register_nb_transport_bw(
-        this, &AXIInterconnect::nb_transport_bw, i);
+    isockets[i].register_nb_transport_bw(this,
+                                         &AXIInterconnect::nb_transport_bw, i);
   }
 }
 
@@ -37,16 +36,14 @@ tlm_sync_enum AXIInterconnect::nb_transport_fw(int id,
   ChipletExtension *ext;
   transaction.get_extension(ext);
 
-  int module = (ext->destination_id == chip_id) ? 0 : 1;
-
   switch (phase) {
   case BEGIN_REQ:
-    requests_map[&transaction] = module;
+    requests_map[&transaction] = id;
 
     delay += delays.axi_arbitration(transaction);
 
-    return isockets[module]->nb_transport_fw(transaction, phase,
-                                                      delay);
+    int tmodule = (ext->destination_id == chip_id) ? 0 : 1;
+    return isockets[tmodule]->nb_transport_fw(transaction, phase, delay);
   }
 
   return TLM_ACCEPTED;
@@ -56,18 +53,18 @@ tlm_sync_enum AXIInterconnect::nb_transport_bw(int id,
                                                tlm_generic_payload &transaction,
                                                tlm_phase &phase,
                                                sc_time &delay) {
-  int module = requests_map.find(&transaction)->second;
+  int imodule = requests_map.find(&transaction)->second;
 
   SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase);
 
   switch (phase) {
   case END_REQ: {
     sc_time delay = delays.axi_address(transaction);
-    return tsockets[module]->nb_transport_bw(transaction, phase, delay);
+    return tsockets[imodule]->nb_transport_bw(transaction, phase, delay);
   }
   case BEGIN_RESP:
     requests_map.erase(&transaction);
-    return tsockets[module]->nb_transport_bw(transaction, phase, delay);
+    return tsockets[imodule]->nb_transport_bw(transaction, phase, delay);
   }
 
   return TLM_ACCEPTED;
