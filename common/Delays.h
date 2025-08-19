@@ -137,77 +137,6 @@ inline sc_time get_bus_transfer_bw_delay(sc_module &module,
 }
 
 // -------------------------------------------------------
-// Cache
-// -------------------------------------------------------
-inline sc_time get_cache_arbitration_delay(sc_module &module,
-                                           tlm_generic_payload &transaction,
-                                           sc_time arbitration_delay) {
-  // Cache Arbitration Delay
-  // -----------------------------------------------
-  //      + fixed arbitration delay
-
-  sc_time delay = arbitration_delay;
-
-  SC_LOG_DELAY(&module, transaction, "Cache Arbitration", delay);
-  return delay;
-}
-
-inline sc_time get_cache_access_delay(sc_module &module,
-                                      tlm_generic_payload &transaction,
-                                      sc_time access_delay) {
-  // Cache Access Delay
-  // -----------------------------------------------
-  //      + fixed access delay
-
-  sc_time delay = SC_ZERO_TIME;
-
-  delay = access_delay;
-
-  SC_LOG_DELAY(&module, transaction, "Cache Access", delay);
-  return delay;
-}
-
-// -------------------------------------------------------
-// RAM
-// -------------------------------------------------------
-inline sc_time
-get_mem_address_assignment_delay(sc_module &module,
-                                 tlm_generic_payload &transaction,
-                                 sc_time assignment_delay) {
-  // Memory Controller Address Assignment Delay
-  // -----------------------------------------------
-  //      + fixed assignment delay
-
-  sc_time delay = SC_ZERO_TIME;
-
-  delay = assignment_delay;
-
-  SC_LOG_DELAY(&module, transaction, "Memory Controller Address Assignment",
-               delay);
-  return delay;
-}
-
-inline sc_time get_mem_access_delay(sc_module &module,
-                                    tlm_generic_payload &transaction,
-                                    sc_time clk_cycle, sc_time access_delay,
-                                    unsigned int width) {
-  // RAM Access Delay
-  // -----------------------------------------------
-  //      + fixed access delay
-  //      + data cycles delay
-
-  sc_time delay = SC_ZERO_TIME;
-  sc_time data_cycles_delay = SC_ZERO_TIME;
-
-  data_cycles_delay = get_data_cycles_delay(transaction, width, clk_cycle);
-
-  delay = access_delay + data_cycles_delay;
-
-  SC_LOG_DELAY(&module, transaction, "RAM Access", delay);
-  return delay;
-}
-
-// -------------------------------------------------------
 // Interconnect Protocol Layer
 // -------------------------------------------------------
 inline sc_time
@@ -241,21 +170,6 @@ get_interconnect2protocol_process_delay(sc_module &module,
 
   SC_LOG_DELAY(&module, transaction, "Interconnect to Protocol Layer Process",
                delay);
-  return delay;
-}
-
-inline sc_time get_irq_transfer_delay(sc_module &module,
-                                      tlm_generic_payload &transaction,
-                                      sc_time irq_delay) {
-  // IRQ Transfer Delay
-  // -----------------------------------------------
-  //      + fixed irq delay
-
-  sc_time delay = SC_ZERO_TIME;
-
-  delay = irq_delay;
-
-  SC_LOG_DELAY(&module, transaction, "IRQ Transfer", delay);
   return delay;
 }
 

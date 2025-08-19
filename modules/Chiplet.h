@@ -34,7 +34,6 @@ private:
   // configs
   // -------------------------------------------------------
   const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
-  const Config &fpga_config = ConfigRegistry::instance().get("FPGA");
   const Config &interconnect_config =
       ConfigRegistry::instance().get("Interconnect");
 
@@ -47,34 +46,35 @@ private:
   const unsigned int num_interconnects = 3;
 
   // chiplet config
-  const sc_time chiplet_cores_clk_cycle =
+  const sc_time cores_clk_cycle =
       chiplet_config.get<sc_time>("cores.clk_cycle");
 
-  const unsigned int chiplet_cache_size =
+  const unsigned int cache_size =
       chiplet_config.get<unsigned int>("cache.size");
-  const unsigned int chiplet_cache_block_size =
+  const unsigned int cache_block_size =
       chiplet_config.get<unsigned int>("cache.block_size");
-  const sc_time chiplet_cache_arbitration_delay =
+  const sc_time cache_arbitration_delay =
       chiplet_config.get<sc_time>("cache.arbitration_delay");
-  const sc_time chiplet_cache_access_delay =
+  const sc_time cache_access_delay =
       chiplet_config.get<sc_time>("cache.access_delay");
 
-  const unsigned int chiplet_bus_width =
-      chiplet_config.get<unsigned int>("bus.width");
-  const sc_time chiplet_bus_clk_cycle =
-      chiplet_config.get<sc_time>("bus.clk_cycle");
-  const sc_time chiplet_bus_arbitration_delay =
+  const unsigned int axi_width = chiplet_config.get<unsigned int>("axi.width");
+  const sc_time axi_clk_cycle = chiplet_config.get<sc_time>("axi.clk_cycle");
+  const sc_time axi_arbitration_delay =
+      chiplet_config.get<sc_time>("axi.arbitration_delay");
+
+  const unsigned int bus_width = chiplet_config.get<unsigned int>("bus.width");
+  const sc_time bus_clk_cycle = chiplet_config.get<sc_time>("bus.clk_cycle");
+  const sc_time bus_arbitration_delay =
       chiplet_config.get<sc_time>("bus.arbitration_delay");
 
-  const unsigned int chiplet_ram_size =
-      chiplet_config.get<unsigned int>("ram.size");
-  const unsigned int chiplet_ram_width =
-      chiplet_config.get<unsigned int>("ram.width");
-  const sc_time chiplet_ram_clk_cycle =
-      chiplet_config.get<sc_time>("ram.clk_cycle");
-  const sc_time chiplet_ram_address_delay =
-      chiplet_config.get<sc_time>("ram.address_delay");
-  const sc_time chiplet_ram_access_delay =
+  const sc_time memory_controller_address_delay =
+      chiplet_config.get<sc_time>("memory_controller.address_delay");
+
+  const unsigned int ram_size = chiplet_config.get<unsigned int>("ram.size");
+  const unsigned int ram_width = chiplet_config.get<unsigned int>("ram.width");
+  const sc_time ram_clk_cycle = chiplet_config.get<sc_time>("ram.clk_cycle");
+  const sc_time ram_access_delay =
       chiplet_config.get<sc_time>("ram.access_delay");
 
   // interconnect config
@@ -118,11 +118,11 @@ private:
   AXIInterconnect axi_interconnect;
   AXIManager axi_manager_core0;
   AXIManager axi_manager_core1;
-  AXISubordinate axi_subordinate_memorycontroller;
+  AXISubordinate axi_subordinate_memory_controller;
 
   Bus bus; // obsolete
-  InterconnectProtocol interconnectprotocol;
-  MemoryController memorycontroller;
+  InterconnectProtocol interconnect_protocol;
+  MemoryController memory_controller;
 
   void initialize();
 };

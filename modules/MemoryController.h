@@ -7,6 +7,8 @@
 
 #include "common/Tracker.h"
 
+#include "include/logging.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -21,11 +23,11 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket<MemoryController> bus_target_socket;
-  simple_initiator_socket<MemoryController> ram_initiator_socket;
+  simple_target_socket<MemoryController> tsocket;
+  simple_initiator_socket<MemoryController> isocket;
 
-  MemoryController(sc_module_name name, unsigned int bus_width,
-                   sc_time bus_clk_cycle, unsigned int ram_size);
+  MemoryController(sc_module_name name, unsigned int ram_size,
+                   sc_time address_assignment_delay);
 
 private:
   sc_mutex mutex;
@@ -63,20 +65,11 @@ private:
   void deallocate_dynamic_address(tlm_generic_payload & transaction,
                                   uint32_t address, unsigned int size);
 
-  void send_to_ram(tlm_generic_payload & transaction, tlm_phase & phase,
-                   sc_time & delay);
-
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
-  const unsigned int bus_width;
-  const sc_time bus_clk_cycle;
   const unsigned int ram_size;
-
-  // -------------------------------------------------------
-  // events
-  // -------------------------------------------------------
-  sc_event ram_transaction_done;
+  const sc_time address_assignment_delay;
 
   // -------------------------------------------------------
   // transport functions
@@ -86,4 +79,23 @@ private:
 
   tlm_sync_enum nb_transport_bw(tlm_generic_payload & transaction,
                                 tlm_phase & phase, sc_time & delay);
+
+  // -------------------------------------------------------
+  // delay model
+  // -------------------------------------------------------
+  struct DelayModel {
+  private:
+    const MemoryController &module;
+
+  public:
+    DelayModel(const MemoryController &m) : module(m) {}
+
+    sc_time address_assignment(tlm_generic_payload &transaction) const {
+      SC_LOG_DELAY(&module, transaction, "Address Assignment",
+                   module.address_assignment_delay);
+      return module.address_assignment_delay;
+    }
+  };
+
+  DelayModel delays{*this};
 };

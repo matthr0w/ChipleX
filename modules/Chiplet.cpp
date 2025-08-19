@@ -8,32 +8,26 @@ Chiplet::Chiplet(sc_module_name name)
     : sc_module(name), chiplet_id(Chiplet::instance++),
       core0("Core0", chiplet_id, 0, interconnect_irq_delay),
       core1("Core1", chiplet_id, 1, interconnect_irq_delay),
-      cache0("Cache0", chiplet_id, chiplet_cache_size, chiplet_cache_block_size,
-             chiplet_cache_arbitration_delay, chiplet_cache_access_delay,
-             chiplet_bus_width, chiplet_bus_clk_cycle),
-      cache1("Cache1", chiplet_id, chiplet_cache_size, chiplet_cache_block_size,
-             chiplet_cache_arbitration_delay, chiplet_cache_access_delay,
-             chiplet_bus_width, chiplet_bus_clk_cycle),
+      cache0("Cache0", chiplet_id, cache_size, cache_block_size,
+             cache_arbitration_delay, cache_access_delay),
+      cache1("Cache1", chiplet_id, cache_size, cache_block_size,
+             cache_arbitration_delay, cache_access_delay),
       bus("Bus", chiplet_id, num_axi_managers, num_axi_subordinates,
-          chiplet_bus_arbitration_delay),
-      axi_interconnect("AXIInterconnect", chiplet_id, 2, 1, 32, 32,
-                       sc_time(5, SC_NS), sc_time(5, SC_NS)),
-      axi_manager_core0("AXIManager_Core0", 32, 32, sc_time(5, SC_NS),
-                        sc_time(5, SC_NS)),
-      axi_manager_core1("AXIManager_Core1", 32, 32, sc_time(5, SC_NS),
-                        sc_time(5, SC_NS)),
-      axi_subordinate_memorycontroller("AXISubordinate_MemoryController", 32,
-                                       32, sc_time(5, SC_NS),
-                                       sc_time(5, SC_NS)),
-      interconnectprotocol("InterconnectProtocol", chiplet_id, num_cores,
-                           num_interconnects, interconnect_flit_size,
-                           interconnect_overhead_size, interconnect_pre_delay,
-                           interconnect_post_delay, interconnect_irq_delay,
-                           chiplet_bus_width, chiplet_bus_clk_cycle),
-      memorycontroller("MemoryController", chiplet_bus_width,
-                       chiplet_bus_clk_cycle, chiplet_ram_size),
-      ram("RAM", chiplet_ram_size, chiplet_ram_width, chiplet_ram_clk_cycle,
-          chiplet_ram_address_delay, chiplet_ram_access_delay) {
+          bus_arbitration_delay),
+      axi_interconnect("AXI_Interconnect", chiplet_id, 2, 1, axi_clk_cycle,
+                       axi_arbitration_delay),
+      axi_manager_core0("AXI_M_Core0", axi_width, axi_clk_cycle),
+      axi_manager_core1("AXI_M_Core1", axi_width, axi_clk_cycle),
+      axi_subordinate_memory_controller("AXI_S_MemoryController",
+                                        axi_width, axi_clk_cycle),
+      interconnect_protocol("InterconnectProtocol", chiplet_id, num_cores,
+                            num_interconnects, interconnect_flit_size,
+                            interconnect_overhead_size, interconnect_pre_delay,
+                            interconnect_post_delay, interconnect_irq_delay,
+                            bus_width, bus_clk_cycle),
+      memory_controller("MemoryController", ram_size,
+                        memory_controller_address_delay),
+      ram("RAM", ram_size, ram_width, ram_clk_cycle, ram_access_delay) {
   for (unsigned int i = 0; i < num_interconnects; ++i) {
     std::string name = "Interconnect" + std::to_string(i);
 
@@ -65,41 +59,42 @@ Chiplet::~Chiplet() {
 void Chiplet::initialize() {
   // sockets
   // cores
-  core0.socket.bind(cache0.target_socket);
-  core1.socket.bind(cache1.target_socket);
+  core0.isocket.bind(cache0.tsocket);
+  core1.isocket.bind(cache1.tsocket);
+
   // caches
   dummy_initiator0.bind(bus.manager_target_sockets[0]);
   dummy_initiator1.bind(bus.manager_target_sockets[1]);
-  cache0.initiator_socket.bind(axi_manager_core0.target_socket);
-  cache1.initiator_socket.bind(axi_manager_core1.target_socket);
+  cache0.isocket.bind(axi_manager_core0.tsocket);
+  cache1.isocket.bind(axi_manager_core1.tsocket);
+
   // AXI
-  axi_manager_core0.initiator_socket.bind(axi_interconnect.target_sockets[0]);
-  axi_manager_core1.initiator_socket.bind(axi_interconnect.target_sockets[1]);
-  axi_interconnect.initiator_sockets[0].bind(
-      axi_subordinate_memorycontroller.target_socket);
-  axi_subordinate_memorycontroller.initiator_socket.bind(
-      memorycontroller.bus_target_socket);
+  axi_manager_core0.isocket.bind(axi_interconnect.tsockets[0]);
+  axi_manager_core1.isocket.bind(axi_interconnect.tsockets[1]);
+  axi_interconnect.isockets[0].bind(axi_subordinate_memory_controller.tsocket);
+  axi_subordinate_memory_controller.isocket.bind(memory_controller.tsocket);
 
   // memory controller
   bus.subordinate_initiator_sockets[1].bind(dummy_target);
-  // RAM
-  memorycontroller.ram_initiator_socket.bind(ram.target_socket);
+  memory_controller.isocket.bind(ram.tsocket);
+
   // interconnects
   bus.subordinate_initiator_sockets[0].bind(
-      interconnectprotocol.bus_target_socket);
-  interconnectprotocol.bus_initiator_socket.bind(bus.manager_target_sockets[2]);
+      interconnect_protocol.bus_target_socket);
+  interconnect_protocol.bus_initiator_socket.bind(
+      bus.manager_target_sockets[2]);
 
   // IRQs
-  interconnectprotocol.irq_initiator_sockets[0].bind(core0.irq_socket);
-  interconnectprotocol.irq_initiator_sockets[1].bind(core1.irq_socket);
+  interconnect_protocol.irq_initiator_sockets[0].bind(core0.irq_socket);
+  interconnect_protocol.irq_initiator_sockets[1].bind(core1.irq_socket);
 
   // interconnect protocol <-> interconnects
   for (unsigned int i = 0; i < 3; ++i) {
-    interconnectprotocol.interconnect_initiator_sockets[i].bind(
+    interconnect_protocol.interconnect_initiator_sockets[i].bind(
         interconnects[i]->protocol_target_socket);
 
     interconnects[i]->protocol_initiator_socket.bind(
-        interconnectprotocol.interconnect_target_sockets[i]);
+        interconnect_protocol.interconnect_target_sockets[i]);
   }
 
   // trackers
@@ -109,9 +104,9 @@ void Chiplet::initialize() {
   utilization_trackers.push_back(&cache0.utilization_tracker);
   utilization_trackers.push_back(&cache1.utilization_tracker);
   utilization_trackers.push_back(&bus.utilization_tracker);
-  utilization_trackers.push_back(&memorycontroller.utilization_tracker);
+  utilization_trackers.push_back(&memory_controller.utilization_tracker);
   utilization_trackers.push_back(&ram.utilization_tracker);
-  utilization_trackers.push_back(&interconnectprotocol.utilization_tracker);
+  utilization_trackers.push_back(&interconnect_protocol.utilization_tracker);
 
   for (unsigned int i = 0; i < num_interconnects; ++i) {
     utilization_trackers.push_back(&interconnects[i]->utilization_tracker);

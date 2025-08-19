@@ -1,37 +1,18 @@
 #include "MemoryController.h"
 
-#include "common/Delays.h"
 #include "common/Flits.h"
-#include "common/Tracker.h"
 #include "common/protocol/ChipletExtension.h"
 #include "common/protocol/ChipletPayload.h"
 
-#include "include/logging.h"
-
-MemoryController::MemoryController(sc_module_name name, unsigned int bus_width,
-                                   sc_time bus_clk_cycle, unsigned int ram_size)
-    : sc_module(name), bus_width(bus_width), bus_clk_cycle(bus_clk_cycle),
-      ram_size(ram_size), utilization_tracker(this->name()) {
-  bus_target_socket.register_nb_transport_fw(
-      this, &MemoryController::nb_transport_fw);
-  ram_initiator_socket.register_nb_transport_bw(
-      this, &MemoryController::nb_transport_bw);
+MemoryController::MemoryController(sc_module_name name, unsigned int ram_size,
+                                   sc_time address_assignment_delay)
+    : sc_module(name), ram_size(ram_size),
+      address_assignment_delay(address_assignment_delay),
+      utilization_tracker(this->name()) {
+  tsocket.register_nb_transport_fw(this, &MemoryController::nb_transport_fw);
+  isocket.register_nb_transport_bw(this, &MemoryController::nb_transport_bw);
 
   offchip_base_address = (ram_size * 1024) / 2;
-}
-
-void MemoryController::send_to_ram(tlm_generic_payload &transaction,
-                                   tlm_phase &phase, sc_time &delay) {
-  ChipletExtension *ext;
-  tlm_sync_enum tlm_resp;
-
-  tlm_resp = ram_initiator_socket->nb_transport_fw(transaction, phase, delay);
-
-  if (tlm_resp == TLM_UPDATED) {
-    delay = SC_ZERO_TIME;
-
-    tlm_resp = bus_target_socket->nb_transport_bw(transaction, phase, delay);
-  }
 }
 
 void MemoryController::set_address(tlm::tlm_generic_payload &transaction) {
@@ -200,17 +181,15 @@ MemoryController::nb_transport_fw(tlm_generic_payload &transaction,
                                   tlm_phase &phase, sc_time &delay) {
   std::scoped_lock lock(mutex);
 
+  SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase);
+
   switch (phase) {
   case BEGIN_REQ:
-    SC_LOG_DEBUG(this, transaction, "TLM Protocol: BEGIN_REQ");
-
-    delay +=
-        get_mem_address_assignment_delay(*this, transaction, sc_time(3, SC_NS));
+    delay += delays.address_assignment(transaction);
 
     set_address(transaction);
 
-    // send to RAM
-    send_to_ram(transaction, phase, delay);
+    return isocket->nb_transport_fw(transaction, phase, delay);
   }
 
   return TLM_ACCEPTED;
@@ -221,5 +200,5 @@ MemoryController::nb_transport_bw(tlm_generic_payload &transaction,
                                   tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase);
 
-  return bus_target_socket->nb_transport_bw(transaction, phase, delay);
+  return tsocket->nb_transport_bw(transaction, phase, delay);
 }

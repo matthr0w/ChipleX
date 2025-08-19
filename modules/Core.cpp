@@ -1,17 +1,12 @@
 #include "Core.h"
 
-#include "common/Delays.h"
-#include "common/Tracker.h"
 #include "common/protocol/ChipletExtension.h"
-#include "common/protocol/ChipletPayload.h"
-
-#include "include/logging.h"
 
 Core::Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
            sc_time irq_delay)
     : sc_module(name), chip_id(chip_id), core_id(core_id), irq_delay(irq_delay),
       utilization_tracker(this->name()), request(0) {
-  socket.register_nb_transport_bw(this, &Core::nb_transport_bw);
+  isocket.register_nb_transport_bw(this, &Core::nb_transport_bw);
   irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
 
   SC_THREAD(core_thread);
@@ -32,7 +27,7 @@ void Core::interrupt_thread() {
   tlm_sync_enum tlm_resp;
 
   while (true) {
-    wait(interrupt_request);
+    wait(irq_req_evt);
 
     while (!irq_queue.empty()) {
       transaction = irq_queue.front();
@@ -104,9 +99,9 @@ Core::send_request(tlm_command command, int request_id, int destination_id,
   phase = BEGIN_REQ;
   delay = SC_ZERO_TIME;
 
-  tlm_resp = socket->nb_transport_fw(*transaction, phase, delay);
+  tlm_resp = isocket->nb_transport_fw(*transaction, phase, delay);
 
-  wait(request_accepted);
+  wait(req_evt);
 
   // on-chip requests: request done
   // if (destination_id == chip_id) {
@@ -126,13 +121,13 @@ tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                         sc_core::sc_time &delay) {
   switch (phase) {
   case BEGIN_REQ:
-    delay += get_irq_transfer_delay(*this, transaction, irq_delay);
+    delay += delays.irq_transfer(transaction);
 
     auto *transaction_copy =
         static_cast<ChipletPayload *>(&transaction)->clone();
 
     irq_queue.push_back(transaction_copy);
-    interrupt_request.notify(delay);
+    irq_req_evt.notify(delay);
 
     phase = END_REQ;
     return TLM_COMPLETED;
@@ -147,7 +142,7 @@ tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
 
   switch (phase) {
   case END_REQ:
-    request_accepted.notify(delay);
+    req_evt.notify(delay);
 
     phase = END_REQ;
     return TLM_ACCEPTED;

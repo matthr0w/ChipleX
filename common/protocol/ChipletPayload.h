@@ -79,6 +79,16 @@ public:
     return ext;
   }
 
+  unsigned int get_ext_length() {
+    auto *ext = get_extension<ChipletExtension>();
+    unsigned int flitext_size = 0;
+    if (ext && ext->flit_id != -1) {
+      flitext_size = ext->get_flitext_size_bytes();
+    }
+    unsigned int stdext_size = ext->get_stdext_size_bytes();
+    return stdext_size + flitext_size;
+  }
+
   // AXI metadata
   void set_axi_length(unsigned int value) {
     ensure_extension()->axi_length = value;

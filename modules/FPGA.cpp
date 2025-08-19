@@ -8,20 +8,18 @@ using namespace tlm;
 FPGA::FPGA(sc_module_name name)
     : sc_module(name), fpga_id(0),
       core("Core", fpga_id, 0, interconnect_irq_delay),
-      cache("Cache", fpga_id, fpga_cache_size, fpga_cache_block_size,
-            fpga_cache_arbitration_delay, fpga_cache_access_delay,
-            fpga_bus_width, fpga_bus_clk_cycle),
+      cache("Cache", fpga_id, cache_size, cache_block_size,
+            cache_arbitration_delay, cache_access_delay),
       bus("Bus", fpga_id, num_bus_managers, num_bus_subordinates,
-          fpga_bus_arbitration_delay),
-      interconnectprotocol("InterconnectProtocol", fpga_id, num_cores,
-                           num_interconnects, interconnect_flit_size,
-                           interconnect_overhead_size, interconnect_pre_delay,
-                           interconnect_post_delay, interconnect_irq_delay,
-                           fpga_bus_width, fpga_bus_clk_cycle),
-      memorycontroller("MemoryController", fpga_bus_width, fpga_bus_clk_cycle,
-                       fpga_ram_size),
-      ram("RAM", fpga_ram_size, fpga_ram_width, fpga_ram_clk_cycle,
-          fpga_ram_address_delay, fpga_ram_access_delay) {
+          bus_arbitration_delay),
+      interconnect_protocol("InterconnectProtocol", fpga_id, num_cores,
+                            num_interconnects, interconnect_flit_size,
+                            interconnect_overhead_size, interconnect_pre_delay,
+                            interconnect_post_delay, interconnect_irq_delay,
+                            bus_width, bus_clk_cycle),
+      memory_controller("MemoryController", ram_size,
+                        memory_controller_address_delay),
+      ram("RAM", ram_size, ram_width, ram_clk_cycle, ram_access_delay) {
   for (unsigned int i = 0; i < num_interconnects; ++i) {
     std::string name = "Interconnect" + std::to_string(i);
     interconnects.push_back(new Interconnect(
@@ -44,28 +42,29 @@ FPGA::~FPGA() {
 void FPGA::initialize() {
   // sockets
   // core
-  core.socket.bind(cache.target_socket);
+  core.isocket.bind(cache.tsocket);
   // cache
-  cache.initiator_socket.bind(bus.manager_target_sockets[0]);
+  cache.isocket.bind(bus.manager_target_sockets[0]);
   // interconnects
   bus.subordinate_initiator_sockets[0].bind(
-      interconnectprotocol.bus_target_socket);
-  interconnectprotocol.bus_initiator_socket.bind(bus.manager_target_sockets[1]);
+      interconnect_protocol.bus_target_socket);
+  interconnect_protocol.bus_initiator_socket.bind(
+      bus.manager_target_sockets[1]);
   // memory controller
-  bus.subordinate_initiator_sockets[1].bind(memorycontroller.bus_target_socket);
+  bus.subordinate_initiator_sockets[1].bind(memory_controller.tsocket);
   // RAM
-  memorycontroller.ram_initiator_socket.bind(ram.target_socket);
+  memory_controller.isocket.bind(ram.tsocket);
 
   // IRQ
-  interconnectprotocol.irq_initiator_sockets[0].bind(core.irq_socket);
+  interconnect_protocol.irq_initiator_sockets[0].bind(core.irq_socket);
 
   // interconnect protocol <-> interconnects
   for (unsigned int i = 0; i < num_interconnects; ++i) {
-    interconnectprotocol.interconnect_initiator_sockets[i].bind(
+    interconnect_protocol.interconnect_initiator_sockets[i].bind(
         interconnects[i]->protocol_target_socket);
 
     interconnects[i]->protocol_initiator_socket.bind(
-        interconnectprotocol.interconnect_target_sockets[i]);
+        interconnect_protocol.interconnect_target_sockets[i]);
   }
 
   // trackers
@@ -73,9 +72,9 @@ void FPGA::initialize() {
   utilization_trackers.push_back(&core.utilization_tracker);
   utilization_trackers.push_back(&cache.utilization_tracker);
   utilization_trackers.push_back(&bus.utilization_tracker);
-  utilization_trackers.push_back(&memorycontroller.utilization_tracker);
+  utilization_trackers.push_back(&memory_controller.utilization_tracker);
   utilization_trackers.push_back(&ram.utilization_tracker);
-  utilization_trackers.push_back(&interconnectprotocol.utilization_tracker);
+  utilization_trackers.push_back(&interconnect_protocol.utilization_tracker);
 
   for (unsigned int i = 0; i < num_interconnects; ++i) {
     utilization_trackers.push_back(&interconnects[i]->utilization_tracker);

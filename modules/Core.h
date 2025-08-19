@@ -8,6 +8,8 @@
 #include "common/Tracker.h"
 #include "common/protocol/ChipletPayload.h"
 
+#include "include/logging.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -48,7 +50,7 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_initiator_socket<Core> socket;
+  simple_initiator_socket<Core> isocket;
   simple_target_socket<Core> irq_socket;
 
   Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
@@ -83,14 +85,33 @@ private:
   // -------------------------------------------------------
   // events
   // -------------------------------------------------------
-  sc_event request_accepted;
-  sc_event interrupt_request;
+  sc_event req_evt;
+  sc_event irq_req_evt;
 
   // -------------------------------------------------------
   // transport functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw_irq(tlm_generic_payload & transaction,
                                     tlm_phase & phase, sc_time & delay);
+
   tlm_sync_enum nb_transport_bw(tlm_generic_payload & transaction,
                                 tlm_phase & phase, sc_time & delay);
+
+  // -------------------------------------------------------
+  // delay model
+  // -------------------------------------------------------
+  struct DelayModel {
+  private:
+    const Core &module;
+
+  public:
+    DelayModel(const Core &m) : module(m) {}
+
+    sc_time irq_transfer(tlm_generic_payload &transaction) const {
+      SC_LOG_DELAY(&module, transaction, "IRQ Transfer", module.irq_delay);
+      return module.irq_delay;
+    }
+  };
+
+  DelayModel delays{*this};
 };

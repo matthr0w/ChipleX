@@ -1,22 +1,14 @@
 #include "RAM.h"
 
-#include "common/Delays.h"
-#include "common/Tracker.h"
 #include "common/protocol/ChipletExtension.h"
 
-#include "include/logging.h"
-
-using namespace sc_core;
-using namespace tlm;
-
 RAM::RAM(sc_module_name name, unsigned int ram_size, unsigned int ram_width,
-         sc_time ram_clk_cycle, sc_time ram_address_delay,
-         sc_time ram_access_delay)
+         sc_time ram_clk_cycle, sc_time ram_access_delay)
     : sc_module(name), ram_size(ram_size), ram_width(ram_width),
-      ram_clk_cycle(ram_clk_cycle), ram_address_delay(ram_address_delay),
-      ram_access_delay(ram_access_delay), utilization_tracker(this->name()),
-      peq("peq"), mem(ram_size * 1024, 0), write_flags(mem.size(), false) {
-  target_socket.register_nb_transport_fw(this, &RAM::nb_transport_fw);
+      ram_clk_cycle(ram_clk_cycle), ram_access_delay(ram_access_delay),
+      utilization_tracker(this->name()), peq("peq"), mem(ram_size * 1024, 0),
+      write_flags(mem.size(), false) {
+  tsocket.register_nb_transport_fw(this, &RAM::nb_transport_fw);
 
   SC_THREAD(process_queue);
 
@@ -102,7 +94,7 @@ void RAM::process_transaction() {
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
 
-    target_socket->nb_transport_bw(*transaction, phase, delay);
+    tsocket->nb_transport_bw(*transaction, phase, delay);
 
     resp_evt.notify(delay);
   }
@@ -120,9 +112,9 @@ void RAM::process_queue() {
       tlm_phase phase = END_REQ;
       sc_time delay = *request.delay;
 
-      target_socket->nb_transport_bw(*transaction, phase, delay);
-
       peq.notify(*transaction, delay);
+
+      tsocket->nb_transport_bw(*transaction, phase, delay);
 
       wait(resp_evt);
     }
@@ -146,8 +138,7 @@ tlm_sync_enum RAM::nb_transport_fw(tlm_generic_payload &transaction,
 
   switch (phase) {
   case BEGIN_REQ:
-    delay += get_mem_access_delay(*this, transaction, ram_clk_cycle,
-                                  ram_access_delay, ram_width);
+    delay += delays.ram_access(transaction);
 
     requests_queue.push_back({&transaction, &phase, &delay});
     req_evt.notify(SC_ZERO_TIME);

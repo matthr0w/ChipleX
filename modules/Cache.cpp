@@ -1,20 +1,15 @@
 #include "Cache.h"
 
-#include "common/Delays.h"
-#include "common/Tracker.h"
 #include "common/protocol/ChipletExtension.h"
-
-#include "include/logging.h"
+#include "common/protocol/ChipletPayload.h"
 
 Cache::Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
              unsigned int cache_block_size, sc_time cache_arbitration_delay,
-             sc_time cache_access_delay, unsigned int bus_width,
-             sc_time bus_clk_cycle)
+             sc_time cache_access_delay)
     : sc_module(name), chip_id(chip_id), cache_size(cache_size),
       cache_block_size(cache_block_size),
       cache_arbitration_delay(cache_arbitration_delay),
-      cache_access_delay(cache_access_delay), bus_width(bus_width),
-      bus_clk_cycle(bus_clk_cycle), utilization_tracker(this->name()),
+      cache_access_delay(cache_access_delay), utilization_tracker(this->name()),
       peq("peq") {
   if (cache_size % cache_block_size != 0) {
     SC_REPORT_ERROR("Cache", "Cache size must be multiple of block size.");
@@ -27,8 +22,8 @@ Cache::Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
   num_hits = 0;
   num_misses = 0;
 
-  target_socket.register_nb_transport_fw(this, &Cache::nb_transport_fw);
-  initiator_socket.register_nb_transport_bw(this, &Cache::nb_transport_bw);
+  tsocket.register_nb_transport_fw(this, &Cache::nb_transport_fw);
+  isocket.register_nb_transport_bw(this, &Cache::nb_transport_bw);
 
   SC_THREAD(process_queue);
 
@@ -65,7 +60,7 @@ void Cache::process_transaction() {
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
 
-    target_socket->nb_transport_bw(*transaction, phase, delay);
+    tsocket->nb_transport_bw(*transaction, phase, delay);
 
     resp_evt.notify(delay);
   }
@@ -83,7 +78,7 @@ void Cache::process_queue() {
       tlm_phase phase = END_REQ;
       sc_time delay = *request.delay;
 
-      target_socket->nb_transport_bw(*transaction, phase, delay);
+      tsocket->nb_transport_bw(*transaction, phase, delay);
 
       peq.notify(*transaction, delay);
 
@@ -177,7 +172,7 @@ void Cache::access_cache(tlm_generic_payload &transaction) {
         num_hits++;
 
         std::memcpy(data_ptr + processed, &line.data[block_offset], length);
-        wait(get_cache_access_delay(*this, transaction, cache_access_delay));
+        wait(delays.cache_access(transaction));
       }
     } else if (transaction.is_write()) {
       // cache hit if valid and correct tag
@@ -188,7 +183,7 @@ void Cache::access_cache(tlm_generic_payload &transaction) {
         num_hits++;
 
         std::memcpy(&line.data[block_offset], data_ptr + processed, length);
-        wait(get_cache_access_delay(*this, transaction, cache_access_delay));
+        wait(delays.cache_access(transaction));
 
         // mark as updated
         updated_cache_indices[index] = true;
@@ -238,8 +233,7 @@ tlm_sync_enum Cache::nb_transport_fw(tlm_generic_payload &transaction,
 
   switch (phase) {
   case BEGIN_REQ:
-    delay += get_cache_arbitration_delay(*this, transaction,
-                                         cache_arbitration_delay);
+    delay += delays.cache_arbitration(transaction);
 
     requests_queue.push_back({&transaction, &phase, &delay});
     req_evt.notify(SC_ZERO_TIME);
@@ -269,7 +263,7 @@ void Cache::transport_fw(tlm_generic_payload &transaction) {
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
 
-  initiator_socket->nb_transport_fw(transaction, phase, delay);
+  isocket->nb_transport_fw(transaction, phase, delay);
 
   wait(axi_resp_evt);
 }

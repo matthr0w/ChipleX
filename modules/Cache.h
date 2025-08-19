@@ -9,6 +9,8 @@
 
 #include "common/Tracker.h"
 
+#include "include/logging.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -23,13 +25,12 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket<Cache> target_socket;
-  simple_initiator_socket<Cache> initiator_socket;
+  simple_target_socket<Cache> tsocket;
+  simple_initiator_socket<Cache> isocket;
 
   Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
         unsigned int cache_block_size, sc_time cache_arbitration_delay,
-        sc_time cache_access_delay, unsigned int bus_width,
-        sc_time bus_clk_cycle);
+        sc_time cache_access_delay);
 
   void report_rates();
 
@@ -67,8 +68,6 @@ private:
   const unsigned int cache_block_size;
   const sc_time cache_arbitration_delay;
   const sc_time cache_access_delay;
-  const unsigned int bus_width;
-  const sc_time bus_clk_cycle;
 
   // -------------------------------------------------------
   // events
@@ -93,4 +92,29 @@ private:
                                 tlm_phase & phase, sc_time & delay);
 
   void transport_fw(tlm_generic_payload & transaction);
+
+  // -------------------------------------------------------
+  // delay model
+  // -------------------------------------------------------
+  struct DelayModel {
+  private:
+    const Cache &module;
+
+  public:
+    DelayModel(const Cache &m) : module(m) {}
+
+    sc_time cache_arbitration(tlm_generic_payload &transaction) const {
+      SC_LOG_DELAY(&module, transaction, "Cache Arbitration",
+                   module.cache_arbitration_delay);
+      return module.cache_arbitration_delay;
+    }
+
+    sc_time cache_access(tlm_generic_payload &transaction) const {
+      SC_LOG_DELAY(&module, transaction, "Cache Access",
+                   module.cache_access_delay);
+      return module.cache_access_delay;
+    }
+  };
+
+  DelayModel delays{*this};
 };

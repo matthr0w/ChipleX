@@ -7,6 +7,8 @@
 
 #include "common/Tracker.h"
 
+#include "include/logging.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -21,11 +23,10 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket<RAM> target_socket;
+  simple_target_socket<RAM> tsocket;
 
   RAM(sc_module_name name, unsigned int ram_size, unsigned int ram_width,
-      sc_time ram_clk_cycle, sc_time ram_address_delay,
-      sc_time ram_access_delay);
+      sc_time ram_clk_cycle, sc_time ram_access_delay);
 
   void report_usage();
 
@@ -48,7 +49,6 @@ private:
   const unsigned int ram_size;
   const unsigned int ram_width;
   const sc_time ram_clk_cycle;
-  const sc_time ram_address_delay;
   const sc_time ram_access_delay;
 
   // -------------------------------------------------------
@@ -68,4 +68,29 @@ private:
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw(tlm_generic_payload & transaction,
                                 tlm_phase & phase, sc_time & delay);
+
+  // -------------------------------------------------------
+  // delay model
+  // -------------------------------------------------------
+  struct DelayModel {
+  private:
+    const RAM &module;
+
+  public:
+    DelayModel(const RAM &m) : module(m) {}
+
+    sc_time ram_access(tlm_generic_payload &transaction) const {
+      unsigned int data_size = transaction.get_data_length();
+      unsigned int num_cycles =
+          (data_size * 8 + module.ram_width - 1) / module.ram_width;
+
+      sc_time delay =
+          module.ram_access_delay + module.ram_clk_cycle * num_cycles;
+
+      SC_LOG_DELAY(&module, transaction, "RAM Access", delay);
+      return delay;
+    }
+  };
+
+  DelayModel delays{*this};
 };

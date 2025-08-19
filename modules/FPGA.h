@@ -26,7 +26,6 @@ private:
   // configs
   // -------------------------------------------------------
   const Config &fpga_config = ConfigRegistry::instance().get("FPGA");
-  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
   const Config &interconnect_config =
       ConfigRegistry::instance().get("Interconnect");
 
@@ -39,31 +38,38 @@ private:
   const unsigned int num_interconnects = num_chiplets;
 
   // FPGA config
-  const sc_time fpga_cores_clk_cycle =
+  const sc_time cores_clk_cycle =
       fpga_config.get<sc_time>("cores.clk_cycle");
 
-  const unsigned int fpga_cache_size =
+  const unsigned int cache_size =
       fpga_config.get<unsigned int>("cache.size");
-  const unsigned int fpga_cache_block_size =
+  const unsigned int cache_block_size =
       fpga_config.get<unsigned int>("cache.block_size");
-  const sc_time fpga_cache_arbitration_delay =
+  const sc_time cache_arbitration_delay =
       fpga_config.get<sc_time>("cache.arbitration_delay");
-  const sc_time fpga_cache_access_delay =
+  const sc_time cache_access_delay =
       fpga_config.get<sc_time>("cache.access_delay");
 
-  const unsigned int fpga_bus_width =
+  const unsigned int axi_width =
+      fpga_config.get<unsigned int>("axi.width");
+  const sc_time axi_clk_cycle = fpga_config.get<sc_time>("axi.clk_cycle");
+  const sc_time axi_arbitration_delay =
+      fpga_config.get<sc_time>("axi.arbitration_delay");
+
+  const unsigned int bus_width =
       fpga_config.get<unsigned int>("bus.width");
-  const sc_time fpga_bus_clk_cycle = fpga_config.get<sc_time>("bus.clk_cycle");
-  const sc_time fpga_bus_arbitration_delay =
+  const sc_time bus_clk_cycle = fpga_config.get<sc_time>("bus.clk_cycle");
+  const sc_time bus_arbitration_delay =
       fpga_config.get<sc_time>("bus.arbitration_delay");
 
-  const unsigned int fpga_ram_size = fpga_config.get<unsigned int>("ram.size");
-  const unsigned int fpga_ram_width =
+  const sc_time memory_controller_address_delay =
+      fpga_config.get<sc_time>("memory_controller.address_delay");
+
+  const unsigned int ram_size = fpga_config.get<unsigned int>("ram.size");
+  const unsigned int ram_width =
       fpga_config.get<unsigned int>("ram.width");
-  const sc_time fpga_ram_clk_cycle = fpga_config.get<sc_time>("ram.clk_cycle");
-  const sc_time fpga_ram_address_delay =
-      fpga_config.get<sc_time>("ram.address_delay");
-  const sc_time fpga_ram_access_delay =
+  const sc_time ram_clk_cycle = fpga_config.get<sc_time>("ram.clk_cycle");
+  const sc_time ram_access_delay =
       fpga_config.get<sc_time>("ram.access_delay");
 
   // interconnect config
@@ -102,8 +108,8 @@ public:
 
 private:
   Bus bus;
-  InterconnectProtocol interconnectprotocol;
-  MemoryController memorycontroller;
+  InterconnectProtocol interconnect_protocol;
+  MemoryController memory_controller;
 
   void initialize();
 };
