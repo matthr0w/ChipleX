@@ -2,7 +2,9 @@
 
 #include <systemc>
 
-#include "AXI.h"
+#include "AXIInterconnect.h"
+#include "AXIManager.h"
+#include "AXISubordinate.h"
 #include "Bus.h"
 #include "Cache.h"
 #include "Core.h"
@@ -40,8 +42,8 @@ private:
   // parameters
   // -------------------------------------------------------
   const unsigned int num_cores = 2;
-  const unsigned int num_bus_managers = 3;
-  const unsigned int num_bus_subordinates = 2;
+  const unsigned int num_axi_managers = 3;
+  const unsigned int num_axi_subordinates = 2;
   const unsigned int num_interconnects = 3;
 
   // chiplet config
@@ -105,17 +107,22 @@ public:
   Core core1;
   Cache cache0;
   Cache cache1;
-  std::vector<Interconnect *> interconnects;
   RAM ram;
+  std::vector<Interconnect *> interconnects;
 
   SC_CTOR(Chiplet);
   ~Chiplet();
 
 private:
-  Bus bus;
+  // AXI
+  AXIInterconnect axi_interconnect;
+  AXIManager axi_manager_core0;
+  AXIManager axi_manager_core1;
+  AXISubordinate axi_subordinate_memorycontroller;
+
+  Bus bus; // obsolete
   InterconnectProtocol interconnectprotocol;
   MemoryController memorycontroller;
-  AXI memorycontroller_axi;
 
   void initialize();
 };

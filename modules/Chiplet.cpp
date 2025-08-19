@@ -14,15 +14,22 @@ Chiplet::Chiplet(sc_module_name name)
       cache1("Cache1", chiplet_id, chiplet_cache_size, chiplet_cache_block_size,
              chiplet_cache_arbitration_delay, chiplet_cache_access_delay,
              chiplet_bus_width, chiplet_bus_clk_cycle),
-      bus("Bus", chiplet_id, num_bus_managers, num_bus_subordinates,
+      bus("Bus", chiplet_id, num_axi_managers, num_axi_subordinates,
           chiplet_bus_arbitration_delay),
+      axi_interconnect("AXIInterconnect", chiplet_id, 2, 1, 32, 32,
+                       sc_time(5, SC_NS), sc_time(5, SC_NS)),
+      axi_manager_core0("AXIManager_Core0", 32, 32, sc_time(5, SC_NS),
+                        sc_time(5, SC_NS)),
+      axi_manager_core1("AXIManager_Core1", 32, 32, sc_time(5, SC_NS),
+                        sc_time(5, SC_NS)),
+      axi_subordinate_memorycontroller("AXISubordinate_MemoryController", 32,
+                                       32, sc_time(5, SC_NS),
+                                       sc_time(5, SC_NS)),
       interconnectprotocol("InterconnectProtocol", chiplet_id, num_cores,
                            num_interconnects, interconnect_flit_size,
                            interconnect_overhead_size, interconnect_pre_delay,
                            interconnect_post_delay, interconnect_irq_delay,
                            chiplet_bus_width, chiplet_bus_clk_cycle),
-      memorycontroller_axi("MemoryControllerAXI", 32, 32, sc_time(5, SC_NS),
-                           sc_time(5, SC_NS)),
       memorycontroller("MemoryController", chiplet_bus_width,
                        chiplet_bus_clk_cycle, chiplet_ram_size),
       ram("RAM", chiplet_ram_size, chiplet_ram_width, chiplet_ram_clk_cycle,
@@ -63,18 +70,24 @@ void Chiplet::initialize() {
   // caches
   dummy_initiator0.bind(bus.manager_target_sockets[0]);
   dummy_initiator1.bind(bus.manager_target_sockets[1]);
-  cache0.initiator_socket.bind(memorycontroller_axi.target_socket);
-  cache1.initiator_socket.bind(memorycontroller_axi.target_socket);
+  cache0.initiator_socket.bind(axi_manager_core0.target_socket);
+  cache1.initiator_socket.bind(axi_manager_core1.target_socket);
+  // AXI
+  axi_manager_core0.initiator_socket.bind(axi_interconnect.target_sockets[0]);
+  axi_manager_core1.initiator_socket.bind(axi_interconnect.target_sockets[1]);
+  axi_interconnect.initiator_sockets[0].bind(
+      axi_subordinate_memorycontroller.target_socket);
+  axi_subordinate_memorycontroller.initiator_socket.bind(
+      memorycontroller.bus_target_socket);
+
+  // memory controller
+  bus.subordinate_initiator_sockets[1].bind(dummy_target);
+  // RAM
+  memorycontroller.ram_initiator_socket.bind(ram.target_socket);
   // interconnects
   bus.subordinate_initiator_sockets[0].bind(
       interconnectprotocol.bus_target_socket);
   interconnectprotocol.bus_initiator_socket.bind(bus.manager_target_sockets[2]);
-  // memory controller
-  bus.subordinate_initiator_sockets[1].bind(dummy_target);
-  memorycontroller_axi.initiator_socket.bind(
-      memorycontroller.bus_target_socket);
-  // RAM
-  memorycontroller.ram_initiator_socket.bind(ram.target_socket);
 
   // IRQs
   interconnectprotocol.irq_initiator_sockets[0].bind(core0.irq_socket);

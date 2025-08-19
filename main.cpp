@@ -19,7 +19,6 @@ using namespace tlm_utils;
 
 // TODO:
 // + add API methods
-// + fix cache handling
 // + update interconnect
 // + update delay handling
 // + fix memory ownership
