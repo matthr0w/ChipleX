@@ -16,7 +16,7 @@ RAM::RAM(sc_module_name name, unsigned int ram_size, unsigned int ram_width,
       ram_clk_cycle(ram_clk_cycle), ram_address_delay(ram_address_delay),
       ram_access_delay(ram_access_delay), utilization_tracker(this->name()),
       peq("peq"), mem(ram_size * 1024, 0), write_flags(mem.size(), false) {
-  socket.register_nb_transport_fw(this, &RAM::nb_transport_fw);
+  target_socket.register_nb_transport_fw(this, &RAM::nb_transport_fw);
 
   SC_THREAD(process_queue);
 
@@ -29,7 +29,6 @@ void RAM::process_transaction() {
   ChipletExtension *ext;
   tlm_phase phase;
   sc_time delay;
-  tlm_sync_enum tlm_resp;
 
   while (true) {
     wait();
@@ -40,8 +39,8 @@ void RAM::process_transaction() {
     transaction->get_extension(ext);
 
     uint32_t address = transaction->get_address();
-    unsigned char *data = transaction->get_data_ptr();
-    unsigned int len = transaction->get_data_length();
+    unsigned char *data_ptr = transaction->get_data_ptr();
+    unsigned int data_length = transaction->get_data_length();
 
     unsigned int num_transfers = ext->axi_length;
     unsigned int beat_bytes = ext->axi_size;
@@ -78,9 +77,9 @@ void RAM::process_transaction() {
       }
 
       if (transaction->get_command() == TLM_READ_COMMAND) {
-        std::memcpy(&data[beat * beat_bytes], &mem[beat_addr], beat_bytes);
+        std::memcpy(&data_ptr[beat * beat_bytes], &mem[beat_addr], beat_bytes);
       } else if (transaction->get_command() == TLM_WRITE_COMMAND) {
-        std::memcpy(&mem[beat_addr], &data[beat * beat_bytes], beat_bytes);
+        std::memcpy(&mem[beat_addr], &data_ptr[beat * beat_bytes], beat_bytes);
 
         // set written flags
         for (unsigned int i = 0; i < beat_bytes; ++i) {
@@ -103,15 +102,15 @@ void RAM::process_transaction() {
     phase = BEGIN_RESP;
     delay = SC_ZERO_TIME;
 
-    socket->nb_transport_bw(*transaction, phase, delay);
+    target_socket->nb_transport_bw(*transaction, phase, delay);
 
-    transaction_done.notify(delay);
+    resp_evt.notify(delay);
   }
 }
 
 void RAM::process_queue() {
   while (true) {
-    wait(request_issued);
+    wait(req_evt);
 
     while (!requests_queue.empty()) {
       Request request = requests_queue.front();
@@ -121,11 +120,11 @@ void RAM::process_queue() {
       tlm_phase phase = END_REQ;
       sc_time delay = *request.delay;
 
-      socket->nb_transport_bw(*transaction, phase, delay);
+      target_socket->nb_transport_bw(*transaction, phase, delay);
 
       peq.notify(*transaction, delay);
 
-      wait(transaction_done);
+      wait(resp_evt);
     }
   }
 }
@@ -151,7 +150,7 @@ tlm_sync_enum RAM::nb_transport_fw(tlm_generic_payload &transaction,
                                   ram_access_delay, ram_width);
 
     requests_queue.push_back({&transaction, &phase, &delay});
-    request_issued.notify(SC_ZERO_TIME);
+    req_evt.notify(SC_ZERO_TIME);
 
     return TLM_ACCEPTED;
   }

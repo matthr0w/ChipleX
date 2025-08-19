@@ -21,7 +21,7 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket<RAM> socket;
+  simple_target_socket<RAM> target_socket;
 
   RAM(sc_module_name name, unsigned int ram_size, unsigned int ram_width,
       sc_time ram_clk_cycle, sc_time ram_address_delay,
@@ -30,9 +30,6 @@ public:
   void report_usage();
 
 private:
-  std::vector<uint8_t> mem;
-  std::vector<bool> write_flags;
-
   struct Request {
     tlm_generic_payload *transaction;
     tlm_phase *phase;
@@ -41,6 +38,9 @@ private:
 
   std::deque<Request> requests_queue;
   void process_queue();
+
+  std::vector<uint8_t> mem;
+  std::vector<bool> write_flags;
 
   // -------------------------------------------------------
   // parameters
@@ -54,8 +54,8 @@ private:
   // -------------------------------------------------------
   // events
   // -------------------------------------------------------
-  sc_event request_issued;
-  sc_event transaction_done;
+  sc_event req_evt;
+  sc_event resp_evt;
 
   // -------------------------------------------------------
   // peqs

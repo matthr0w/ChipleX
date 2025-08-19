@@ -23,8 +23,8 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket<Cache> core_target_socket;
-  simple_initiator_socket<Cache> bus_initiator_socket;
+  simple_target_socket<Cache> target_socket;
+  simple_initiator_socket<Cache> initiator_socket;
 
   Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
         unsigned int cache_block_size, sc_time cache_arbitration_delay,
@@ -34,12 +34,14 @@ public:
   void report_rates();
 
 private:
-  void process_cache(tlm_generic_payload & transaction, tlm_phase & phase,
-                     sc_time & delay);
-  void split_transaction(tlm_generic_payload & transaction, tlm_phase & phase,
-                         sc_time & delay);
-  void send_to_bus(tlm_generic_payload & transaction, tlm_phase & phase,
-                   sc_time & delay);
+  struct Request {
+    tlm_generic_payload *transaction;
+    tlm_phase *phase;
+    sc_time *delay;
+  };
+
+  std::deque<Request> requests_queue;
+  void process_queue();
 
   struct CacheLine {
     bool valid = false;
@@ -55,6 +57,8 @@ private:
   unsigned int num_hits;
   unsigned int num_misses;
 
+  void access_cache(tlm_generic_payload & transaction);
+
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
@@ -69,7 +73,15 @@ private:
   // -------------------------------------------------------
   // events
   // -------------------------------------------------------
-  sc_event bus_transaction_done;
+  sc_event req_evt;
+  sc_event resp_evt;
+  sc_event axi_resp_evt;
+
+  // -------------------------------------------------------
+  // peqs
+  // -------------------------------------------------------
+  peq_with_get<tlm_generic_payload> peq;
+  void process_transaction();
 
   // -------------------------------------------------------
   // transport functions
@@ -79,4 +91,6 @@ private:
 
   tlm_sync_enum nb_transport_bw(tlm_generic_payload & transaction,
                                 tlm_phase & phase, sc_time & delay);
+
+  void transport_fw(tlm_generic_payload & transaction);
 };

@@ -14,7 +14,8 @@ Cache::Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
       cache_block_size(cache_block_size),
       cache_arbitration_delay(cache_arbitration_delay),
       cache_access_delay(cache_access_delay), bus_width(bus_width),
-      bus_clk_cycle(bus_clk_cycle), utilization_tracker(this->name()) {
+      bus_clk_cycle(bus_clk_cycle), utilization_tracker(this->name()),
+      peq("peq") {
   if (cache_size % cache_block_size != 0) {
     SC_REPORT_ERROR("Cache", "Cache size must be multiple of block size.");
   }
@@ -26,47 +27,61 @@ Cache::Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
   num_hits = 0;
   num_misses = 0;
 
-  core_target_socket.register_nb_transport_fw(this, &Cache::nb_transport_fw);
-  bus_initiator_socket.register_nb_transport_bw(this, &Cache::nb_transport_bw);
+  target_socket.register_nb_transport_fw(this, &Cache::nb_transport_fw);
+  initiator_socket.register_nb_transport_bw(this, &Cache::nb_transport_bw);
+
+  SC_THREAD(process_queue);
+
+  SC_THREAD(process_transaction);
+  sensitive << peq.get_event();
 }
 
-void Cache::process_cache(tlm_generic_payload &transaction, tlm_phase &phase,
-                          sc_time &delay) {
+void Cache::process_transaction() {
+  tlm_generic_payload *transaction;
   ChipletExtension *ext;
-  tlm_sync_enum tlm_resp;
+  tlm_phase phase;
+  sc_time delay;
 
-  transaction.get_extension(ext);
+  while (true) {
+    wait();
 
-  uint32_t address = transaction.get_address();
-  unsigned char *data = transaction.get_data_ptr();
-  unsigned int data_size = transaction.get_data_length();
+    transaction = peq.get_next_transaction();
+    transaction->get_extension(ext);
 
-  // skip cache for dynamic, volatile or off-chip transactions
-  if (!ext->fixed_address || ext->is_volatile ||
-      ext->destination_id != chip_id) {
-    SC_LOG_DEBUG(
-        this, transaction,
-        "Dynamic address, volatile or off-chip request -> skipping cache");
-    send_to_bus(transaction, phase, delay);
-  } else {
-    utilization_tracker.set_active();
-    split_transaction(transaction, phase, delay);
-    utilization_tracker.set_idle();
+    bool skip_cache = !ext->fixed_address || ext->is_volatile ||
+                      ext->destination_id != chip_id;
+
+    if (skip_cache) {
+      SC_LOG_DEBUG(
+          this, *transaction,
+          "Non-fixed address, volatile or off-chip request -> skipping cache");
+      transport_fw(*transaction);
+    } else {
+      utilization_tracker.set_active();
+      access_cache(*transaction);
+      utilization_tracker.set_idle();
+    }
+
+    phase = BEGIN_RESP;
+    delay = SC_ZERO_TIME;
+
+    target_socket->nb_transport_bw(*transaction, phase, delay);
+
+    resp_evt.notify(delay);
   }
 }
 
-void Cache::split_transaction(tlm_generic_payload &transaction,
-                              tlm_phase &phase, sc_time &delay) {
+void Cache::access_cache(tlm_generic_payload &transaction) {
   uint32_t address = transaction.get_address();
   unsigned char *data_ptr = transaction.get_data_ptr();
-  unsigned int data_size = transaction.get_data_length();
+  unsigned int data_length = transaction.get_data_length();
 
   // track cache lines that were filled from RAM in this transaction
   std::unordered_map<uint32_t, bool> updated_cache_indices;
 
   // process each block covered by the request
   unsigned int processed = 0;
-  while (processed < data_size) {
+  while (processed < data_length) {
     num_accesses++;
 
     // mask tag + index bits
@@ -86,7 +101,7 @@ void Cache::split_transaction(tlm_generic_payload &transaction,
 
     // data size to fit in cache line
     uint32_t length =
-        std::min(cache_block_size - block_offset, data_size - processed);
+        std::min(cache_block_size - block_offset, data_length - processed);
 
     CacheLine &line = cache_lines[index];
 
@@ -98,7 +113,7 @@ void Cache::split_transaction(tlm_generic_payload &transaction,
     if (transaction.is_read()) {
       // cache miss if invalid or wrong tag
       if (!(line.valid && line.tag == tag)) {
-        SC_LOG_DEBUG(this, transaction, "CACHE MISS: Loading data from RAM");
+        SC_LOG_DEBUG(this, transaction, "Read Miss: Loading data from RAM");
 
         num_misses++;
 
@@ -112,7 +127,7 @@ void Cache::split_transaction(tlm_generic_payload &transaction,
         tmp_trans->set_data_ptr(tmp_data);
         tmp_trans->set_data_length(cache_block_size);
 
-        send_to_bus(*tmp_trans, phase, delay);
+        transport_fw(*tmp_trans);
 
         // only update cache line if index has NOT been filled already in this
         // transaction
@@ -136,7 +151,7 @@ void Cache::split_transaction(tlm_generic_payload &transaction,
         delete tmp_trans;
       } else {
         // cache hit: use data from cache
-        SC_LOG_DEBUG(this, transaction, "CACHE HIT: Loading data from cache");
+        SC_LOG_DEBUG(this, transaction, "Read Hit: Loading data from cache");
 
         num_hits++;
 
@@ -147,7 +162,7 @@ void Cache::split_transaction(tlm_generic_payload &transaction,
       // cache hit if valid and correct tag
       if (line.valid && line.tag == tag) {
         SC_LOG_DEBUG(this, transaction,
-                     "CACHE HIT: Writing data to cache and RAM");
+                     "Write Hit: Writing data to cache and RAM");
 
         num_hits++;
 
@@ -174,7 +189,7 @@ void Cache::split_transaction(tlm_generic_payload &transaction,
       tmp_trans->set_data_ptr(tmp_data);
       tmp_trans->set_data_length(length);
 
-      send_to_bus(*tmp_trans, phase, delay);
+      transport_fw(*tmp_trans);
 
       delete tmp_trans;
     }
@@ -183,9 +198,34 @@ void Cache::split_transaction(tlm_generic_payload &transaction,
   }
 }
 
-void Cache::send_to_bus(tlm_generic_payload &transaction, tlm_phase &phase,
-                        sc_time &delay) {
-  bus_initiator_socket->nb_transport_fw(transaction, phase, delay);
+void Cache::process_queue() {
+  while (true) {
+    wait(req_evt);
+
+    while (!requests_queue.empty()) {
+      Request request = requests_queue.front();
+      requests_queue.pop_front();
+
+      tlm_generic_payload *transaction = request.transaction;
+      tlm_phase phase = END_REQ;
+      sc_time delay = *request.delay;
+
+      target_socket->nb_transport_bw(*transaction, phase, delay);
+
+      peq.notify(*transaction, delay);
+
+      wait(resp_evt);
+    }
+  }
+}
+
+void Cache::transport_fw(tlm_generic_payload &transaction) {
+  tlm_phase phase = BEGIN_REQ;
+  sc_time delay = SC_ZERO_TIME;
+
+  initiator_socket->nb_transport_fw(transaction, phase, delay);
+
+  wait(axi_resp_evt);
 }
 
 void Cache::report_rates() {
@@ -203,11 +243,15 @@ void Cache::report_rates() {
 // -------------------------------------------------------
 tlm_sync_enum Cache::nb_transport_fw(tlm_generic_payload &transaction,
                                      tlm_phase &phase, sc_time &delay) {
-  if (phase == BEGIN_REQ) {
+  SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase);
+
+  switch (phase) {
+  case BEGIN_REQ:
     delay += get_cache_arbitration_delay(*this, transaction,
                                          cache_arbitration_delay);
 
-    process_cache(transaction, phase, delay);
+    requests_queue.push_back({&transaction, &phase, &delay});
+    req_evt.notify(SC_ZERO_TIME);
 
     return TLM_ACCEPTED;
   }
@@ -233,7 +277,12 @@ tlm_sync_enum Cache::nb_transport_bw(tlm_generic_payload &transaction,
       // no direct data response -> no extra delay
       delay += SC_ZERO_TIME;
     }
+
+    axi_resp_evt.notify(delay);
+
+    phase = END_RESP;
+    return TLM_COMPLETED;
   }
 
-  return core_target_socket->nb_transport_bw(transaction, phase, delay);
+  return TLM_ACCEPTED;
 }

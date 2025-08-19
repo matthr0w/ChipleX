@@ -44,9 +44,9 @@ FPGA::~FPGA() {
 void FPGA::initialize() {
   // sockets
   // core
-  core.socket.bind(cache.core_target_socket);
+  core.socket.bind(cache.target_socket);
   // cache
-  cache.bus_initiator_socket.bind(bus.manager_target_sockets[0]);
+  cache.initiator_socket.bind(bus.manager_target_sockets[0]);
   // interconnects
   bus.subordinate_initiator_sockets[0].bind(
       interconnectprotocol.bus_target_socket);
@@ -54,7 +54,7 @@ void FPGA::initialize() {
   // memory controller
   bus.subordinate_initiator_sockets[1].bind(memorycontroller.bus_target_socket);
   // RAM
-  memorycontroller.ram_initiator_socket.bind(ram.socket);
+  memorycontroller.ram_initiator_socket.bind(ram.target_socket);
 
   // IRQ
   interconnectprotocol.irq_initiator_sockets[0].bind(core.irq_socket);
