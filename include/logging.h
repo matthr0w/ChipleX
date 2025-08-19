@@ -103,7 +103,7 @@
 
 #define SC_LOG_DELAY(module, transaction, type, value)                         \
   do {                                                                         \
-    if (log_level <= LogLevel::DEBUG) {                                        \
+    if (log_level <= LogLevel::DELAY) {                                        \
       const auto *ext = (transaction).get_extension<ChipletExtension>();       \
       std::ostringstream _sc_stream, _sc_idstream;                             \
       _sc_stream << std::left << std::setw(16) << sc_time_stamp()              \

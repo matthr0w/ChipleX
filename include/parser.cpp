@@ -22,7 +22,7 @@ void Parser::print_help(const char *progname) {
          "in millimeters (default: 5000)\n"
       << "  --ber=<prob>              Set bit error rate (default: 1e-12)\n"
       << "  --logging=level           Set logging level: INFO, WARN, "
-         "ERROR, DEBUG, SILENT (default: ERROR)\n"
+         "ERROR, DELAY, DEBUG, SILENT (default: ERROR)\n"
       << "  --help                    Show this help message\n";
 }
 
@@ -149,6 +149,8 @@ int Parser::parse(int argc, char *argv[]) {
         log_level = LogLevel::ERROR;
       } else if (level == "debug") {
         log_level = LogLevel::DEBUG;
+      } else if (level == "delay") {
+        log_level = LogLevel::DELAY;
       } else if (level == "silent") {
         log_level = LogLevel::SILENT;
       } else {

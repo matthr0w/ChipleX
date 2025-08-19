@@ -6,7 +6,7 @@
 
 using namespace sc_core;
 
-enum class LogLevel { DEBUG, INFO, WARN, ERROR, SILENT };
+enum class LogLevel { DEBUG, DELAY, INFO, WARN, ERROR, SILENT };
 
 enum class ConnectionType { Custom, UCIe, PCIe, SPI, Unknown };
 
