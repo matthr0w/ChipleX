@@ -34,10 +34,10 @@ void RAM::process_transaction() {
     unsigned char *data_ptr = transaction->get_data_ptr();
     unsigned int data_length = transaction->get_data_length();
 
-    unsigned int num_transfers = ext->axi_length;
-    unsigned int beat_bytes = ext->axi_size;
+    unsigned int num_beats = ext->axi_length + 1; // AxLEN + 1
+    unsigned int beat_bytes = 1 << ext->axi_size; // 2^AxSIZE
 
-    for (unsigned int beat = 0; beat < num_transfers; ++beat) {
+    for (unsigned int beat = 0; beat < num_beats; ++beat) {
       uint32_t beat_addr = address;
 
       switch (ext->axi_burst) {
@@ -50,7 +50,7 @@ void RAM::process_transaction() {
         break;
       // WRAP
       case 2: {
-        unsigned int burst_size_bytes = num_transfers * beat_bytes;
+        unsigned int burst_size_bytes = num_beats * beat_bytes;
         uint32_t base = (address / burst_size_bytes) * burst_size_bytes;
         uint32_t offset = (address + beat * beat_bytes) % burst_size_bytes;
         beat_addr = base + offset;
@@ -62,32 +62,34 @@ void RAM::process_transaction() {
         return;
       }
 
-      if (beat_addr + beat_bytes > mem.size()) {
+      // out of bounds check
+      if (beat_addr >= mem.size()) {
         transaction->set_response_status(TLM_ADDRESS_ERROR_RESPONSE);
         SC_LOG_ERROR(this, *transaction, "Out of bounds RAM access");
         return;
       }
 
+      // data buffer check
+      unsigned int bytes_left =
+          data_length > beat * beat_bytes ? data_length - beat * beat_bytes : 0;
+      unsigned int bytes_to_copy = std::min(beat_bytes, bytes_left);
+
+      if (bytes_to_copy == 0)
+        break;
+
       if (transaction->get_command() == TLM_READ_COMMAND) {
-        std::memcpy(&data_ptr[beat * beat_bytes], &mem[beat_addr], beat_bytes);
+        std::memcpy(&data_ptr[beat * beat_bytes], &mem[beat_addr],
+                    bytes_to_copy);
       } else if (transaction->get_command() == TLM_WRITE_COMMAND) {
-        std::memcpy(&mem[beat_addr], &data_ptr[beat * beat_bytes], beat_bytes);
+        std::memcpy(&mem[beat_addr], &data_ptr[beat * beat_bytes],
+                    bytes_to_copy);
 
         // set written flags
-        for (unsigned int i = 0; i < beat_bytes; ++i) {
+        for (unsigned int i = 0; i < bytes_to_copy; ++i) {
           write_flags[beat_addr + i] = true;
         }
       }
     }
-
-    // off-chip requests: request done on last flit
-    // if (transaction->get_command() == TLM_WRITE_COMMAND) {
-    //   transaction->get_extension(ext);
-    //   if (ext->flit_id == ext->flit_count - 1) {
-    //     sc_time latency = sc_time_stamp() - ext->start_time;
-    //     LatencyTracker::instance().record(latency);
-    //   }
-    // }
 
     utilization_tracker.set_idle();
 
