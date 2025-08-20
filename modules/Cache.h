@@ -7,6 +7,7 @@
 
 #include <vector>
 
+#include "common/AXIUtils.h"
 #include "common/Tracker.h"
 
 #include "include/logging.h"
@@ -28,21 +29,34 @@ public:
   simple_target_socket<Cache> tsocket;
   simple_initiator_socket<Cache> isocket;
 
-  Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
-        unsigned int cache_block_size, sc_time cache_arbitration_delay,
+  Cache(sc_module_name name, AXIUtils & axi_utils, unsigned int chip_id,
+        unsigned int cache_size, unsigned int cache_block_size,
+        unsigned int cache_store_buffer_size, sc_time cache_arbitration_delay,
         sc_time cache_access_delay);
 
   void report_rates();
 
 private:
+  AXIUtils & axi_utils;
+
   struct Request {
     tlm_generic_payload *transaction;
     tlm_phase *phase;
     sc_time *delay;
   };
 
-  std::deque<Request> requests_queue;
-  void process_queue();
+  std::deque<Request> request_queue;
+  void process_request_queue();
+
+  struct StoreBufferEntry {
+    tlm_generic_payload *transaction;
+    bool wlast;
+    uint32_t address;
+    std::vector<uint8_t> data;
+  };
+
+  std::deque<StoreBufferEntry> store_buffer;
+  void drain_store_buffer();
 
   struct CacheLine {
     bool valid = false;
@@ -60,12 +74,15 @@ private:
 
   void access_cache(tlm_generic_payload & transaction);
 
+  std::unordered_map<tlm::tlm_generic_payload *, bool> cache_skipped;
+
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
   const unsigned int chip_id;
   const unsigned int cache_size;
   const unsigned int cache_block_size;
+  const unsigned int cache_store_buffer_size;
   const sc_time cache_arbitration_delay;
   const sc_time cache_access_delay;
 
@@ -75,6 +92,8 @@ private:
   sc_event req_evt;
   sc_event resp_evt;
   sc_event axi_resp_evt;
+  sc_event store_buffer_in_evt;
+  sc_event store_buffer_out_evt;
 
   // -------------------------------------------------------
   // peqs
@@ -90,8 +109,6 @@ private:
 
   tlm_sync_enum nb_transport_bw(tlm_generic_payload & transaction,
                                 tlm_phase & phase, sc_time & delay);
-
-  void transport_fw(tlm_generic_payload & transaction);
 
   // -------------------------------------------------------
   // delay model

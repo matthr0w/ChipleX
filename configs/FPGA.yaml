@@ -4,6 +4,7 @@ cores:
 cache:
   size: 512 # bytes
   block_size: 32 # bytes
+  store_buffer_size: 8 # entries
   arbitration_delay: 1.0 # ns
   access_delay: 3.0 # ns
 

@@ -13,6 +13,7 @@
 #include "MemoryController.h"
 #include "RAM.h"
 
+#include "common/AXIUtils.h"
 #include "common/Tracker.h"
 
 using namespace sc_core;
@@ -53,6 +54,8 @@ private:
       chiplet_config.get<unsigned int>("cache.size");
   const unsigned int cache_block_size =
       chiplet_config.get<unsigned int>("cache.block_size");
+  const unsigned int cache_store_buffer_size =
+      chiplet_config.get<unsigned int>("cache.store_buffer_size");
   const sc_time cache_arbitration_delay =
       chiplet_config.get<sc_time>("cache.arbitration_delay");
   const sc_time cache_access_delay =
@@ -115,6 +118,7 @@ public:
 
 private:
   // AXI
+  AXIUtils axi_utils;
   AXIInterconnect axi_interconnect;
   AXIManager axi_manager_core0;
   AXIManager axi_manager_core1;

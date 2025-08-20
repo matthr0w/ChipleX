@@ -1,15 +1,17 @@
 #include "FPGA.h"
 
+#include "common/AXIUtils.h"
 #include "include/globals.h"
 
 using namespace sc_core;
 using namespace tlm;
 
 FPGA::FPGA(sc_module_name name)
-    : sc_module(name), fpga_id(0),
-      core("Core", fpga_id, 0, interconnect_irq_delay),
-      cache("Cache", fpga_id, cache_size, cache_block_size,
-            cache_arbitration_delay, cache_access_delay),
+    : sc_module(name), fpga_id(0), axi_utils(axi_width / 8),
+      core("Core", axi_utils, fpga_id, 0, interconnect_irq_delay),
+      cache("Cache", axi_utils, fpga_id, cache_size, cache_block_size,
+            cache_store_buffer_size, cache_arbitration_delay,
+            cache_access_delay),
       bus("Bus", fpga_id, num_bus_managers, num_bus_subordinates,
           bus_arbitration_delay),
       interconnect_protocol("InterconnectProtocol", fpga_id, num_cores,

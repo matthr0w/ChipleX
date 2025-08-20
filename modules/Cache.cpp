@@ -3,17 +3,18 @@
 #include "common/protocol/ChipletExtension.h"
 #include "common/protocol/ChipletPayload.h"
 
-Cache::Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
-             unsigned int cache_block_size, sc_time cache_arbitration_delay,
-             sc_time cache_access_delay)
-    : sc_module(name), chip_id(chip_id), cache_size(cache_size),
-      cache_block_size(cache_block_size),
+Cache::Cache(sc_module_name name, AXIUtils &axi_utils, unsigned int chip_id,
+             unsigned int cache_size, unsigned int cache_block_size,
+             unsigned int cache_store_buffer_size,
+             sc_time cache_arbitration_delay, sc_time cache_access_delay)
+    : sc_module(name), axi_utils(axi_utils), chip_id(chip_id),
+      cache_size(cache_size), cache_block_size(cache_block_size),
+      cache_store_buffer_size(cache_store_buffer_size),
       cache_arbitration_delay(cache_arbitration_delay),
       cache_access_delay(cache_access_delay), utilization_tracker(this->name()),
       peq("peq") {
-  if (cache_size % cache_block_size != 0) {
+  if (cache_size % cache_block_size != 0)
     SC_REPORT_ERROR("Cache", "Cache size must be multiple of block size.");
-  }
 
   num_lines = cache_size / cache_block_size;
   cache_lines.resize(num_lines);
@@ -25,17 +26,18 @@ Cache::Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
   tsocket.register_nb_transport_fw(this, &Cache::nb_transport_fw);
   isocket.register_nb_transport_bw(this, &Cache::nb_transport_bw);
 
-  SC_THREAD(process_queue);
-
+  SC_THREAD(process_request_queue);
   SC_THREAD(process_transaction);
   sensitive << peq.get_event();
+
+  SC_THREAD(drain_store_buffer);
 }
 
 void Cache::process_transaction() {
-  tlm_generic_payload *transaction;
-  ChipletExtension *ext;
-  tlm_phase phase;
-  sc_time delay;
+  tlm_generic_payload *transaction = nullptr;
+  ChipletExtension *ext = nullptr;
+  tlm_phase phase = UNINITIALIZED_PHASE;
+  sc_time delay = SC_ZERO_TIME;
 
   while (true) {
     wait();
@@ -47,38 +49,44 @@ void Cache::process_transaction() {
                       ext->destination_id != chip_id;
 
     if (skip_cache) {
-      SC_LOG_DEBUG(
-          this, *transaction,
-          "Non-fixed address, volatile or off-chip request -> skipping cache");
-      transport_fw(*transaction);
+      SC_LOG_DEBUG(this, *transaction, "Cache skipped");
+
+      cache_skipped[transaction] = true;
+
+      resp_evt.notify(delay);
+
+      phase = BEGIN_REQ;
+      delay = SC_ZERO_TIME;
+
+      isocket->nb_transport_fw(*transaction, phase, delay);
     } else {
       utilization_tracker.set_active();
       access_cache(*transaction);
       utilization_tracker.set_idle();
+
+      delay = SC_ZERO_TIME;
+      phase = END_REQ;
+      tsocket->nb_transport_bw(*transaction, phase, delay);
+
+      if (transaction->is_read()) {
+        phase = BEGIN_RESP;
+        tsocket->nb_transport_bw(*transaction, phase, delay);
+        resp_evt.notify(delay);
+      }
     }
-
-    phase = BEGIN_RESP;
-    delay = SC_ZERO_TIME;
-
-    tsocket->nb_transport_bw(*transaction, phase, delay);
-
-    resp_evt.notify(delay);
   }
 }
 
-void Cache::process_queue() {
+void Cache::process_request_queue() {
   while (true) {
     wait(req_evt);
 
-    while (!requests_queue.empty()) {
-      Request request = requests_queue.front();
-      requests_queue.pop_front();
+    while (!request_queue.empty()) {
+      Request request = request_queue.front();
+      request_queue.pop_front();
 
       tlm_generic_payload *transaction = request.transaction;
-      tlm_phase phase = END_REQ;
       sc_time delay = *request.delay;
-
-      tsocket->nb_transport_bw(*transaction, phase, delay);
 
       peq.notify(*transaction, delay);
 
@@ -133,17 +141,22 @@ void Cache::access_cache(tlm_generic_payload &transaction) {
 
         num_misses++;
 
-        auto *tmp_trans =
+        auto *axi_trans =
             static_cast<ChipletPayload &>(transaction).clone_ext();
 
         unsigned char *tmp_data = new unsigned char[cache_block_size]();
 
-        tmp_trans->set_command(TLM_READ_COMMAND);
-        tmp_trans->set_address(block_address);
-        tmp_trans->set_data_ptr(tmp_data);
-        tmp_trans->set_data_length(cache_block_size);
+        axi_trans->set_command(TLM_READ_COMMAND);
+        axi_trans->set_address(block_address);
+        axi_trans->set_data_ptr(tmp_data);
+        axi_trans->set_data_length(cache_block_size);
 
-        transport_fw(*tmp_trans);
+        tlm_phase phase = BEGIN_REQ;
+        sc_time delay = SC_ZERO_TIME;
+
+        isocket->nb_transport_fw(*axi_trans, phase, delay);
+
+        wait(axi_resp_evt);
 
         // only update cache line if index has NOT been filled already in this
         // transaction
@@ -164,7 +177,7 @@ void Cache::access_cache(tlm_generic_payload &transaction) {
         // copy required block portion directly to transaction buffer
         std::memcpy(data_ptr + processed, tmp_data + block_offset, length);
 
-        delete tmp_trans;
+        delete axi_trans;
       } else {
         // cache hit: use data from cache
         SC_LOG_DEBUG(this, transaction, "Read Hit: Loading data from cache");
@@ -193,24 +206,59 @@ void Cache::access_cache(tlm_generic_payload &transaction) {
         num_misses++;
       }
 
-      // write-through: write data to RAM
-      auto *tmp_trans = static_cast<ChipletPayload &>(transaction).clone_ext();
+      // enqueue into store buffer
+      while (store_buffer.size() >= cache_store_buffer_size) {
+        wait(store_buffer_out_evt); // stall until space frees up
+      }
 
-      unsigned char *tmp_data = new unsigned char[length]();
-
-      std::memcpy(tmp_data, data_ptr + processed, length);
-
-      tmp_trans->set_command(TLM_WRITE_COMMAND);
-      tmp_trans->set_address(block_address + block_offset);
-      tmp_trans->set_data_ptr(tmp_data);
-      tmp_trans->set_data_length(length);
-
-      transport_fw(*tmp_trans);
-
-      delete tmp_trans;
+      StoreBufferEntry entry;
+      entry.transaction = &transaction;
+      entry.wlast = processed + length >= data_length;
+      entry.address = block_address + block_offset;
+      entry.data.resize(length);
+      std::memcpy(entry.data.data(), data_ptr + processed, length);
+      store_buffer.push_back(std::move(entry));
+      store_buffer_in_evt.notify(SC_ZERO_TIME);
     }
 
     processed += length;
+  }
+}
+
+void Cache::drain_store_buffer() {
+  while (true) {
+    wait(store_buffer_in_evt);
+
+    while (!store_buffer.empty()) {
+      StoreBufferEntry entry = std::move(store_buffer.front());
+      store_buffer.pop_front();
+      store_buffer_out_evt.notify(SC_ZERO_TIME);
+
+      auto *axi_trans =
+          static_cast<ChipletPayload &>(*entry.transaction).clone_ext();
+      axi_trans->set_command(TLM_WRITE_COMMAND);
+      axi_trans->set_address(entry.address);
+      uint8_t *buffer = new uint8_t[entry.data.size()];
+      std::memcpy(buffer, entry.data.data(), entry.data.size());
+      axi_trans->set_data_ptr(buffer);
+      axi_trans->set_data_length(entry.data.size());
+
+      tlm_phase phase = BEGIN_REQ;
+      sc_time delay = SC_ZERO_TIME;
+
+      isocket->nb_transport_fw(*axi_trans, phase, delay);
+
+      wait(axi_resp_evt);
+
+      delete axi_trans;
+
+      if (entry.wlast) {
+        phase = BEGIN_RESP;
+        delay = SC_ZERO_TIME;
+        tsocket->nb_transport_bw(*entry.transaction, phase, delay);
+        resp_evt.notify(delay);
+      }
+    }
   }
 }
 
@@ -235,7 +283,12 @@ tlm_sync_enum Cache::nb_transport_fw(tlm_generic_payload &transaction,
   case BEGIN_REQ:
     delay += delays.cache_arbitration(transaction);
 
-    requests_queue.push_back({&transaction, &phase, &delay});
+    if (transaction.is_write()) {
+      request_queue.push_back({&transaction, &phase, &delay});
+    } else {
+      request_queue.push_front({&transaction, &phase, &delay});
+    }
+
     req_evt.notify(SC_ZERO_TIME);
 
     return TLM_ACCEPTED;
@@ -248,22 +301,21 @@ tlm_sync_enum Cache::nb_transport_bw(tlm_generic_payload &transaction,
                                      tlm_phase &phase, sc_time &delay) {
   SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase);
 
+  auto it = cache_skipped.find(&transaction);
+  if (it != cache_skipped.end()) {
+    switch (phase) {
+    case BEGIN_RESP:
+      cache_skipped.erase(it);
+    }
+    return tsocket->nb_transport_bw(transaction, phase, delay);
+  }
+
   switch (phase) {
   case BEGIN_RESP:
     axi_resp_evt.notify(delay);
-
     phase = END_RESP;
     return TLM_COMPLETED;
   }
 
   return TLM_ACCEPTED;
-}
-
-void Cache::transport_fw(tlm_generic_payload &transaction) {
-  tlm_phase phase = BEGIN_REQ;
-  sc_time delay = SC_ZERO_TIME;
-
-  isocket->nb_transport_fw(transaction, phase, delay);
-
-  wait(axi_resp_evt);
 }
