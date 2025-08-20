@@ -2,10 +2,10 @@
 
 #include "common/protocol/ChipletExtension.h"
 
-Core::Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
-           sc_time irq_delay)
-    : sc_module(name), chip_id(chip_id), core_id(core_id), irq_delay(irq_delay),
-      utilization_tracker(this->name()), request(0) {
+Core::Core(sc_module_name name, AXIUtils &axi_utils, unsigned int chip_id,
+           unsigned int core_id, sc_time irq_delay)
+    : sc_module(name), axi_utils(axi_utils), chip_id(chip_id), core_id(core_id),
+      irq_delay(irq_delay), utilization_tracker(this->name()), request(0) {
   isocket.register_nb_transport_bw(this, &Core::nb_transport_bw);
   irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
 
@@ -102,13 +102,6 @@ Core::send_request(tlm_command command, int request_id, int destination_id,
   tlm_resp = isocket->nb_transport_fw(*transaction, phase, delay);
 
   wait(req_evt);
-
-  // on-chip requests: request done
-  // if (destination_id == chip_id) {
-  //   transaction->get_extension(ext);
-  //   sc_time latency = sc_time_stamp() - ext->start_time;
-  //   LatencyTracker::instance().record(latency);
-  // }
 
   return h;
 }

@@ -5,6 +5,7 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "common/AXIUtils.h"
 #include "common/Tracker.h"
 #include "common/protocol/ChipletPayload.h"
 
@@ -53,8 +54,8 @@ public:
   simple_initiator_socket<Core> isocket;
   simple_target_socket<Core> irq_socket;
 
-  Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
-       sc_time irq_delay);
+  Core(sc_module_name name, AXIUtils & axi_utils, unsigned int chip_id,
+       unsigned int core_id, sc_time irq_delay);
 
   std::function<void(Core &, UtilizationTracker *)> thread_fn;
   std::function<void(Core &, UtilizationTracker *, tlm_generic_payload *)>
@@ -70,6 +71,8 @@ public:
       unsigned int axi_burst);
 
 private:
+  AXIUtils & axi_utils;
+
   sc_mutex request_mutex;
   unsigned int request;
 
