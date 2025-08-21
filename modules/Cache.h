@@ -38,6 +38,9 @@ public:
 
 private:
   AXIUtils & axi_utils;
+  void send_axi_request(tlm_generic_payload & transaction, tlm_command command,
+                        uint32_t address, unsigned char *data,
+                        unsigned int data_length);
 
   struct Request {
     tlm_generic_payload *transaction;
@@ -50,9 +53,9 @@ private:
 
   struct StoreBufferEntry {
     tlm_generic_payload *transaction;
-    bool wlast;
     uint32_t address;
     std::vector<uint8_t> data;
+    bool wlast;
   };
 
   std::deque<StoreBufferEntry> store_buffer;
