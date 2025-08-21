@@ -73,7 +73,7 @@ make
 
 - AXI4-like system bus with bursts and congestion handling
 
-- Improved RAM model
+- Improved cache and RAM delay models
 
 - Interconnect protocol extensions:
 
