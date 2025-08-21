@@ -5,19 +5,20 @@
 #include "ChipletExtension.h"
 
 class ChipletPayload : public tlm::tlm_generic_payload {
+private:
+  bool owns_data_ptr;
+
 public:
-  ChipletPayload() {
+  ChipletPayload() : owns_data_ptr(true) {
     auto *ext = new ChipletExtension();
     this->set_extension(ext);
   }
 
   ~ChipletPayload() {
-    // data buffer
-    if (this->get_data_ptr()) {
+    if (owns_data_ptr && this->get_data_ptr()) {
       delete[] this->get_data_ptr();
     }
 
-    // extension
     ChipletExtension *ext = nullptr;
     this->get_extension(ext);
     if (ext) {
@@ -26,24 +27,29 @@ public:
     }
   }
 
+  void set_data_ptr(unsigned char *ptr, bool take_ownership = true) {
+    tlm::tlm_generic_payload::set_data_ptr(ptr);
+    owns_data_ptr = take_ownership;
+  }
+
   ChipletPayload *clone() const {
     auto *cp = new ChipletPayload();
 
-    // TLM attributes
     cp->set_command(this->get_command());
     cp->set_address(this->get_address());
 
-    // data buffer
     if (this->get_data_ptr() && this->get_data_length() > 0) {
-      unsigned char *cp_data = new unsigned char[this->get_data_length()];
-      std::memcpy(cp_data, this->get_data_ptr(), this->get_data_length());
-      cp->set_data_ptr(cp_data);
+      if (owns_data_ptr) {
+        unsigned char *cp_data = new unsigned char[this->get_data_length()];
+        std::memcpy(cp_data, this->get_data_ptr(), this->get_data_length());
+        cp->set_data_ptr(cp_data, true);
+        cp->set_data_length(this->get_data_length());
+      } else {
+        cp->set_data_ptr(this->get_data_ptr(), false);
+        cp->set_data_length(this->get_data_length());
+      }
     }
 
-    // data size
-    cp->set_data_length(this->get_data_length());
-
-    // extension
     ChipletExtension *ext = nullptr;
     this->get_extension(ext);
     if (ext) {
@@ -58,7 +64,6 @@ public:
   ChipletPayload *clone_ext() const {
     auto *cp = new ChipletPayload();
 
-    // extension
     ChipletExtension *ext = nullptr;
     this->get_extension(ext);
     if (ext) {
@@ -72,20 +77,25 @@ public:
 
   ChipletExtension *ensure_extension() {
     auto *ext = get_extension<ChipletExtension>();
+
     if (!ext) {
       ext = new ChipletExtension();
       set_extension(ext);
     }
+
     return ext;
   }
 
   unsigned int get_ext_length() {
     auto *ext = get_extension<ChipletExtension>();
+
     unsigned int flitext_size = 0;
     if (ext && ext->flit_id != -1) {
       flitext_size = ext->get_flitext_size_bytes();
     }
+
     unsigned int stdext_size = ext->get_stdext_size_bytes();
+
     return stdext_size + flitext_size;
   }
 

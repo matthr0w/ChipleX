@@ -56,7 +56,7 @@ Core::send_request(tlm_command command, int request_id, int destination_id,
   tlm_sync_enum tlm_resp;
 
   transaction->set_command(command);
-  transaction->set_data_ptr(data);
+  transaction->set_data_ptr(data, false);
   transaction->set_data_length(data_len);
 
   transaction->set_axi_length(axi_length);
