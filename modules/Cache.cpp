@@ -19,6 +19,12 @@ Cache::Cache(sc_module_name name, AXIUtils &axi_utils, unsigned int chip_id,
   num_lines = cache_size / cache_block_size;
   cache_lines.resize(num_lines);
 
+  for (auto &line : cache_lines) {
+    line.valid = false;
+    line.tag = 0;
+    line.data.resize(cache_block_size, 0);
+  }
+
   num_accesses = 0;
   num_hits = 0;
   num_misses = 0;
@@ -97,120 +103,137 @@ void Cache::process_request_queue() {
 }
 
 void Cache::access_cache(tlm_generic_payload &transaction) {
-  uint32_t address = transaction.get_address();
+  ChipletExtension *ext = transaction.get_extension<ChipletExtension>();
+
+  uint32_t start_addr = transaction.get_address();
   unsigned char *data_ptr = transaction.get_data_ptr();
   unsigned int data_length = transaction.get_data_length();
 
-  // track cache lines that were filled from RAM in this transaction
+  unsigned int num_beats = ext->axi_length + 1; // AxLEN + 1
+  unsigned int beat_bytes = 1 << ext->axi_size; // 2^AxSIZE
+
   std::unordered_map<uint32_t, bool> updated_cache_indices;
 
-  // process each block covered by the request
-  unsigned int processed = 0;
-  while (processed < data_length) {
-    num_accesses++;
+  for (unsigned int beat = 0; beat < num_beats; ++beat) {
+    uint32_t beat_addr = start_addr;
 
-    // mask tag + index bits
-    uint32_t block_address = (address + processed) & ~(cache_block_size - 1);
-    // mask offset bits
-    uint32_t block_offset = (address + processed) & (cache_block_size - 1);
-
-    // extract tag + index bits
-    // shift offset and index bits
-    uint32_t tag =
-        block_address >> (static_cast<uint32_t>(log2(cache_block_size)) +
-                          static_cast<uint32_t>(log2(num_lines)));
-    // shift offset bits and mask index bits
-    uint32_t index =
-        (block_address >> static_cast<uint32_t>(log2(cache_block_size))) %
-        num_lines;
-
-    // data size to fit in cache line
-    uint32_t length =
-        std::min(cache_block_size - block_offset, data_length - processed);
-
-    CacheLine &line = cache_lines[index];
-
-    // resize cache line if needed
-    if (line.data.size() != cache_block_size) {
-      line.data.resize(cache_block_size, 0);
+    switch (ext->axi_burst) {
+    // FIXED
+    case 0:
+      break;
+    // INCR
+    case 1:
+      beat_addr = start_addr + beat * beat_bytes;
+      break;
+    // WRAP
+    case 2: {
+      unsigned int burst_size_bytes = num_beats * beat_bytes;
+      uint32_t base = (start_addr / burst_size_bytes) * burst_size_bytes;
+      uint32_t offset = (start_addr + beat * beat_bytes) % burst_size_bytes;
+      beat_addr = base + offset;
+      break;
+    }
+    default:
+      transaction.set_response_status(TLM_BURST_ERROR_RESPONSE);
+      SC_LOG_ERROR(this, transaction, "Unsupported AXI burst type");
+      return;
     }
 
-    if (transaction.is_read()) {
-      // cache miss if invalid or wrong tag
-      if (!(line.valid && line.tag == tag)) {
-        SC_LOG_DEBUG(this, transaction, "Read Miss: Loading data from RAM");
+    // copy possibly across cache lines
+    unsigned int remaining = beat_bytes;
+    unsigned int beat_offset_in_tx = beat * beat_bytes;
 
-        num_misses++;
+    while (remaining > 0) {
+      num_accesses++;
 
-        uint8_t *buffer = new uint8_t[cache_block_size];
+      uint32_t block_address = beat_addr & ~(cache_block_size - 1);
+      uint32_t block_offset = beat_addr & (cache_block_size - 1);
 
-        send_axi_request(transaction, TLM_READ_COMMAND, block_address, buffer,
-                         cache_block_size);
+      uint32_t tag = block_address >>
+                     ((unsigned)(log2(cache_block_size) + log2(num_lines)));
+      uint32_t index =
+          (block_address >> (unsigned)log2(cache_block_size)) % num_lines;
 
-        // only update cache line if index has NOT been filled already in this
-        // transaction
-        if (!updated_cache_indices[index]) {
-          // fill cache line
-          line.valid = true;
-          line.tag = tag;
-          std::memcpy(line.data.data(), buffer, cache_block_size);
+      uint32_t copy_len = std::min(cache_block_size - block_offset, remaining);
 
-          // mark as updated
+      CacheLine &line = cache_lines[index];
+
+      if (transaction.is_read()) {
+        if (!(line.valid && line.tag == tag)) {
+          // Read Miss: fetch whole line
+          SC_LOG_DEBUG(this, transaction, "Read Miss: Loading data from RAM");
+          num_misses++;
+
+          uint8_t *buffer = new uint8_t[cache_block_size];
+          send_axi_request(transaction, TLM_READ_COMMAND, block_address, buffer,
+                           cache_block_size);
+
+          // update same line only once
+          if (!updated_cache_indices[index]) {
+            line.valid = true;
+            line.tag = tag;
+            std::memcpy(line.data.data(), buffer, cache_block_size);
+            updated_cache_indices[index] = true;
+          }
+
+          // copy to transaction buffer
+          std::memcpy(data_ptr + beat_offset_in_tx + (beat_bytes - remaining),
+                      buffer + block_offset, copy_len);
+
+          delete[] buffer;
+        } else {
+          // Read Hit
+          SC_LOG_DEBUG(this, transaction, "Read Hit: Loading data from cache");
+          num_hits++;
+
+          // copy to transaction buffer
+          std::memcpy(data_ptr + beat_offset_in_tx + (beat_bytes - remaining),
+                      &line.data[block_offset], copy_len);
+
+          wait(delays.cache_access(transaction));
+        }
+      } else if (transaction.is_write()) {
+        if (line.valid && line.tag == tag) {
+          // Write Hit
+          SC_LOG_DEBUG(this, transaction,
+                       "Write Hit: Writing data to cache and RAM");
+          num_hits++;
+
+          // copy to line
+          std::memcpy(&line.data[block_offset],
+                      data_ptr + beat_offset_in_tx + (beat_bytes - remaining),
+                      copy_len);
+
+          wait(delays.cache_access(transaction));
+
           updated_cache_indices[index] = true;
         } else {
           SC_LOG_DEBUG(this, transaction,
-                       "Cache line already loaded in this transaction -> "
-                       "skipping cache update");
+                       "Write Miss: Writing data only to RAM");
+          num_misses++;
         }
 
-        // copy required block portion directly to transaction buffer
-        std::memcpy(data_ptr + processed, buffer + block_offset, length);
+        // enqueue into store buffer
+        while (store_buffer.size() >= cache_store_buffer_size) {
+          wait(store_buffer_out_evt); // stall until space frees up
+        }
 
-        delete[] buffer;
-      } else {
-        // cache hit: use data from cache
-        SC_LOG_DEBUG(this, transaction, "Read Hit: Loading data from cache");
-
-        num_hits++;
-
-        std::memcpy(data_ptr + processed, &line.data[block_offset], length);
-        wait(delays.cache_access(transaction));
-      }
-    } else if (transaction.is_write()) {
-      // cache hit if valid and correct tag
-      if (line.valid && line.tag == tag) {
-        SC_LOG_DEBUG(this, transaction,
-                     "Write Hit: Writing data to cache and RAM");
-
-        num_hits++;
-
-        std::memcpy(&line.data[block_offset], data_ptr + processed, length);
-        wait(delays.cache_access(transaction));
-
-        // mark as updated
-        updated_cache_indices[index] = true;
-      } else {
-        SC_LOG_DEBUG(this, transaction, "Write Miss: Writing data only to RAM");
-
-        num_misses++;
+        StoreBufferEntry entry;
+        entry.transaction = &transaction;
+        entry.wlast = (beat == num_beats - 1) && (remaining - copy_len == 0);
+        entry.address = block_address + block_offset;
+        entry.data.resize(copy_len);
+        std::memcpy(entry.data.data(),
+                    data_ptr + beat_offset_in_tx + (beat_bytes - remaining),
+                    copy_len);
+        store_buffer.push_back(std::move(entry));
+        store_buffer_in_evt.notify(SC_ZERO_TIME);
       }
 
-      // enqueue into store buffer
-      while (store_buffer.size() >= cache_store_buffer_size) {
-        wait(store_buffer_out_evt); // stall until space frees up
-      }
-
-      StoreBufferEntry entry;
-      entry.transaction = &transaction;
-      entry.wlast = processed + length >= data_length;
-      entry.address = block_address + block_offset;
-      entry.data.resize(length);
-      std::memcpy(entry.data.data(), data_ptr + processed, length);
-      store_buffer.push_back(std::move(entry));
-      store_buffer_in_evt.notify(SC_ZERO_TIME);
+      // advance inside this beat
+      beat_addr += copy_len;
+      remaining -= copy_len;
     }
-
-    processed += length;
   }
 }
 
@@ -239,12 +262,15 @@ void Cache::drain_store_buffer() {
 void Cache::send_axi_request(tlm_generic_payload &transaction,
                              tlm_command command, uint32_t address,
                              unsigned char *data, unsigned int data_length) {
-  auto *axi_trans = static_cast<ChipletPayload &>(transaction).clone_ext();
+  ChipletPayload *axi_trans =
+      static_cast<ChipletPayload &>(transaction).clone_ext();
 
   axi_trans->set_command(command);
   axi_trans->set_address(address);
   axi_trans->set_data_ptr(data, false);
   axi_trans->set_data_length(data_length);
+
+  axi_utils.set_burst_incr(axi_trans, data_length);
 
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
@@ -254,6 +280,20 @@ void Cache::send_axi_request(tlm_generic_payload &transaction,
   wait(axi_resp_evt);
 
   delete axi_trans;
+}
+
+void Cache::dump() {
+  std::cout << "=== Cache Dump ===\n";
+  for (size_t i = 0; i < cache_lines.size(); ++i) {
+    const auto &line = cache_lines[i];
+    std::cout << "Line " << i << " [valid=" << line.valid
+              << ", tag=" << std::setw(2) << line.tag << "]: ";
+    for (uint8_t b : line.data) {
+      std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)b
+                << " ";
+    }
+    std::cout << std::dec << "\n";
+  }
 }
 
 void Cache::report_rates() {

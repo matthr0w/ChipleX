@@ -30,7 +30,7 @@ void RAM::process_transaction() {
     transaction = peq.get_next_transaction();
     transaction->get_extension(ext);
 
-    uint32_t address = transaction->get_address();
+    uint32_t start_addr = transaction->get_address();
     unsigned char *data_ptr = transaction->get_data_ptr();
     unsigned int data_length = transaction->get_data_length();
 
@@ -38,7 +38,7 @@ void RAM::process_transaction() {
     unsigned int beat_bytes = 1 << ext->axi_size; // 2^AxSIZE
 
     for (unsigned int beat = 0; beat < num_beats; ++beat) {
-      uint32_t beat_addr = address;
+      uint32_t beat_addr = start_addr;
 
       switch (ext->axi_burst) {
       // FIXED
@@ -46,13 +46,13 @@ void RAM::process_transaction() {
         break;
       // INCR
       case 1:
-        beat_addr = address + beat * beat_bytes;
+        beat_addr = start_addr + beat * beat_bytes;
         break;
       // WRAP
       case 2: {
         unsigned int burst_size_bytes = num_beats * beat_bytes;
-        uint32_t base = (address / burst_size_bytes) * burst_size_bytes;
-        uint32_t offset = (address + beat * beat_bytes) % burst_size_bytes;
+        uint32_t base = (start_addr / burst_size_bytes) * burst_size_bytes;
+        uint32_t offset = (start_addr + beat * beat_bytes) % burst_size_bytes;
         beat_addr = base + offset;
         break;
       }

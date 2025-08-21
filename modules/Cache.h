@@ -34,6 +34,7 @@ public:
         unsigned int cache_store_buffer_size, sc_time cache_arbitration_delay,
         sc_time cache_access_delay);
 
+  void dump();
   void report_rates();
 
 private:
