@@ -16,7 +16,31 @@ using namespace tlm;
 using namespace tlm_utils;
 
 SC_MODULE(Core) {
+public:
+  // -------------------------------------------------------
+  // trackers
+  // -------------------------------------------------------
+  UtilizationTracker utilization_tracker;
+
+  // -------------------------------------------------------
+  // sockets
+  // -------------------------------------------------------
+  simple_initiator_socket<Core> isocket;
+  simple_target_socket<Core> irq_socket;
+
+  Core(sc_module_name name, AXIUtils & axi_utils, unsigned int chip_id,
+       unsigned int core_id, sc_time irq_delay);
+
+  std::function<void(Core &, UtilizationTracker *)> thread_fn;
+  std::function<void(Core &, UtilizationTracker *, tlm_generic_payload *)>
+      interrupt_fn;
+
+  void core_thread();
+  void interrupt_thread();
+
 private:
+  AXIUtils & axi_utils;
+
   struct RequestHandle {
     ChipletPayload *transaction;
     sc_event done;
@@ -42,38 +66,7 @@ private:
   std::unordered_map<tlm::tlm_generic_payload *, RequestHandle *>
       request_handles;
 
-public:
-  // -------------------------------------------------------
-  // trackers
-  // -------------------------------------------------------
-  UtilizationTracker utilization_tracker;
-
-  // -------------------------------------------------------
-  // sockets
-  // -------------------------------------------------------
-  simple_initiator_socket<Core> isocket;
-  simple_target_socket<Core> irq_socket;
-
-  Core(sc_module_name name, AXIUtils & axi_utils, unsigned int chip_id,
-       unsigned int core_id, sc_time irq_delay);
-
-  std::function<void(Core &, UtilizationTracker *)> thread_fn;
-  std::function<void(Core &, UtilizationTracker *, tlm_generic_payload *)>
-      interrupt_fn;
-
-  void core_thread();
-  void interrupt_thread();
-
-  RequestHandle *send_request(
-      tlm_command command, int request_id, int destination_id, uint32_t address,
-      bool fixed_address, bool is_volatile, unsigned char *data,
-      unsigned int data_length, unsigned int burst_type);
-
-private:
-  AXIUtils & axi_utils;
-
   sc_mutex request_mutex;
-  unsigned int request;
 
   std::deque<tlm_generic_payload *> irq_queue;
 
@@ -116,4 +109,52 @@ private:
   };
 
   DelayModel delays{*this};
+
+  // -------------------------------------------------------
+  // AXI methods
+  // -------------------------------------------------------
+private:
+  RequestHandle *read_internal(int request_id, int destination_id,
+                               uint32_t address, bool fixed_address,
+                               unsigned char *data, unsigned int data_length,
+                               unsigned int burst_type, bool is_volatile);
+
+  RequestHandle *write_internal(int request_id, int destination_id,
+                                uint32_t address, bool fixed_address,
+                                unsigned char *data, unsigned int data_length,
+                                unsigned int burst_type, bool is_volatile);
+
+public:
+  RequestHandle *read(int request_id, int destination_id, uint32_t address,
+                      unsigned char *data, unsigned int data_length,
+                      bool is_volatile);
+
+  RequestHandle *read_fixed(int request_id, int destination_id,
+                            uint32_t address, unsigned char *data,
+                            unsigned int data_length, bool is_volatile);
+
+  RequestHandle *read_wrap(int request_id, int destination_id, uint32_t address,
+                           unsigned char *data, unsigned int data_length,
+                           bool is_volatile);
+
+  RequestHandle *write(int request_id, int destination_id, uint32_t address,
+                       unsigned char *data, unsigned int data_length,
+                       bool is_volatile);
+
+  RequestHandle *write(int request_id, int destination_id, unsigned char *data,
+                       unsigned int data_length);
+
+  RequestHandle *write_fixed(int request_id, int destination_id,
+                             uint32_t address, unsigned char *data,
+                             unsigned int data_length, bool is_volatile);
+
+  RequestHandle *write_fixed(int request_id, int destination_id,
+                             unsigned char *data, unsigned int data_length);
+
+  RequestHandle *write_wrap(int request_id, int destination_id,
+                            uint32_t address, unsigned char *data,
+                            unsigned int data_length, bool is_volatile);
+
+  RequestHandle *write_wrap(int request_id, int destination_id,
+                            unsigned char *data, unsigned int data_length);
 };

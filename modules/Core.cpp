@@ -5,7 +5,7 @@
 Core::Core(sc_module_name name, AXIUtils &axi_utils, unsigned int chip_id,
            unsigned int core_id, sc_time irq_delay)
     : sc_module(name), axi_utils(axi_utils), chip_id(chip_id), core_id(core_id),
-      irq_delay(irq_delay), utilization_tracker(this->name()), request(0) {
+      irq_delay(irq_delay), utilization_tracker(this->name()) {
   isocket.register_nb_transport_bw(this, &Core::nb_transport_bw);
   irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
 
@@ -40,79 +40,6 @@ void Core::interrupt_thread() {
       delete transaction;
     }
   }
-}
-
-Core::RequestHandle *Core::send_request(tlm_command command, int request_id,
-                                        int destination_id, uint32_t address,
-                                        bool fixed_address, bool is_volatile,
-                                        unsigned char *data,
-                                        unsigned int data_length,
-                                        unsigned int burst_type) {
-  auto *h = new RequestHandle();
-  auto *transaction = new ChipletPayload();
-  ChipletExtension *ext;
-  tlm_phase phase;
-  sc_time delay;
-  tlm_sync_enum tlm_resp;
-
-  transaction->set_command(command);
-  transaction->set_data_ptr(data, false);
-  transaction->set_data_length(data_length);
-  transaction->get_extension(ext);
-
-  switch (burst_type) {
-  case 0:
-    axi_utils.set_burst_fixed(transaction, data_length);
-    break;
-  case 1:
-    axi_utils.set_burst_incr(transaction, data_length);
-    break;
-  case 2:
-    axi_utils.set_burst_wrap(transaction, data_length);
-    break;
-  }
-
-  transaction->set_fixed_address(fixed_address);
-  transaction->set_volatile(is_volatile);
-
-  if (command == TLM_WRITE_COMMAND) {
-    if (fixed_address) {
-      transaction->set_address(address);
-    } else {
-      transaction->set_address(0x0);
-    }
-  } else if (command == TLM_READ_COMMAND) {
-    transaction->set_address(address);
-  }
-
-  transaction->set_core_id(core_id);
-  transaction->set_request_id(request_id);
-  transaction->set_destination_id(destination_id);
-
-  if (command == TLM_READ_COMMAND) {
-    SC_LOG_INFO(this, *transaction,
-                "Sending request: READ from 0x" << std::hex << address);
-  } else if (command == TLM_WRITE_COMMAND) {
-    if (fixed_address) {
-      SC_LOG_INFO(this, *transaction,
-                  "Sending request: WRITE to 0x" << std::hex << address);
-    } else {
-      SC_LOG_INFO(this, *transaction,
-                  "Sending request: WRITE to dynamic address");
-    }
-  }
-
-  h->transaction = transaction;
-  request_handles[transaction] = h;
-
-  phase = BEGIN_REQ;
-  delay = SC_ZERO_TIME;
-
-  tlm_resp = isocket->nb_transport_fw(*transaction, phase, delay);
-
-  wait(req_evt);
-
-  return h;
 }
 
 // -------------------------------------------------------
@@ -159,4 +86,199 @@ tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
   }
 
   return TLM_ACCEPTED;
+}
+
+// -------------------------------------------------------
+// AXI methods
+// -------------------------------------------------------
+Core::RequestHandle *Core::read_internal(int request_id, int destination_id,
+                                         uint32_t address, bool fixed_address,
+                                         unsigned char *data,
+                                         unsigned int data_length,
+                                         unsigned int burst_type,
+                                         bool is_volatile) {
+  auto *handle = new RequestHandle();
+  auto *transaction = new ChipletPayload();
+
+  transaction->set_command(TLM_READ_COMMAND);
+  transaction->set_address(address);
+  transaction->set_fixed_address(fixed_address);
+  transaction->set_data_ptr(data, false);
+  transaction->set_data_length(data_length);
+  transaction->set_volatile(is_volatile);
+
+  transaction->set_core_id(core_id);
+  transaction->set_request_id(request_id);
+  transaction->set_destination_id(destination_id);
+
+  switch (burst_type) {
+  case 0:
+    axi_utils.set_burst_fixed(transaction, data_length);
+    break;
+  case 1:
+    axi_utils.set_burst_incr(transaction, data_length);
+    break;
+  case 2:
+    axi_utils.set_burst_wrap(transaction, data_length);
+    break;
+  }
+
+  SC_LOG_INFO(this, *transaction,
+              "Sending request: READ from 0x" << std::hex << address);
+
+  handle->transaction = transaction;
+  request_handles[transaction] = handle;
+
+  tlm_phase phase = BEGIN_REQ;
+  sc_time delay = SC_ZERO_TIME;
+
+  isocket->nb_transport_fw(*transaction, phase, delay);
+
+  wait(req_evt);
+
+  return handle;
+}
+
+Core::RequestHandle *Core::read(int request_id, int destination_id,
+                                uint32_t address, unsigned char *data,
+                                unsigned int data_length, bool is_volatile) {
+  bool fixed_address = true;
+  unsigned int burst_type = 1;
+  return read_internal(request_id, destination_id, address, fixed_address, data,
+                       data_length, burst_type, is_volatile);
+}
+
+Core::RequestHandle *Core::read_fixed(int request_id, int destination_id,
+                                      uint32_t address, unsigned char *data,
+                                      unsigned int data_length,
+                                      bool is_volatile) {
+  bool fixed_address = true;
+  unsigned int burst_type = 0;
+  return read_internal(request_id, destination_id, address, fixed_address, data,
+                       data_length, burst_type, is_volatile);
+}
+
+Core::RequestHandle *Core::read_wrap(int request_id, int destination_id,
+                                     uint32_t address, unsigned char *data,
+                                     unsigned int data_length,
+                                     bool is_volatile) {
+  bool fixed_address = true;
+  unsigned int burst_type = 2;
+  return read_internal(request_id, destination_id, address, fixed_address, data,
+                       data_length, burst_type, is_volatile);
+}
+
+Core::RequestHandle *Core::write_internal(int request_id, int destination_id,
+                                          uint32_t address, bool fixed_address,
+                                          unsigned char *data,
+                                          unsigned int data_length,
+                                          unsigned int burst_type,
+                                          bool is_volatile) {
+  auto *handle = new RequestHandle();
+  auto *transaction = new ChipletPayload();
+
+  transaction->set_command(TLM_WRITE_COMMAND);
+  transaction->set_address(address);
+  transaction->set_fixed_address(fixed_address);
+  transaction->set_data_ptr(data, false);
+  transaction->set_data_length(data_length);
+  transaction->set_volatile(is_volatile);
+
+  transaction->set_core_id(core_id);
+  transaction->set_request_id(request_id);
+  transaction->set_destination_id(destination_id);
+
+  switch (burst_type) {
+  case 0:
+    axi_utils.set_burst_fixed(transaction, data_length);
+    break;
+  case 1:
+    axi_utils.set_burst_incr(transaction, data_length);
+    break;
+  case 2:
+    axi_utils.set_burst_wrap(transaction, data_length);
+    break;
+  }
+
+  if (fixed_address) {
+    SC_LOG_INFO(this, *transaction,
+                "Sending request: WRITE to 0x" << std::hex << address);
+  } else {
+    SC_LOG_INFO(this, *transaction,
+                "Sending request: WRITE to dynamic address");
+  }
+
+  handle->transaction = transaction;
+  request_handles[transaction] = handle;
+
+  tlm_phase phase = BEGIN_REQ;
+  sc_time delay = SC_ZERO_TIME;
+
+  isocket->nb_transport_fw(*transaction, phase, delay);
+
+  wait(req_evt);
+
+  return handle;
+}
+
+Core::RequestHandle *Core::write(int request_id, int destination_id,
+                                 uint32_t address, unsigned char *data,
+                                 unsigned int data_length, bool is_volatile) {
+  bool fixed_address = true;
+  unsigned int burst_type = 1;
+  return write_internal(request_id, destination_id, address, fixed_address,
+                        data, data_length, burst_type, is_volatile);
+}
+
+Core::RequestHandle *Core::write(int request_id, int destination_id,
+                                 unsigned char *data,
+                                 unsigned int data_length) {
+  uint32_t address = 0x0;
+  bool fixed_address = false;
+  unsigned int burst_type = 1;
+  bool is_volatile = true;
+  return write_internal(request_id, destination_id, address, fixed_address,
+                        data, data_length, burst_type, is_volatile);
+}
+
+Core::RequestHandle *Core::write_fixed(int request_id, int destination_id,
+                                       uint32_t address, unsigned char *data,
+                                       unsigned int data_length,
+                                       bool is_volatile) {
+  bool fixed_address = true;
+  unsigned int burst_type = 0;
+  return write_internal(request_id, destination_id, address, fixed_address,
+                        data, data_length, burst_type, is_volatile);
+}
+
+Core::RequestHandle *Core::write_fixed(int request_id, int destination_id,
+                                       unsigned char *data,
+                                       unsigned int data_length) {
+  uint32_t address = 0x0;
+  bool fixed_address = false;
+  unsigned int burst_type = 0;
+  bool is_volatile = true;
+  return write_internal(request_id, destination_id, address, fixed_address,
+                        data, data_length, burst_type, is_volatile);
+}
+
+Core::RequestHandle *Core::write_wrap(int request_id, int destination_id,
+                                      uint32_t address, unsigned char *data,
+                                      unsigned int data_length,
+                                      bool is_volatile) {
+  bool fixed_address = true;
+  unsigned int burst_type = 2;
+  return write_internal(request_id, destination_id, address, fixed_address,
+                        data, data_length, burst_type, is_volatile);
+}
+
+Core::RequestHandle *Core::write_wrap(int request_id, int destination_id,
+                                      unsigned char *data,
+                                      unsigned int data_length) {
+  uint32_t address = 0x0;
+  bool fixed_address = false;
+  unsigned int burst_type = 2;
+  bool is_volatile = true;
+  return write_internal(request_id, destination_id, address, fixed_address,
+                        data, data_length, burst_type, is_volatile);
 }
