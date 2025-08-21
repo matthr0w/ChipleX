@@ -30,6 +30,7 @@ tlm_sync_enum AXIManager::nb_transport_bw(tlm_generic_payload &transaction,
   switch (phase) {
   case BEGIN_RESP:
     delay += delays.axi_response(transaction);
+    break;
   }
 
   return tsocket->nb_transport_bw(transaction, phase, delay);
