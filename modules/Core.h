@@ -67,8 +67,7 @@ public:
   RequestHandle *send_request(
       tlm_command command, int request_id, int destination_id, uint32_t address,
       bool fixed_address, bool is_volatile, unsigned char *data,
-      unsigned int data_len, unsigned int axi_length, unsigned int axi_size,
-      unsigned int axi_burst);
+      unsigned int data_length, unsigned int burst_type);
 
 private:
   AXIUtils & axi_utils;

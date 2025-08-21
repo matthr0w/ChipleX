@@ -42,12 +42,12 @@ void Core::interrupt_thread() {
   }
 }
 
-Core::RequestHandle *
-Core::send_request(tlm_command command, int request_id, int destination_id,
-                   uint32_t address, bool fixed_address, bool is_volatile,
-                   unsigned char *data, unsigned int data_len,
-                   unsigned int axi_length, unsigned int axi_size,
-                   unsigned int axi_burst) {
+Core::RequestHandle *Core::send_request(tlm_command command, int request_id,
+                                        int destination_id, uint32_t address,
+                                        bool fixed_address, bool is_volatile,
+                                        unsigned char *data,
+                                        unsigned int data_length,
+                                        unsigned int burst_type) {
   auto *h = new RequestHandle();
   auto *transaction = new ChipletPayload();
   ChipletExtension *ext;
@@ -57,11 +57,20 @@ Core::send_request(tlm_command command, int request_id, int destination_id,
 
   transaction->set_command(command);
   transaction->set_data_ptr(data, false);
-  transaction->set_data_length(data_len);
+  transaction->set_data_length(data_length);
+  transaction->get_extension(ext);
 
-  transaction->set_axi_length(axi_length);
-  transaction->set_axi_size(axi_size);
-  transaction->set_axi_burst(axi_burst);
+  switch (burst_type) {
+  case 0:
+    axi_utils.set_burst_fixed(transaction, data_length);
+    break;
+  case 1:
+    axi_utils.set_burst_incr(transaction, data_length);
+    break;
+  case 2:
+    axi_utils.set_burst_wrap(transaction, data_length);
+    break;
+  }
 
   transaction->set_fixed_address(fixed_address);
   transaction->set_volatile(is_volatile);
