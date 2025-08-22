@@ -37,8 +37,8 @@ private:
     sc_time *delay;
   };
 
-  std::deque<Request> requests_queue;
-  void process_queue();
+  std::deque<Request> request_queue;
+  void process_request_queue();
 
   std::vector<uint8_t> mem;
   std::vector<bool> write_flags;

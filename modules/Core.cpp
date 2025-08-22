@@ -76,9 +76,10 @@ tlm_sync_enum Core::nb_transport_bw(tlm_generic_payload &transaction,
     phase = END_REQ;
     return TLM_ACCEPTED;
   case BEGIN_RESP:
+    resp_evt.notify(delay);
+
     Core::RequestHandle *h = request_handles.find(&transaction)->second;
     request_handles.erase(&transaction);
-
     h->notify(delay);
 
     phase = END_RESP;
@@ -134,7 +135,7 @@ Core::RequestHandle *Core::read_internal(int request_id, int destination_id,
 
   isocket->nb_transport_fw(*transaction, phase, delay);
 
-  wait(req_evt);
+  wait(resp_evt);
 
   return handle;
 }
@@ -216,7 +217,12 @@ Core::RequestHandle *Core::write_internal(int request_id, int destination_id,
 
   isocket->nb_transport_fw(*transaction, phase, delay);
 
-  wait(req_evt);
+  // I/O: stall till response
+  if (destination_id == chip_id) {
+    wait(req_evt);
+  } else {
+    wait(resp_evt);
+  }
 
   return handle;
 }

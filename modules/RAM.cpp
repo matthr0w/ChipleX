@@ -10,25 +10,20 @@ RAM::RAM(sc_module_name name, unsigned int ram_size, unsigned int ram_width,
       write_flags(mem.size(), false) {
   tsocket.register_nb_transport_fw(this, &RAM::nb_transport_fw);
 
-  SC_THREAD(process_queue);
+  SC_THREAD(process_request_queue);
 
   SC_THREAD(process_transaction);
   sensitive << peq.get_event();
 }
 
 void RAM::process_transaction() {
-  tlm_generic_payload *transaction;
-  ChipletExtension *ext;
-  tlm_phase phase;
-  sc_time delay;
-
   while (true) {
     wait();
 
     utilization_tracker.set_active();
 
-    transaction = peq.get_next_transaction();
-    transaction->get_extension(ext);
+    tlm_generic_payload *transaction = peq.get_next_transaction();
+    ChipletExtension *ext = transaction->get_extension<ChipletExtension>();
 
     uint32_t start_addr = transaction->get_address();
     unsigned char *data_ptr = transaction->get_data_ptr();
@@ -93,8 +88,8 @@ void RAM::process_transaction() {
 
     utilization_tracker.set_idle();
 
-    phase = BEGIN_RESP;
-    delay = SC_ZERO_TIME;
+    tlm_phase phase = BEGIN_RESP;
+    sc_time delay = SC_ZERO_TIME;
 
     tsocket->nb_transport_bw(*transaction, phase, delay);
 
@@ -102,13 +97,13 @@ void RAM::process_transaction() {
   }
 }
 
-void RAM::process_queue() {
+void RAM::process_request_queue() {
   while (true) {
     wait(req_evt);
 
-    while (!requests_queue.empty()) {
-      Request request = requests_queue.front();
-      requests_queue.pop_front();
+    while (!request_queue.empty()) {
+      Request request = request_queue.front();
+      request_queue.pop_front();
 
       tlm_generic_payload *transaction = request.transaction;
       tlm_phase phase = END_REQ;
@@ -142,7 +137,7 @@ tlm_sync_enum RAM::nb_transport_fw(tlm_generic_payload &transaction,
   case BEGIN_REQ:
     delay += delays.ram_access(transaction);
 
-    requests_queue.push_back({&transaction, &phase, &delay});
+    request_queue.push_back({&transaction, &phase, &delay});
     req_evt.notify(SC_ZERO_TIME);
 
     return TLM_ACCEPTED;

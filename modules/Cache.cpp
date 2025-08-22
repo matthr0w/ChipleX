@@ -40,26 +40,18 @@ Cache::Cache(sc_module_name name, AXIUtils &axi_utils, unsigned int chip_id,
 }
 
 void Cache::process_transaction() {
-  tlm_generic_payload *transaction = nullptr;
-  tlm_phase phase = UNINITIALIZED_PHASE;
-  sc_time delay = SC_ZERO_TIME;
-
   while (true) {
     wait();
 
-    transaction = peq.get_next_transaction();
+    tlm_generic_payload *transaction = peq.get_next_transaction();
 
     utilization_tracker.set_active();
     access_cache(*transaction);
     utilization_tracker.set_idle();
 
-    delay = SC_ZERO_TIME;
-    phase = END_REQ;
-    tsocket->nb_transport_bw(*transaction, phase, delay);
-
     if (transaction->is_read()) {
-      delay = SC_ZERO_TIME;
-      phase = BEGIN_RESP;
+      tlm_phase phase = BEGIN_RESP;
+      sc_time delay = SC_ZERO_TIME;
       tsocket->nb_transport_bw(*transaction, phase, delay);
       resp_evt.notify(delay);
     }
@@ -67,11 +59,6 @@ void Cache::process_transaction() {
 }
 
 void Cache::process_request_queue() {
-  tlm_generic_payload *transaction = nullptr;
-  ChipletExtension *ext = nullptr;
-  tlm_phase phase = UNINITIALIZED_PHASE;
-  sc_time delay = SC_ZERO_TIME;
-
   while (true) {
     wait(req_evt);
 
@@ -79,10 +66,10 @@ void Cache::process_request_queue() {
       Request request = request_queue.front();
       request_queue.pop_front();
 
-      transaction = request.transaction;
-      delay = *request.delay;
-
-      transaction->get_extension(ext);
+      tlm_generic_payload *transaction = request.transaction;
+      ChipletExtension *ext = transaction->get_extension<ChipletExtension>();
+      tlm_phase phase = UNINITIALIZED_PHASE;
+      sc_time delay = *request.delay;
 
       bool skip_cache = !ext->fixed_address || ext->is_volatile ||
                         ext->destination_id != chip_id;
@@ -96,6 +83,10 @@ void Cache::process_request_queue() {
         isocket->nb_transport_fw(*transaction, phase, delay);
       } else {
         peq.notify(*transaction, delay);
+
+        phase = END_REQ;
+        tsocket->nb_transport_bw(*transaction, phase, delay);
+
         wait(resp_evt);
       }
     }
