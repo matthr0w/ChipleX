@@ -51,31 +51,24 @@ private:
     DelayModel(const AXIManager &m) : module(m) {}
 
     sc_time axi_response(tlm_generic_payload &transaction) const {
-      sc_time delay = SC_ZERO_TIME;
-      unsigned int total_bytes = 0;
+      unsigned int num_beats = 0;
 
       if (transaction.is_read()) {
         // ---------------------------
-        // read response: extension + data
+        // read response: burst beats
         // ---------------------------
-        unsigned int ext_bytes =
-            static_cast<ChipletPayload *>(&transaction)->get_ext_length();
-        unsigned int data_bytes = transaction.get_data_length();
-
-        total_bytes = ext_bytes + data_bytes;
+        // AxLEN + 1
+        num_beats =
+            static_cast<ChipletPayload *>(&transaction)->get_axi_length() + 1;
 
       } else if (transaction.is_write()) {
         // ---------------------------
-        // write response: address only
+        // write response: response beat
         // ---------------------------
-        total_bytes = sizeof(uint32_t);
-      }
+        num_beats = 1;
+      };
 
-      unsigned int num_cycles =
-          (total_bytes * 8 + module.axi_channel_width - 1) /
-          module.axi_channel_width;
-
-      delay = num_cycles * module.axi_clk_cycle;
+      sc_time delay = num_beats * module.axi_clk_cycle;
 
       SC_LOG_DELAY(&module, transaction, "AXI Response", delay);
       return delay;

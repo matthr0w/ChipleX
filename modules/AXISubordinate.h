@@ -69,36 +69,24 @@ private:
     DelayModel(const AXISubordinate &m) : module(m) {}
 
     sc_time axi_request(tlm_generic_payload &transaction) const {
-      sc_time delay = SC_ZERO_TIME;
-      unsigned int total_bytes = 0;
+      unsigned int num_beats = 0;
 
       if (transaction.is_read()) {
         // ---------------------------
-        // read response: address + extension
+        // read response: address beat
         // ---------------------------
-        unsigned int address_bytes = sizeof(uint32_t);
-        unsigned int ext_bytes =
-            static_cast<ChipletPayload *>(&transaction)->get_ext_length();
-
-        total_bytes = address_bytes + ext_bytes;
+        num_beats = 1;
 
       } else if (transaction.is_write()) {
         // ---------------------------
-        // write response: address + extension + data
+        // write response: address + burst beats
         // ---------------------------
-        unsigned int address_bytes = sizeof(uint32_t);
-        unsigned int ext_bytes =
-            static_cast<ChipletPayload *>(&transaction)->get_ext_length();
-        unsigned int data_bytes = transaction.get_data_length();
-
-        total_bytes = address_bytes + ext_bytes + data_bytes;
+        // AxLEN + 1 + address beat
+        num_beats =
+            static_cast<ChipletPayload *>(&transaction)->get_axi_length() + 2;
       }
 
-      unsigned int num_cycles =
-          (total_bytes * 8 + module.axi_channel_width - 1) /
-          module.axi_channel_width;
-
-      delay = num_cycles * module.axi_clk_cycle;
+      sc_time delay = num_beats * module.axi_clk_cycle;
 
       SC_LOG_DELAY(&module, transaction, "AXI Request", delay);
       return delay;
