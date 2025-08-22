@@ -19,8 +19,7 @@ public:
       delete[] this->get_data_ptr();
     }
 
-    ChipletExtension *ext = nullptr;
-    this->get_extension(ext);
+    ChipletExtension *ext = get_extension<ChipletExtension>();
     if (ext) {
       delete ext;
       this->clear_extension<ChipletExtension>();
@@ -50,8 +49,7 @@ public:
       }
     }
 
-    ChipletExtension *ext = nullptr;
-    this->get_extension(ext);
+    ChipletExtension *ext = get_extension<ChipletExtension>();
     if (ext) {
       ChipletExtension *cp_ext = new ChipletExtension();
       cp_ext->copy_from(*ext);
@@ -64,8 +62,7 @@ public:
   ChipletPayload *clone_ext() const {
     auto *cp = new ChipletPayload();
 
-    ChipletExtension *ext = nullptr;
-    this->get_extension(ext);
+    ChipletExtension *ext = get_extension<ChipletExtension>();
     if (ext) {
       ChipletExtension *cp_ext = new ChipletExtension();
       cp_ext->copy_from(*ext);
@@ -76,8 +73,7 @@ public:
   }
 
   ChipletExtension *ensure_extension() {
-    auto *ext = get_extension<ChipletExtension>();
-
+    ChipletExtension *ext = get_extension<ChipletExtension>();
     if (!ext) {
       ext = new ChipletExtension();
       set_extension(ext);
@@ -86,29 +82,23 @@ public:
     return ext;
   }
 
-  unsigned int get_ext_length() {
-    auto *ext = get_extension<ChipletExtension>();
-
-    unsigned int flitext_size = 0;
-    if (ext && ext->flit_id != -1) {
-      flitext_size = ext->get_flitext_size_bytes();
-    }
-
-    unsigned int stdext_size = ext->get_stdext_size_bytes();
-
-    return stdext_size + flitext_size;
+  // AXI signals
+  void set_axi_length(uint8_t value) { ensure_extension()->axi_length = value; }
+  uint8_t get_axi_length() {
+    ChipletExtension *ext = get_extension<ChipletExtension>();
+    return ext->axi_length;
+  }
+  void set_axi_size(uint8_t value) { ensure_extension()->axi_size = value; }
+  uint8_t get_axi_size() {
+    ChipletExtension *ext = get_extension<ChipletExtension>();
+    return ext->axi_size;
+  }
+  void set_axi_burst(uint8_t value) { ensure_extension()->axi_burst = value; }
+  uint8_t get_axi_burst() {
+    ChipletExtension *ext = get_extension<ChipletExtension>();
+    return ext->axi_burst;
   }
 
-  // AXI metadata
-  void set_axi_length(unsigned int value) {
-    ensure_extension()->axi_length = value;
-  }
-  void set_axi_size(unsigned int value) {
-    ensure_extension()->axi_size = value;
-  }
-  void set_axi_burst(unsigned int value) {
-    ensure_extension()->axi_burst = value;
-  }
   // chiplet metadata
   void set_request_id(int id) { ensure_extension()->request_id = id; }
   void set_core_id(int id) { ensure_extension()->core_id = id; }
