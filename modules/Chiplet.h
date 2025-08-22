@@ -5,7 +5,6 @@
 #include "AXIInterconnect.h"
 #include "AXIManager.h"
 #include "AXISubordinate.h"
-#include "Bus.h"
 #include "Cache.h"
 #include "Core.h"
 #include "Interconnect.h"
@@ -22,12 +21,6 @@ using namespace tlm_utils;
 
 SC_MODULE(Chiplet) {
 private:
-  // FOR TESTING
-  simple_initiator_socket<Chiplet> dummy_initiator0;
-  simple_initiator_socket<Chiplet> dummy_initiator1;
-  simple_target_socket<Chiplet> dummy_target;
-  //
-
   static unsigned int instance;
   const unsigned int chiplet_id;
 
@@ -122,9 +115,10 @@ private:
   AXIInterconnect axi_interconnect;
   AXIManager axi_manager_core0;
   AXIManager axi_manager_core1;
+  AXIManager axi_manager_interconnect;
+  AXISubordinate axi_subordinate_interconnect;
   AXISubordinate axi_subordinate_memory_controller;
 
-  Bus bus; // obsolete
   InterconnectProtocol interconnect_protocol;
   MemoryController memory_controller;
 

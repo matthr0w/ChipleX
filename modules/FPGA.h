@@ -2,7 +2,9 @@
 
 #include <systemc>
 
-#include "Bus.h"
+#include "AXIInterconnect.h"
+#include "AXIManager.h"
+#include "AXISubordinate.h"
 #include "Cache.h"
 #include "Core.h"
 #include "Interconnect.h"
@@ -12,8 +14,6 @@
 
 #include "common/AXIUtils.h"
 #include "common/Tracker.h"
-
-#include "include/globals.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -34,8 +34,8 @@ private:
   // parameters
   // -------------------------------------------------------
   const unsigned int num_cores = 1;
-  const unsigned int num_bus_managers = 2;
-  const unsigned int num_bus_subordinates = 2;
+  const unsigned int num_axi_managers = 2;
+  const unsigned int num_axi_subordinates = 2;
   const unsigned int num_interconnects = num_chiplets;
 
   // FPGA config
@@ -106,8 +106,12 @@ public:
 private:
   // AXI
   AXIUtils axi_utils;
-  
-  Bus bus;
+  AXIInterconnect axi_interconnect;
+  AXIManager axi_manager_core;
+  AXIManager axi_manager_interconnect;
+  AXISubordinate axi_subordinate_interconnect;
+  AXISubordinate axi_subordinate_memory_controller;
+
   InterconnectProtocol interconnect_protocol;
   MemoryController memory_controller;
 

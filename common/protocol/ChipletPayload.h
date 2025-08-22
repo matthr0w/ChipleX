@@ -36,16 +36,15 @@ public:
 
     cp->set_command(this->get_command());
     cp->set_address(this->get_address());
+    cp->set_data_length(this->get_data_length());
 
     if (this->get_data_ptr() && this->get_data_length() > 0) {
       if (owns_data_ptr) {
         unsigned char *cp_data = new unsigned char[this->get_data_length()];
         std::memcpy(cp_data, this->get_data_ptr(), this->get_data_length());
         cp->set_data_ptr(cp_data, true);
-        cp->set_data_length(this->get_data_length());
       } else {
         cp->set_data_ptr(this->get_data_ptr(), false);
-        cp->set_data_length(this->get_data_length());
       }
     }
 

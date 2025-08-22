@@ -106,10 +106,13 @@ void RAM::process_request_queue() {
       request_queue.pop_front();
 
       tlm_generic_payload *transaction = request.transaction;
-      tlm_phase phase = END_REQ;
+      tlm_phase phase = UNINITIALIZED_PHASE;
       sc_time delay = *request.delay;
 
       peq.notify(*transaction, delay);
+
+      phase = END_REQ;
+      delay = SC_ZERO_TIME;
 
       tsocket->nb_transport_bw(*transaction, phase, delay);
 

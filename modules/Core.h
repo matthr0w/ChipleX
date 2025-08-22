@@ -35,12 +35,6 @@ public:
   std::function<void(Core &, UtilizationTracker *, tlm_generic_payload *)>
       interrupt_fn;
 
-  void core_thread();
-  void interrupt_thread();
-
-private:
-  AXIUtils & axi_utils;
-
   struct RequestHandle {
     ChipletPayload *transaction;
     sc_event done;
@@ -62,6 +56,12 @@ private:
 
     ChipletPayload *get_payload() const { return transaction; }
   };
+
+  void core_thread();
+  void interrupt_thread();
+
+private:
+  AXIUtils & axi_utils;
 
   std::unordered_map<tlm::tlm_generic_payload *, RequestHandle *>
       request_handles;

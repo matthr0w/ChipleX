@@ -1,56 +1,41 @@
 #include "Interconnect.h"
 
-#include "common/Delays.h"
 #include "common/Tracker.h"
-#include "common/protocol/ChipletPayload.h"
-
-#include "include/logging.h"
 
 Interconnect::Interconnect(sc_module_name name, unsigned int buffer_size,
-                           unsigned int flit_size, unsigned int overhead_size,
-                           sc_time pre_delay, sc_time post_delay,
-                           sc_time irq_delay, double bandwidth, double distance)
+                           unsigned int flit_size, double bandwidth,
+                           double distance)
     : sc_module(name), buffer_size(buffer_size), flit_size(flit_size),
-      overhead_size(overhead_size), pre_delay(pre_delay),
-      post_delay(post_delay), irq_delay(irq_delay), bandwidth(bandwidth),
-      distance(distance), utilization_tracker(this->name()),
+      bandwidth(bandwidth), distance(distance),
+      utilization_tracker(this->name()),
       tx_tracker(this->name() + std::string(" Tx Buffer")),
       rx_tracker(this->name() + std::string(" Rx Buffer")), incoming_flits(0),
-      protocol_target_socket("protocol_target_socket"),
-      protocol_initiator_socket("protocol_initiator_socket"),
-      interconnect_target_socket("interconnect_target_socket"),
-      interconnect_initiator_socket("interconnect_initiator_socket"),
-      peq_protocol("peq_protocol"), peq_interconnect("peq_interconnect"),
-      tx_buffer_used_bytes(0), rx_buffer_used_bytes(0) {
-  protocol_target_socket.register_nb_transport_fw(
+      protocol_peq("protocol_peq"), phy_peq("phy_peq"), tx_buffer_used_bytes(0),
+      rx_buffer_used_bytes(0) {
+  protocol_tsocket.register_nb_transport_fw(
       this, &Interconnect::nb_transport_fw_protocol);
-  protocol_initiator_socket.register_nb_transport_bw(
+  protocol_isocket.register_nb_transport_bw(
       this, &Interconnect::nb_transport_bw_protocol);
 
-  interconnect_target_socket.register_nb_transport_fw(
-      this, &Interconnect::nb_transport_fw_interconnect);
-  interconnect_initiator_socket.register_nb_transport_bw(
-      this, &Interconnect::nb_transport_bw_interconnect);
+  phy_tsocket.register_nb_transport_fw(this,
+                                       &Interconnect::nb_transport_fw_phy);
+  phy_isocket.register_nb_transport_bw(this,
+                                       &Interconnect::nb_transport_bw_phy);
 
   SC_THREAD(process_protocol_transaction);
-  sensitive << peq_protocol.get_event();
-  SC_THREAD(process_interconnect_transaction);
-  sensitive << peq_interconnect.get_event();
+  sensitive << protocol_peq.get_event();
+  SC_THREAD(process_phy_transaction);
+  sensitive << phy_peq.get_event();
 
   SC_THREAD(process_tx_buffer);
   SC_THREAD(process_rx_buffer);
 }
 
 void Interconnect::process_protocol_transaction() {
-  tlm_generic_payload *transaction;
-  tlm_phase phase;
-  sc_time delay;
-  tlm_sync_enum tlm_resp;
-
   while (true) {
     wait();
 
-    transaction = peq_protocol.get_next_transaction();
+    tlm_generic_payload *transaction = protocol_peq.get_next_transaction();
 
     // put transaction in tx buffer
     auto *transaction_copy =
@@ -60,12 +45,11 @@ void Interconnect::process_protocol_transaction() {
     tx_buffer.push_back(transaction_copy);
     tx_buffer_in_event.notify();
 
-    // begin response to protocol layer
-    phase = BEGIN_RESP;
-    delay = SC_ZERO_TIME;
+    tlm_phase phase = BEGIN_RESP;
+    sc_time delay = SC_ZERO_TIME;
 
-    tlm_resp =
-        protocol_target_socket->nb_transport_bw(*transaction, phase, delay);
+    tlm_sync_enum tlm_resp =
+        protocol_tsocket->nb_transport_bw(*transaction, phase, delay);
 
     if (tlm_resp == TLM_COMPLETED) {
       wait(delay);
@@ -73,18 +57,12 @@ void Interconnect::process_protocol_transaction() {
   }
 }
 
-void Interconnect::process_interconnect_transaction() {
-  tlm_generic_payload *transaction;
-  ChipletExtension *ext;
-  tlm_phase phase;
-  sc_time delay;
-  tlm_sync_enum tlm_resp;
-
+void Interconnect::process_phy_transaction() {
   while (true) {
     wait();
 
-    transaction = peq_interconnect.get_next_transaction();
-    transaction->get_extension(ext);
+    tlm_generic_payload *transaction = phy_peq.get_next_transaction();
+    ChipletExtension *ext = transaction->get_extension<ChipletExtension>();
 
     // only put transaction in rx buffer if transfer was successful
     if (ext->success) {
@@ -97,12 +75,11 @@ void Interconnect::process_interconnect_transaction() {
       ++incoming_flits;
     }
 
-    // begin response to interconnect
-    phase = BEGIN_RESP;
-    delay = SC_ZERO_TIME;
+    tlm_phase phase = BEGIN_RESP;
+    sc_time delay = SC_ZERO_TIME;
 
-    tlm_resp =
-        interconnect_target_socket->nb_transport_bw(*transaction, phase, delay);
+    tlm_sync_enum tlm_resp =
+        phy_tsocket->nb_transport_bw(*transaction, phase, delay);
 
     if (tlm_resp == TLM_COMPLETED) {
       wait(delay);
@@ -122,14 +99,13 @@ void Interconnect::process_tx_buffer() {
       sc_time delay = SC_ZERO_TIME;
       tlm_sync_enum tlm_resp;
 
-      tlm_resp = interconnect_initiator_socket->nb_transport_fw(*transaction,
-                                                                phase, delay);
+      tlm_resp = phy_isocket->nb_transport_fw(*transaction, phase, delay);
 
       if (tlm_resp == TLM_UPDATED) {
         wait(delay);
       }
 
-      wait(interconnect_transaction_done);
+      wait(phy_transaction_done);
 
       // remove from tx buffer
       tx_buffer_used_bytes -= flit_size;
@@ -156,8 +132,7 @@ void Interconnect::process_rx_buffer() {
       sc_time delay = SC_ZERO_TIME;
       tlm_sync_enum tlm_resp;
 
-      tlm_resp = protocol_initiator_socket->nb_transport_fw(*transaction, phase,
-                                                            delay);
+      tlm_resp = protocol_isocket->nb_transport_fw(*transaction, phase, delay);
 
       if (tlm_resp == TLM_UPDATED) {
         wait(delay);
@@ -182,29 +157,23 @@ void Interconnect::process_rx_buffer() {
 tlm_sync_enum
 Interconnect::nb_transport_fw_protocol(tlm_generic_payload &transaction,
                                        tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, transaction,
-               "PROTOCOL: Received request from Protocol Layer");
+  SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase << " - Protocol");
 
   if (tx_buffer_used_bytes + flit_size > buffer_size) {
     SC_LOG_WARN(this, transaction, "Tx buffer full -> waiting...");
     wait(tx_buffer_out_event);
   }
 
-  // add protocol layer to interconnect process delay
-  delay +=
-      get_protocol2interconnect_process_delay(*this, transaction, pre_delay);
-
-  peq_protocol.notify(transaction, delay);
+  protocol_peq.notify(transaction, delay);
 
   phase = END_REQ;
   return TLM_UPDATED;
 }
 
 tlm_sync_enum
-Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
-                                           tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG(this, transaction,
-               "PROTOCOL: Received request from Interconnect");
+Interconnect::nb_transport_fw_phy(tlm_generic_payload &transaction,
+                                  tlm_phase &phase, sc_time &delay) {
+  SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase << " - PHY");
 
   if (rx_buffer_used_bytes + flit_size > buffer_size) {
     SC_LOG_WARN(this, transaction, "Rx buffer full -> waiting...");
@@ -213,11 +182,9 @@ Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
 
   utilization_tracker.set_active();
 
-  // add die to die transfer delay
-  delay += get_die2die_transfer_delay(*this, transaction, bandwidth, distance,
-                                      flit_size);
+  // delay += delays.pre_delay(transaction, flit_size);
 
-  peq_interconnect.notify(transaction, delay);
+  phy_peq.notify(transaction, delay);
 
   phase = END_REQ;
   return TLM_UPDATED;
@@ -226,12 +193,11 @@ Interconnect::nb_transport_fw_interconnect(tlm_generic_payload &transaction,
 tlm_sync_enum
 Interconnect::nb_transport_bw_protocol(tlm_generic_payload &transaction,
                                        tlm_phase &phase, sc_time &delay) {
-  if (phase == BEGIN_RESP) {
-    SC_LOG_DEBUG(this, transaction,
-                 "PROTOCOL: Received response from Protocol Layer");
+  SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase << " - Protocol");
 
+  switch (phase) {
+  case BEGIN_RESP:
     protocol_transaction_done.notify(SC_ZERO_TIME);
-
     phase = END_RESP;
     return TLM_COMPLETED;
   }
@@ -240,14 +206,13 @@ Interconnect::nb_transport_bw_protocol(tlm_generic_payload &transaction,
 }
 
 tlm_sync_enum
-Interconnect::nb_transport_bw_interconnect(tlm_generic_payload &transaction,
-                                           tlm_phase &phase, sc_time &delay) {
-  if (phase == BEGIN_RESP) {
-    SC_LOG_DEBUG(this, transaction,
-                 "PROTOCOL: Received response from Interconnect");
+Interconnect::nb_transport_bw_phy(tlm_generic_payload &transaction,
+                                  tlm_phase &phase, sc_time &delay) {
+  SC_LOG_DEBUG(this, transaction, "TLM Protocol: " << phase << " - PHY");
 
-    interconnect_transaction_done.notify(SC_ZERO_TIME);
-
+  switch (phase) {
+  case BEGIN_RESP:
+    phy_transaction_done.notify(delay);
     phase = END_RESP;
     return TLM_COMPLETED;
   }
