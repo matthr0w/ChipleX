@@ -25,6 +25,8 @@ FetchContent_MakeAvailable(yaml-cpp)
 # find source files
 # common sources
 file(GLOB COMMON_SOURCES ${PROJECT_SOURCE_DIR}/common/*.cpp)
+# AXI sources
+file(GLOB AXI_SOURCES ${PROJECT_SOURCE_DIR}/include/ARM/TLM/*.cpp)
 # include sources
 file(GLOB INCLUDE_SOURCES ${PROJECT_SOURCE_DIR}/include/*.cpp)
 # modules sources
@@ -33,7 +35,7 @@ file(GLOB MODULES_SOURCES ${PROJECT_SOURCE_DIR}/modules/*.cpp)
 file(GLOB USERCODE_SOURCES ${PROJECT_SOURCE_DIR}/usercode/*.c ${PROJECT_SOURCE_DIR}/usercode/*.cpp)
 
 # add source files
-add_executable(sim main.cpp ${COMMON_SOURCES} ${INCLUDE_SOURCES} ${MODULES_SOURCES} ${USERCODE_SOURCES})
+add_executable(sim main.cpp ${COMMON_SOURCES} ${AXI_SOURCES} ${INCLUDE_SOURCES} ${MODULES_SOURCES} ${USERCODE_SOURCES})
 
 # include SystemC headers
 target_include_directories(sim PRIVATE $ENV{SYSTEMC_PATH}/include)
