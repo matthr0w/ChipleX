@@ -40,49 +40,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         h->wait();
 
         SC_LOG_DEBUG_NO_TX(&core, "WRITE OP - CACHE SKIP - DATA READY");
-
-        h = core.read(2, 1, 0x1000, reinterpret_cast<unsigned char *>(data),
-                      num_bytes, false);
-
-        SC_LOG_DEBUG_NO_TX(&core, "READ OP - CACHE USE - CORE CONTINUE");
-
-        h->wait();
-
-        SC_LOG_DEBUG_NO_TX(&core, "READ OP - CACHE USE - DATA READY");
-
-        std::cout << "Core0 Buffer contents (" << num_bytes
-                  << " bytes):" << std::endl;
-        for (size_t i = 0; i < num_bytes; ++i) {
-          std::cout << "data[" << i << "] = " << static_cast<unsigned>(data[i])
-                    << std::endl;
-        }
-
-        h = core.write(3, 1, reinterpret_cast<unsigned char *>(data),
-                       num_bytes);
-
-        SC_LOG_DEBUG_NO_TX(&core, "WRITE OP - DYN ADDR - CORE CONTINUE");
-
-        h->wait();
-
-        SC_LOG_DEBUG_NO_TX(&core, "WRITE OP - DYN ADDR - DATA READY");
-
-        h = core.read_fixed(4, 1, 0x1000,
-                            reinterpret_cast<unsigned char *>(data), num_bytes,
-                            false);
-
-        SC_LOG_DEBUG_NO_TX(&core, "READ OP - BFIXED - CORE CONTINUE");
-
-        h->wait();
-
-        SC_LOG_DEBUG_NO_TX(&core, "WRITE OP - BFIXED - DATA READY");
-
-        std::cout << "Core0 Buffer contents (" << num_bytes
-                  << " bytes):" << std::endl;
-        for (size_t i = 0; i < num_bytes; ++i) {
-          std::cout << "data[" << i << "] = " << static_cast<unsigned>(data[i])
-                    << std::endl;
-        }
-
+        
         delete h;
         delete[] data;
       },
