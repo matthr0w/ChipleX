@@ -2,15 +2,9 @@
 
 #include <systemc>
 
-#include "AXIInterconnect.h"
-#include "AXIManager.h"
-#include "AXISubordinate.h"
-#include "Cache.h"
+#include "AXIBus.h"
 #include "Core.h"
-#include "Interconnect.h"
-#include "InterconnectProtocol.h"
-#include "MemoryController.h"
-#include "RAM.h"
+#include "Memory.h"
 
 #include "common/AXIUtils.h"
 #include "common/Tracker.h"
@@ -34,8 +28,8 @@ private:
   // parameters
   // -------------------------------------------------------
   const unsigned int num_cores = 1;
-  const unsigned int num_axi_managers = 2;
-  const unsigned int num_axi_subordinates = 2;
+  const unsigned int num_axi_managers = 1;
+  const unsigned int num_axi_subordinates = 1;
   const unsigned int num_interconnects = num_chiplets;
 
   // FPGA config
@@ -96,24 +90,22 @@ public:
   std::vector<UtilizationTracker *> utilization_trackers;
 
   Core core;
-  Cache cache;
-  std::vector<Interconnect *> interconnects;
-  RAM ram;
+  Memory memory;
+  // Cache cache;
+  // std::vector<Interconnect *> interconnects;
 
   SC_CTOR(FPGA);
   ~FPGA();
 
 private:
-  // AXI
-  AXIUtils axi_utils;
-  AXIInterconnect axi_interconnect;
-  AXIManager axi_manager_core;
-  AXIManager axi_manager_interconnect;
-  AXISubordinate axi_subordinate_interconnect;
-  AXISubordinate axi_subordinate_memory_controller;
+  // clocks
+  sc_clock core_clk;
+  sc_clock mem_clk;
 
-  InterconnectProtocol interconnect_protocol;
-  MemoryController memory_controller;
+  // AXI
+  AXIBus axi_bus;
+
+  // InterconnectProtocol interconnect_protocol;
 
   void initialize();
 };

@@ -104,29 +104,29 @@ int sc_main(int argc, char *argv[]) {
   }
 
   // connect chiplets in a ring topology
-  for (unsigned int i = 0; i < num_chiplets; ++i) {
-    int next = (i + 1) % num_chiplets;
-    int prev = (i - 1 + num_chiplets) % num_chiplets;
+  // for (unsigned int i = 0; i < num_chiplets; ++i) {
+  //   int next = (i + 1) % num_chiplets;
+  //   int prev = (i - 1 + num_chiplets) % num_chiplets;
 
-    // connect interconnect2 to next chiplet interconnect1
-    chiplets[i]->interconnects[2]->phy_isocket.bind(
-        chiplets[next]->interconnects[1]->phy_tsocket);
+  //   // connect interconnect2 to next chiplet interconnect1
+  //   chiplets[i]->interconnects[2]->phy_isocket.bind(
+  //       chiplets[next]->interconnects[1]->phy_tsocket);
 
-    // connect interconnect1 to previous chiplet interconnect2
-    chiplets[i]->interconnects[1]->phy_isocket.bind(
-        chiplets[prev]->interconnects[2]->phy_tsocket);
-  }
+  //   // connect interconnect1 to previous chiplet interconnect2
+  //   chiplets[i]->interconnects[1]->phy_isocket.bind(
+  //       chiplets[prev]->interconnects[2]->phy_tsocket);
+  // }
 
-  // connect chiplets to FPGA
-  for (unsigned int i = 0; i < num_chiplets; ++i) {
-    // connect interconnect0 to FPGA interconnect
-    chiplets[i]->interconnects[0]->phy_isocket.bind(
-        fpga.interconnects[i]->phy_tsocket);
+  // // connect chiplets to FPGA
+  // for (unsigned int i = 0; i < num_chiplets; ++i) {
+  //   // connect interconnect0 to FPGA interconnect
+  //   chiplets[i]->interconnects[0]->phy_isocket.bind(
+  //       fpga.interconnects[i]->phy_tsocket);
 
-    // connect FPGA interconnect to interconnect0
-    fpga.interconnects[i]->phy_isocket.bind(
-        chiplets[i]->interconnects[0]->phy_tsocket);
-  }
+  //   // connect FPGA interconnect to interconnect0
+  //   fpga.interconnects[i]->phy_isocket.bind(
+  //       chiplets[i]->interconnects[0]->phy_tsocket);
+  // }
 
   if (sim_duration == SC_ZERO_TIME) {
     sc_start();
@@ -141,99 +141,99 @@ int sc_main(int argc, char *argv[]) {
   // -------------------------------------------------------
   // statistics
   // -------------------------------------------------------
-  std::cout << "=== Statistics ===" << std::endl;
-  std::cout << "--- General ---" << std::endl;
-  // times
-  std::cout << "Simulation Time: " << sc_time_stamp() << std::endl;
-  std::cout << "Execution Time: " << std::dec << duration.count() << " ms\n";
-  // latencies
-  std::cout << "Transaction Latencies:" << std::endl;
-  LatencyTracker::instance().report();
-  // transmissions
-  std::cout << "Interconnect Transmissions:" << std::endl;
-  // flits to chiplets
-  for (unsigned int i = 0; i < num_chiplets; ++i) {
-    std::string target = "Chiplet" + std::to_string(i + 1);
+  // std::cout << "=== Statistics ===" << std::endl;
+  // std::cout << "--- General ---" << std::endl;
+  // // times
+  // std::cout << "Simulation Time: " << sc_time_stamp() << std::endl;
+  // std::cout << "Execution Time: " << std::dec << duration.count() << " ms\n";
+  // // latencies
+  // std::cout << "Transaction Latencies:" << std::endl;
+  // LatencyTracker::instance().report();
+  // // transmissions
+  // std::cout << "Interconnect Transmissions:" << std::endl;
+  // // flits to chiplets
+  // for (unsigned int i = 0; i < num_chiplets; ++i) {
+  //   std::string target = "Chiplet" + std::to_string(i + 1);
 
-    unsigned int prev_index = (i == 0) ? num_chiplets - 1 : i - 1;
-    std::string prev_source = "Chiplet" + std::to_string(prev_index + 1);
-    unsigned int next_index = (i == num_chiplets - 1) ? 0 : i + 1;
-    std::string next_source = "Chiplet" + std::to_string(next_index + 1);
+  //   unsigned int prev_index = (i == 0) ? num_chiplets - 1 : i - 1;
+  //   std::string prev_source = "Chiplet" + std::to_string(prev_index + 1);
+  //   unsigned int next_index = (i == num_chiplets - 1) ? 0 : i + 1;
+  //   std::string next_source = "Chiplet" + std::to_string(next_index + 1);
 
-    unsigned int fpga_to_chiplet =
-        chiplets[i]->interconnects[0]->incoming_flits;
-    unsigned int prev_to_chiplet =
-        chiplets[i]->interconnects[1]->incoming_flits;
-    unsigned int next_to_chiplet =
-        chiplets[i]->interconnects[2]->incoming_flits;
+  //   unsigned int fpga_to_chiplet =
+  //       chiplets[i]->interconnects[0]->incoming_flits;
+  //   unsigned int prev_to_chiplet =
+  //       chiplets[i]->interconnects[1]->incoming_flits;
+  //   unsigned int next_to_chiplet =
+  //       chiplets[i]->interconnects[2]->incoming_flits;
 
-    if (fpga_to_chiplet > 0) {
-      std::cout << "  Flits from FPGA to " << target << ": " << fpga_to_chiplet
-                << std::endl;
-    }
+  //   if (fpga_to_chiplet > 0) {
+  //     std::cout << "  Flits from FPGA to " << target << ": " << fpga_to_chiplet
+  //               << std::endl;
+  //   }
 
-    if (prev_to_chiplet > 0) {
-      std::cout << "  Flits from " << prev_source << " to " << target << ": "
-                << prev_to_chiplet << std::endl;
-    }
+  //   if (prev_to_chiplet > 0) {
+  //     std::cout << "  Flits from " << prev_source << " to " << target << ": "
+  //               << prev_to_chiplet << std::endl;
+  //   }
 
-    if (next_to_chiplet > 0) {
-      std::cout << "  Flits from " << next_source << " to " << target << ": "
-                << next_to_chiplet << std::endl;
-    }
-  }
-  // flits to FPGA
-  for (unsigned int i = 0; i < num_chiplets; ++i) {
-    std::string source = "Chiplet" + std::to_string(i + 1);
+  //   if (next_to_chiplet > 0) {
+  //     std::cout << "  Flits from " << next_source << " to " << target << ": "
+  //               << next_to_chiplet << std::endl;
+  //   }
+  // }
+  // // flits to FPGA
+  // for (unsigned int i = 0; i < num_chiplets; ++i) {
+  //   std::string source = "Chiplet" + std::to_string(i + 1);
 
-    unsigned int chiplet_to_fpga = fpga.interconnects[i]->incoming_flits;
+  //   unsigned int chiplet_to_fpga = fpga.interconnects[i]->incoming_flits;
 
-    if (chiplet_to_fpga > 0) {
-      std::cout << "  Flits from " << source << " to FPGA: " << chiplet_to_fpga
-                << std::endl;
-    }
-  }
-  TransmissionTracker::instance().report();
-  std::cout << "\n";
+  //   if (chiplet_to_fpga > 0) {
+  //     std::cout << "  Flits from " << source << " to FPGA: " << chiplet_to_fpga
+  //               << std::endl;
+  //   }
+  // }
+  // TransmissionTracker::instance().report();
+  // std::cout << "\n";
 
-  // FPGA
-  std::string title = "--- FPGA ---";
-  std::cout << title << std::endl;
-  std::cout << "Utilizations:" << std::endl;
-  for (unsigned int j = 0; j < fpga.utilization_trackers.size(); ++j) {
-    fpga.utilization_trackers[j]->report();
-  }
-  std::cout << "Generator Cache:" << std::endl;
-  fpga.cache.report_rates();
-  std::cout << "RAM Usage:" << std::endl;
-  fpga.ram.report_usage();
-  std::cout << "Average Buffer Fill Levels:" << std::endl;
-  for (unsigned int j = 0; j < fpga.buffer_trackers.size(); ++j) {
-    fpga.buffer_trackers[j]->report();
-  }
-  std::cout << "\n";
+  // // FPGA
+  // std::string title = "--- FPGA ---";
+  // std::cout << title << std::endl;
+  // std::cout << "Utilizations:" << std::endl;
+  // for (unsigned int j = 0; j < fpga.utilization_trackers.size(); ++j) {
+  //   fpga.utilization_trackers[j]->report();
+  // }
+  // std::cout << "Generator Cache:" << std::endl;
+  // fpga.cache.report_rates();
+  // std::cout << "RAM Usage:" << std::endl;
+  // fpga.ram.report_usage();
+  // std::cout << "Average Buffer Fill Levels:" << std::endl;
+  // for (unsigned int j = 0; j < fpga.buffer_trackers.size(); ++j) {
+  //   fpga.buffer_trackers[j]->report();
+  // }
+  // std::cout << "\n";
 
-  // chiplets
-  for (unsigned int i = 0; i < num_chiplets; ++i) {
-    std::string title = "--- Chiplet" + std::to_string(i + 1) + " ---";
-    std::cout << title << std::endl;
-    std::cout << "Utilizations:" << std::endl;
-    for (unsigned int j = 0; j < chiplets[i]->utilization_trackers.size();
-         ++j) {
-      chiplets[i]->utilization_trackers[j]->report();
-    }
-    std::cout << "Core0 Cache:" << std::endl;
-    chiplets[i]->cache0.report_rates();
-    std::cout << "Core1 Cache:" << std::endl;
-    chiplets[i]->cache1.report_rates();
-    std::cout << "RAM Usage:" << std::endl;
-    chiplets[i]->ram.report_usage();
-    std::cout << "Buffer Fill Levels:" << std::endl;
-    for (unsigned int j = 0; j < chiplets[i]->buffer_trackers.size(); ++j) {
-      chiplets[i]->buffer_trackers[j]->report();
-    }
-  }
-  std::cout << "\n";
+  // // chiplets
+  // for (unsigned int i = 0; i < num_chiplets; ++i) {
+  //   std::string title = "--- Chiplet" + std::to_string(i + 1) + " ---";
+  //   std::cout << title << std::endl;
+  //   std::cout << "Utilizations:" << std::endl;
+  //   for (unsigned int j = 0; j < chiplets[i]->utilization_trackers.size();
+  //        ++j) {
+  //     chiplets[i]->utilization_trackers[j]->report();
+  //   }
+  //   std::cout << "Core0 Cache:" << std::endl;
+  //   chiplets[i]->cache0.report_rates();
+  //   std::cout << "Core1 Cache:" << std::endl;
+  //   chiplets[i]->cache1.report_rates();
+  //   std::cout << "RAM Usage:" << std::endl;
+  //   chiplets[i]->ram.report_usage();
+  //   std::cout << "Buffer Fill Levels:" << std::endl;
+  //   for (unsigned int j = 0; j < chiplets[i]->buffer_trackers.size(); ++j) {
+  //     chiplets[i]->buffer_trackers[j]->report();
+  //   }
+  // }
+  // std::cout << "\n";
 
   // clean up
   for (auto *chiplet : chiplets) {

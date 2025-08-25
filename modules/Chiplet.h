@@ -2,15 +2,9 @@
 
 #include <systemc>
 
-#include "AXIInterconnect.h"
-#include "AXIManager.h"
-#include "AXISubordinate.h"
-#include "Cache.h"
+#include "AXIBus.h"
 #include "Core.h"
-#include "Interconnect.h"
-#include "InterconnectProtocol.h"
-#include "MemoryController.h"
-#include "RAM.h"
+#include "Memory.h"
 
 #include "common/AXIUtils.h"
 #include "common/Tracker.h"
@@ -35,8 +29,8 @@ private:
   // parameters
   // -------------------------------------------------------
   const unsigned int num_cores = 2;
-  const unsigned int num_axi_managers = 3;
-  const unsigned int num_axi_subordinates = 2;
+  const unsigned int num_axi_managers = 2;
+  const unsigned int num_axi_subordinates = 1;
   const unsigned int num_interconnects = 3;
 
   // chiplet config
@@ -101,26 +95,23 @@ public:
 
   Core core0;
   Core core1;
-  Cache cache0;
-  Cache cache1;
-  RAM ram;
-  std::vector<Interconnect *> interconnects;
+  Memory memory;
+  // Cache cache0;
+  // Cache cache1;
+  // std::vector<Interconnect *> interconnects;
 
   SC_CTOR(Chiplet);
   ~Chiplet();
 
 private:
-  // AXI
-  AXIUtils axi_utils;
-  AXIInterconnect axi_interconnect;
-  AXIManager axi_manager_core0;
-  AXIManager axi_manager_core1;
-  AXIManager axi_manager_interconnect;
-  AXISubordinate axi_subordinate_interconnect;
-  AXISubordinate axi_subordinate_memory_controller;
+  // clocks
+  sc_clock core_clk;
+  sc_clock mem_clk;
 
-  InterconnectProtocol interconnect_protocol;
-  MemoryController memory_controller;
+  // AXI
+  AXIBus axi_bus;
+
+  // InterconnectProtocol interconnect_protocol;
 
   void initialize();
 };

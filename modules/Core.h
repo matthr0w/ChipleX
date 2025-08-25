@@ -5,10 +5,9 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
-#include "common/AXIUtils.h"
 #include "common/Tracker.h"
-#include "common/protocol/ChipletPayload.h"
 
+#include "include/ARM/TLM/arm_axi4.h"
 #include "include/logging.h"
 
 using namespace sc_core;
@@ -17,6 +16,8 @@ using namespace tlm_utils;
 
 SC_MODULE(Core) {
 public:
+  sc_core::sc_in<bool> clock;
+
   // -------------------------------------------------------
   // trackers
   // -------------------------------------------------------
@@ -25,10 +26,10 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_initiator_socket<Core> isocket;
-  simple_target_socket<Core> irq_socket;
+  ARM::AXI::SimpleInitiatorSocket<Core> isocket;
+  //simple_target_socket<Core> irq_socket;
 
-  Core(sc_module_name name, AXIUtils & axi_utils, unsigned int chip_id,
+  Core(sc_module_name name, unsigned int chip_id,
        unsigned int core_id, sc_time irq_delay);
 
   std::function<void(Core &, UtilizationTracker *)> thread_fn;
@@ -36,12 +37,11 @@ public:
       interrupt_fn;
 
   struct RequestHandle {
-    ChipletPayload *transaction;
+    ARM::AXI::Payload *payload;
     sc_event done;
     bool ready = false;
 
-    RequestHandle() : transaction(nullptr) {}
-    ~RequestHandle() { delete transaction; }
+    RequestHandle() : payload(nullptr) {}
 
     void notify(sc_time delay) {
       ready = true;
@@ -54,19 +54,31 @@ public:
       }
     }
 
-    ChipletPayload *get_payload() const { return transaction; }
+    ARM::AXI::Payload *get_payload() const { return payload; }
   };
 
   void core_thread();
   void interrupt_thread();
 
 private:
-  AXIUtils & axi_utils;
-
-  std::unordered_map<tlm::tlm_generic_payload *, RequestHandle *>
-      request_handles;
+  std::unordered_map<ARM::AXI::Payload *, RequestHandle *> request_handles;
 
   sc_mutex request_mutex;
+
+  enum ChannelState { CLEAR, REQ, ACK };
+
+  ChannelState aw_state;
+  ChannelState w_state;
+  ChannelState ar_state;
+
+  std::deque<ARM::AXI::Payload *> aw_queue;
+  std::deque<ARM::AXI::Payload *> w_queue;
+  std::deque<ARM::AXI::Payload *> ar_queue;
+
+  unsigned w_beat_count;
+
+  void clock_posedge();
+  void clock_negedge();
 
   std::deque<tlm_generic_payload *> irq_queue;
 
@@ -80,18 +92,18 @@ private:
   // -------------------------------------------------------
   // events
   // -------------------------------------------------------
-  sc_event req_evt;
-  sc_event resp_evt;
+  sc_event read_done;
+  sc_event write_done;
   sc_event irq_req_evt;
 
   // -------------------------------------------------------
   // transport functions
   // -------------------------------------------------------
-  tlm_sync_enum nb_transport_fw_irq(tlm_generic_payload & transaction,
+  tlm_sync_enum nb_transport_fw_irq(tlm_generic_payload & payload,
                                     tlm_phase & phase, sc_time & delay);
 
-  tlm_sync_enum nb_transport_bw(tlm_generic_payload & transaction,
-                                tlm_phase & phase, sc_time & delay);
+  tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload,
+                                ARM::AXI::Phase & phase);
 
   // -------------------------------------------------------
   // delay model
