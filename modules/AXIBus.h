@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <memory>
 #include <systemc>
 #include <tlm>
@@ -19,21 +20,23 @@ public:
   std::vector<std::unique_ptr<ARM::AXI4::SimpleInitiatorSocketTagged<AXIBus>>>
       sub_isockets;
 
-  AXIBus(sc_module_name name, unsigned int chip_id, unsigned int num_managers,
-         unsigned int num_subordinates);
+  AXIBus(sc_module_name name, unsigned int chip_id, unsigned int axi_width,
+         unsigned int num_managers, unsigned int num_subordinates);
+  ~AXIBus();
 
 private:
-  struct ChanState {
+  struct ChannelState {
     bool busy = false;
     ARM::AXI::Payload *cur =
-        nullptr;                  // transaction currently using this channel
-    int mgr = -1;                 // source manager ID
-    bool completion_mark = false; // set on R_VALID_LAST / B_VALID
+        nullptr;  // transaction currently using this channel
+    int mgr = -1; // manager id
   };
+
   struct SubState {
-    ChanState R; // AR/R channel state
-    ChanState W; // AW/W/B channel state
+    ChannelState R; // AR/R channel state
+    ChannelState W; // AW/W/B channel state
   };
+
   std::vector<SubState> sub_state;
 
   std::unordered_map<ARM::AXI::Payload *, int> payloads2mgr;
@@ -42,37 +45,15 @@ private:
   sc_mutex fw_mutex;
   sc_mutex bw_mutex;
 
-  int route(ARM::AXI::Payload & payload) { return 0; } // fixed for now
-
-  bool is_ar_valid(ARM::AXI::Phase & phase) {
-    return phase == ARM::AXI::AR_VALID;
-  }
-  bool is_r_ready(ARM::AXI::Phase & phase) {
-    return phase == ARM::AXI::R_READY;
-  }
-  bool is_r_valid_last(ARM::AXI::Phase & phase) {
-    return phase == ARM::AXI::R_VALID_LAST;
-  }
-  bool is_aw_valid(ARM::AXI::Phase & phase) {
-    return phase == ARM::AXI::AW_VALID;
-  }
-  bool is_w_valid(ARM::AXI::Phase & phase) {
-    return phase == ARM::AXI::W_VALID;
-  }
-  bool is_w_valid_last(ARM::AXI::Phase & phase) {
-    return phase == ARM::AXI::W_VALID_LAST;
-  }
-  bool is_b_ready(ARM::AXI::Phase & phase) {
-    return phase == ARM::AXI::B_READY;
-  }
-  bool is_b_valid(ARM::AXI::Phase & phase) {
-    return phase == ARM::AXI::B_VALID;
-  }
+  // debug output
+  uint8_t *beat_data;
+  std::map<ARM::AXI::Payload *, unsigned> payload_burst_index;
 
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
   const unsigned int chip_id;
+  const unsigned int axi_width;
 
   // -------------------------------------------------------
   // transport functions
@@ -82,4 +63,15 @@ private:
 
   tlm_sync_enum nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
                                 ARM::AXI::Phase &phase);
+
+  // -------------------------------------------------------
+  // helper functions
+  // -------------------------------------------------------
+  int route_payload(ARM::AXI::Payload & payload) { return 0; } // fixed for now
+
+  // -------------------------------------------------------
+  // debug functions
+  // -------------------------------------------------------
+  void print_payload(ARM::AXI::Payload & payload, ARM::AXI::Phase sent_phase,
+                     tlm_sync_enum reply, ARM::AXI::Phase reply_phase);
 };

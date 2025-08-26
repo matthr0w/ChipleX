@@ -7,7 +7,8 @@ unsigned int Chiplet::instance = 1; // id == 0 is reserved for FPGA
 Chiplet::Chiplet(sc_module_name name)
     : sc_module(name), chiplet_id(Chiplet::instance++),
       axi_clk("AXI_Clk", axi_clk_cycle, sc_core::SC_NS, 0.5),
-      axi_bus("AXI_Bus", chiplet_id, num_axi_managers, num_axi_subordinates),
+      axi_bus("AXI_Bus", chiplet_id, axi_width, num_axi_managers,
+              num_axi_subordinates),
       core0("Core0", chiplet_id, 0, axi_width, interconnect_irq_delay),
       core1("Core1", chiplet_id, 1, axi_width, interconnect_irq_delay),
       // cache0("Cache0", axi_utils, chiplet_id, cache_size, cache_block_size,

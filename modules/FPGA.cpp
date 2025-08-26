@@ -8,7 +8,8 @@ using namespace tlm;
 FPGA::FPGA(sc_module_name name)
     : sc_module(name), fpga_id(0),
       axi_clk("AXI_Clk", axi_clk_cycle, sc_core::SC_NS, 0.5),
-      axi_bus("AXI_Bus", fpga_id, num_axi_managers, num_axi_subordinates),
+      axi_bus("AXI_Bus", fpga_id, axi_width, num_axi_managers,
+              num_axi_subordinates),
       core("Core", fpga_id, 0, axi_width, interconnect_irq_delay),
       // cache("Cache", axi_utils, fpga_id, cache_size, cache_block_size,
       //       cache_store_buffer_size, cache_arbitration_delay,
