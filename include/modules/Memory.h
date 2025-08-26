@@ -4,9 +4,9 @@
 #include <tlm>
 #include <vector>
 
-#include "common/Tracker.h"
+#include "ARM/TLM/arm_axi4.h"
 
-#include "include/ARM/TLM/arm_axi4.h"
+#include "common/Tracker.h"
 
 using namespace sc_core;
 using namespace tlm;

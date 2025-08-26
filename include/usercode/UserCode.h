@@ -2,9 +2,9 @@
 
 #include "common/Tracker.h"
 
-#include "include/configs.h"
-#include "include/globals.h"
-#include "include/logging.h"
+#include "configs.h"
+#include "globals.h"
+#include "logging.h"
 
 #include "modules/Core.h"
 
@@ -36,7 +36,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
      {[](Core &core, UtilizationTracker *tracker) {
         int width, height, channels;
         unsigned char *input_img =
-            stbi_load("usercode/tum_input.jpg", &width, &height, &channels, 3);
+            stbi_load("include/usercode/tum_input.jpg", &width, &height, &channels, 3);
 
         unsigned header_size = sizeof(ImageHeader);
         unsigned img_size = width * height * channels;
@@ -91,7 +91,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         unsigned char *img_data = read_buffer + sizeof(ImageHeader);
 
-        stbi_write_jpg("usercode/tum_output.jpg", width, height, 3, img_data,
+        stbi_write_jpg("tum_output.jpg", width, height, 3, img_data,
                        100);
 
         delete[] read_buffer;

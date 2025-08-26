@@ -1,8 +1,8 @@
-#include "RoutingTable.h"
+#include "common/RoutingTable.h"
 
 #include <algorithm>
 
-#include "include/globals.h"
+#include "globals.h"
 
 std::vector<std::vector<int>> RoutingTable::table;
 

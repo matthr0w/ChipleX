@@ -2,9 +2,9 @@
 
 #include <systemc>
 
-#include "AXIBus.h"
-#include "Core.h"
-#include "Memory.h"
+#include "modules/AXIBus.h"
+#include "modules/Core.h"
+#include "modules/Memory.h"
 
 #include "common/Tracker.h"
 
@@ -12,44 +12,42 @@ using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-SC_MODULE(Chiplet) {
+SC_MODULE(FPGA) {
 private:
-  static unsigned int instance;
-  const unsigned int chiplet_id;
+  const unsigned int fpga_id;
 
   // -------------------------------------------------------
   // configs
   // -------------------------------------------------------
-  const Config &chiplet_config = ConfigRegistry::instance().get("Chiplet");
+  const Config &fpga_config = ConfigRegistry::instance().get("FPGA");
   const Config &interconnect_config =
       ConfigRegistry::instance().get("Interconnect");
 
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
-  const unsigned int num_cores = 2;
-  const unsigned int num_axi_managers = 2;
+  const unsigned int num_cores = 1;
+  const unsigned int num_axi_managers = 1;
   const unsigned int num_axi_subordinates = 1;
-  const unsigned int num_interconnects = 3;
+  const unsigned int num_interconnects = num_chiplets;
 
-  // chiplet config
+  // FPGA config
   const unsigned int cores_clk_cycle =
-      chiplet_config.get<unsigned int>("cores.clk_cycle");
+      fpga_config.get<unsigned int>("cores.clk_cycle");
 
-  const unsigned int cache_size =
-      chiplet_config.get<unsigned int>("cache.size");
+  const unsigned int cache_size = fpga_config.get<unsigned int>("cache.size");
   const unsigned int cache_block_size =
-      chiplet_config.get<unsigned int>("cache.block_size");
+      fpga_config.get<unsigned int>("cache.block_size");
   const unsigned int cache_store_buffer_size =
-      chiplet_config.get<unsigned int>("cache.store_buffer_size");
+      fpga_config.get<unsigned int>("cache.store_buffer_size");
 
-  const unsigned int axi_width = chiplet_config.get<unsigned int>("axi.width");
+  const unsigned int axi_width = fpga_config.get<unsigned int>("axi.width");
   const unsigned int axi_clk_cycle =
-      chiplet_config.get<unsigned int>("axi.clk_cycle");
+      fpga_config.get<unsigned int>("axi.clk_cycle");
 
-  const unsigned int ram_size = chiplet_config.get<unsigned int>("ram.size");
+  const unsigned int ram_size = fpga_config.get<unsigned int>("ram.size");
   const unsigned int ram_clk_cycle =
-      chiplet_config.get<unsigned int>("ram.clk_cycle");
+      fpga_config.get<unsigned int>("ram.clk_cycle");
 
   // interconnect config
   const unsigned int interconnect_flit_size =
@@ -77,15 +75,13 @@ public:
   std::vector<BufferUsageTracker *> buffer_trackers;
   std::vector<UtilizationTracker *> utilization_trackers;
 
-  Core core0;
-  Core core1;
+  Core core;
   Memory memory;
-  // Cache cache0;
-  // Cache cache1;
+  // Cache cache;
   // std::vector<Interconnect *> interconnects;
 
-  SC_CTOR(Chiplet);
-  ~Chiplet();
+  SC_CTOR(FPGA);
+  ~FPGA();
 
 private:
   // AXI

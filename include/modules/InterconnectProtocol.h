@@ -6,9 +6,9 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
-#include "common/Tracker.h"
+#include "logging.h"
 
-#include "include/logging.h"
+#include "common/Tracker.h"
 
 using namespace sc_core;
 using namespace tlm;

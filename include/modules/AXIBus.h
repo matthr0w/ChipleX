@@ -5,7 +5,7 @@
 #include <systemc>
 #include <tlm>
 
-#include "include/ARM/TLM/arm_axi4.h"
+#include "ARM/TLM/arm_axi4.h"
 
 using namespace sc_core;
 using namespace tlm;

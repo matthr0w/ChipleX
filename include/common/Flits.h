@@ -2,8 +2,8 @@
 
 #include <systemc>
 
-#include "include/configs.h"
-#include "include/globals.h"
+#include "configs.h"
+#include "globals.h"
 
 #include "protocol/ChipletExtension.h"
 

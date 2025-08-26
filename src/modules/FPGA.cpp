@@ -1,6 +1,6 @@
-#include "FPGA.h"
+#include "modules/FPGA.h"
 
-#include "include/globals.h"
+#include "globals.h"
 
 using namespace sc_core;
 using namespace tlm;

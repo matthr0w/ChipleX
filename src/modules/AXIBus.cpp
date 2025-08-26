@@ -1,8 +1,8 @@
-#include "AXIBus.h"
+#include "modules/AXIBus.h"
 
 #include <iomanip>
 
-#include "include/globals.h"
+#include "globals.h"
 
 AXIBus::AXIBus(sc_module_name name, unsigned int chip_id,
                unsigned int axi_width, unsigned int num_managers,

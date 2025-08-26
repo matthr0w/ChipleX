@@ -1,6 +1,6 @@
-#include "Chiplet.h"
+#include "modules/Chiplet.h"
 
-#include "include/globals.h"
+#include "globals.h"
 
 unsigned int Chiplet::instance = 1; // id == 0 is reserved for FPGA
 

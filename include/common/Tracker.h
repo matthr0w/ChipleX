@@ -3,7 +3,7 @@
 #include <mutex>
 #include <systemc>
 
-#include "include/configs.h"
+#include "configs.h"
 
 using namespace sc_core;
 

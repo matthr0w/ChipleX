@@ -6,10 +6,10 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "logging.h"
+
 #include "common/Tracker.h"
 #include "common/protocol/ChipletPayload.h"
-
-#include "include/logging.h"
 
 using namespace sc_core;
 using namespace tlm;

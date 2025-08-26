@@ -1,6 +1,6 @@
-#include "Memory.h"
+#include "modules/Memory.h"
 
-#include "include/logging.h"
+#include "logging.h"
 
 Memory::Memory(sc_module_name name, unsigned int size)
     : sc_module(name), size(size), utilization_tracker(this->name()),

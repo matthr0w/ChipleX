@@ -1,12 +1,12 @@
 #include <systemc>
 #include <vector>
 
+#include "configs.h"
+#include "globals.h"
+#include "parser.h"
+
 #include "common/RoutingTable.h"
 #include "common/Tracker.h"
-
-#include "include/configs.h"
-#include "include/globals.h"
-#include "include/parser.h"
 
 #include "modules/Chiplet.h"
 #include "modules/FPGA.h"
@@ -168,7 +168,8 @@ int sc_main(int argc, char *argv[]) {
   //       chiplets[i]->interconnects[2]->incoming_flits;
 
   //   if (fpga_to_chiplet > 0) {
-  //     std::cout << "  Flits from FPGA to " << target << ": " << fpga_to_chiplet
+  //     std::cout << "  Flits from FPGA to " << target << ": " <<
+  //     fpga_to_chiplet
   //               << std::endl;
   //   }
 
@@ -189,7 +190,8 @@ int sc_main(int argc, char *argv[]) {
   //   unsigned int chiplet_to_fpga = fpga.interconnects[i]->incoming_flits;
 
   //   if (chiplet_to_fpga > 0) {
-  //     std::cout << "  Flits from " << source << " to FPGA: " << chiplet_to_fpga
+  //     std::cout << "  Flits from " << source << " to FPGA: " <<
+  //     chiplet_to_fpga
   //               << std::endl;
   //   }
   // }

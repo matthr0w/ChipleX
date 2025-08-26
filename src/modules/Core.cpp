@@ -1,4 +1,4 @@
-#include "Core.h"
+#include "modules/Core.h"
 
 Core::Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
            unsigned int axi_width, sc_time irq_delay)

@@ -1,4 +1,4 @@
-#include "InterconnectProtocol.h"
+#include "modules/InterconnectProtocol.h"
 
 #include "common/Flits.h"
 #include "common/RoutingTable.h"
