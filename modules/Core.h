@@ -27,10 +27,10 @@ public:
   // sockets
   // -------------------------------------------------------
   ARM::AXI::SimpleInitiatorSocket<Core> isocket;
-  //simple_target_socket<Core> irq_socket;
+  // simple_target_socket<Core> irq_socket;
 
-  Core(sc_module_name name, unsigned int chip_id,
-       unsigned int core_id, sc_time irq_delay);
+  Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
+       unsigned int axi_width, sc_time irq_delay);
 
   std::function<void(Core &, UtilizationTracker *)> thread_fn;
   std::function<void(Core &, UtilizationTracker *, tlm_generic_payload *)>
@@ -38,18 +38,22 @@ public:
 
   struct RequestHandle {
     ARM::AXI::Payload *payload;
+    unsigned char *data;
+
+    bool completed = false;
     sc_event done;
-    bool ready = false;
 
     RequestHandle() : payload(nullptr) {}
 
     void notify(sc_time delay) {
-      ready = true;
+      completed = true;
+      if (payload->get_command() == ARM::AXI::COMMAND_READ)
+        payload->read_out(data);
       done.notify(delay);
     }
 
     void wait() {
-      if (!ready) {
+      if (!completed) {
         ::wait(done);
       }
     }
@@ -57,36 +61,39 @@ public:
     ARM::AXI::Payload *get_payload() const { return payload; }
   };
 
+  unsigned MAX_INCR_BURST_SIZE = 0;
+  unsigned MAX_FIXED_BURST_SIZE = 0;
+  unsigned MAX_WRAP_BURST_SIZE = 0;
+
   void core_thread();
   void interrupt_thread();
 
 private:
-  std::unordered_map<ARM::AXI::Payload *, RequestHandle *> request_handles;
-
-  sc_mutex request_mutex;
-
   enum ChannelState { CLEAR, REQ, ACK };
 
-  ChannelState aw_state;
-  ChannelState w_state;
-  ChannelState ar_state;
+  ChannelState ar_state = CLEAR;
+  ChannelState aw_state = CLEAR;
+  ChannelState w_state = CLEAR;
 
+  std::deque<ARM::AXI::Payload *> ar_queue;
   std::deque<ARM::AXI::Payload *> aw_queue;
   std::deque<ARM::AXI::Payload *> w_queue;
-  std::deque<ARM::AXI::Payload *> ar_queue;
 
-  unsigned w_beat_count;
+  unsigned w_beat_count = 0;
+
+  std::unordered_map<ARM::AXI::Payload *, RequestHandle *> request_handles;
+
+  std::deque<tlm_generic_payload *> irq_queue;
 
   void clock_posedge();
   void clock_negedge();
-
-  std::deque<tlm_generic_payload *> irq_queue;
 
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
   const unsigned int chip_id;
   const unsigned int core_id;
+  const unsigned int axi_width;
   const sc_time irq_delay;
 
   // -------------------------------------------------------
@@ -94,7 +101,7 @@ private:
   // -------------------------------------------------------
   sc_event read_done;
   sc_event write_done;
-  sc_event irq_req_evt;
+  sc_event interrupt_request;
 
   // -------------------------------------------------------
   // transport functions
@@ -130,12 +137,12 @@ private:
   RequestHandle *read_internal(int request_id, int destination_id,
                                uint32_t address, bool fixed_address,
                                unsigned char *data, unsigned int data_length,
-                               unsigned int burst_type, bool is_volatile);
+                               ARM::AXI::Burst burst, bool is_volatile);
 
   RequestHandle *write_internal(int request_id, int destination_id,
                                 uint32_t address, bool fixed_address,
                                 unsigned char *data, unsigned int data_length,
-                                unsigned int burst_type, bool is_volatile);
+                                ARM::AXI::Burst burst, bool is_volatile);
 
 public:
   RequestHandle *read(int request_id, int destination_id, uint32_t address,
