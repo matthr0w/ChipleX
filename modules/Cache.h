@@ -7,7 +7,6 @@
 
 #include <vector>
 
-#include "common/AXIUtils.h"
 #include "common/Tracker.h"
 
 #include "include/logging.h"
@@ -29,16 +28,14 @@ public:
   simple_target_socket<Cache> tsocket;
   simple_initiator_socket<Cache> isocket;
 
-  Cache(sc_module_name name, AXIUtils & axi_utils, unsigned int chip_id,
-        unsigned int cache_size, unsigned int cache_block_size,
-        unsigned int cache_store_buffer_size, sc_time cache_arbitration_delay,
-        sc_time cache_access_delay);
+  Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
+        unsigned int cache_block_size, unsigned int cache_store_buffer_size,
+        sc_time cache_arbitration_delay, sc_time cache_access_delay);
 
   void dump();
   void report_rates();
 
 private:
-  AXIUtils & axi_utils;
   void send_axi_request(tlm_generic_payload & transaction, tlm_command command,
                         uint32_t address, unsigned char *data,
                         unsigned int data_length);

@@ -3,12 +3,12 @@
 #include "common/protocol/ChipletExtension.h"
 #include "common/protocol/ChipletPayload.h"
 
-Cache::Cache(sc_module_name name, AXIUtils &axi_utils, unsigned int chip_id,
-             unsigned int cache_size, unsigned int cache_block_size,
+Cache::Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
+             unsigned int cache_block_size,
              unsigned int cache_store_buffer_size,
              sc_time cache_arbitration_delay, sc_time cache_access_delay)
-    : sc_module(name), axi_utils(axi_utils), chip_id(chip_id),
-      cache_size(cache_size), cache_block_size(cache_block_size),
+    : sc_module(name), chip_id(chip_id), cache_size(cache_size),
+      cache_block_size(cache_block_size),
       cache_store_buffer_size(cache_store_buffer_size),
       cache_arbitration_delay(cache_arbitration_delay),
       cache_access_delay(cache_access_delay), utilization_tracker(this->name()),
@@ -260,8 +260,6 @@ void Cache::send_axi_request(tlm_generic_payload &transaction,
   axi_trans->set_address(address);
   axi_trans->set_data_ptr(data, false);
   axi_trans->set_data_length(data_length);
-
-  axi_utils.set_burst_incr(axi_trans, data_length);
 
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
