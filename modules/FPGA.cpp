@@ -6,10 +6,10 @@ using namespace sc_core;
 using namespace tlm;
 
 FPGA::FPGA(sc_module_name name)
-    : sc_module(name), fpga_id(0), core_clk("core_clk", 1, sc_core::SC_NS, 0.5),
-      mem_clk("mem_clk", 3, sc_core::SC_NS, 0.5),
+    : sc_module(name), fpga_id(0),
+      axi_clk("AXI_Clk", axi_clk_cycle, sc_core::SC_NS, 0.5),
       axi_bus("AXI_Bus", fpga_id, num_axi_managers, num_axi_subordinates),
-      core("Core", fpga_id, 0, interconnect_irq_delay),
+      core("Core", fpga_id, 0, axi_width, interconnect_irq_delay),
       // cache("Cache", axi_utils, fpga_id, cache_size, cache_block_size,
       //       cache_store_buffer_size, cache_arbitration_delay,
       //       cache_access_delay),
@@ -38,8 +38,8 @@ void FPGA::initialize() {
   // -------------------------------------------------------
   // clocks
   // -------------------------------------------------------
-  core.clock.bind(core_clk);
-  memory.clock.bind(mem_clk);
+  core.clock.bind(axi_clk);
+  memory.clock.bind(axi_clk);
 
   // -------------------------------------------------------
   // sockets

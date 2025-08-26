@@ -6,7 +6,6 @@
 #include "Core.h"
 #include "Memory.h"
 
-#include "common/AXIUtils.h"
 #include "common/Tracker.h"
 
 using namespace sc_core;
@@ -33,35 +32,22 @@ private:
   const unsigned int num_interconnects = num_chiplets;
 
   // FPGA config
-  const sc_time cores_clk_cycle = fpga_config.get<sc_time>("cores.clk_cycle");
+  const unsigned int cores_clk_cycle =
+      fpga_config.get<unsigned int>("cores.clk_cycle");
 
   const unsigned int cache_size = fpga_config.get<unsigned int>("cache.size");
   const unsigned int cache_block_size =
       fpga_config.get<unsigned int>("cache.block_size");
   const unsigned int cache_store_buffer_size =
       fpga_config.get<unsigned int>("cache.store_buffer_size");
-  const sc_time cache_arbitration_delay =
-      fpga_config.get<sc_time>("cache.arbitration_delay");
-  const sc_time cache_access_delay =
-      fpga_config.get<sc_time>("cache.access_delay");
 
   const unsigned int axi_width = fpga_config.get<unsigned int>("axi.width");
-  const sc_time axi_clk_cycle = fpga_config.get<sc_time>("axi.clk_cycle");
-  const sc_time axi_arbitration_delay =
-      fpga_config.get<sc_time>("axi.arbitration_delay");
-
-  const unsigned int bus_width = fpga_config.get<unsigned int>("bus.width");
-  const sc_time bus_clk_cycle = fpga_config.get<sc_time>("bus.clk_cycle");
-  const sc_time bus_arbitration_delay =
-      fpga_config.get<sc_time>("bus.arbitration_delay");
-
-  const sc_time memory_controller_address_delay =
-      fpga_config.get<sc_time>("memory_controller.address_delay");
+  const unsigned int axi_clk_cycle =
+      fpga_config.get<unsigned int>("axi.clk_cycle");
 
   const unsigned int ram_size = fpga_config.get<unsigned int>("ram.size");
-  const unsigned int ram_width = fpga_config.get<unsigned int>("ram.width");
-  const sc_time ram_clk_cycle = fpga_config.get<sc_time>("ram.clk_cycle");
-  const sc_time ram_access_delay = fpga_config.get<sc_time>("ram.access_delay");
+  const unsigned int ram_clk_cycle =
+      fpga_config.get<unsigned int>("ram.clk_cycle");
 
   // interconnect config
   const unsigned int interconnect_flit_size =
@@ -98,11 +84,8 @@ public:
   ~FPGA();
 
 private:
-  // clocks
-  sc_clock core_clk;
-  sc_clock mem_clk;
-
   // AXI
+  sc_clock axi_clk;
   AXIBus axi_bus;
 
   // InterconnectProtocol interconnect_protocol;

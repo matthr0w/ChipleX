@@ -6,11 +6,10 @@ unsigned int Chiplet::instance = 1; // id == 0 is reserved for FPGA
 
 Chiplet::Chiplet(sc_module_name name)
     : sc_module(name), chiplet_id(Chiplet::instance++),
-      core_clk("core_clk", 1, sc_core::SC_NS, 0.5),
-      mem_clk("mem_clk", 3, sc_core::SC_NS, 0.5),
+      axi_clk("AXI_Clk", axi_clk_cycle, sc_core::SC_NS, 0.5),
       axi_bus("AXI_Bus", chiplet_id, num_axi_managers, num_axi_subordinates),
-      core0("Core0", chiplet_id, 0, interconnect_irq_delay),
-      core1("Core1", chiplet_id, 1, interconnect_irq_delay),
+      core0("Core0", chiplet_id, 0, axi_width, interconnect_irq_delay),
+      core1("Core1", chiplet_id, 1, axi_width, interconnect_irq_delay),
       // cache0("Cache0", axi_utils, chiplet_id, cache_size, cache_block_size,
       //        cache_store_buffer_size, cache_arbitration_delay,
       //        cache_access_delay),
@@ -49,9 +48,9 @@ void Chiplet::initialize() {
   // -------------------------------------------------------
   // clocks
   // -------------------------------------------------------
-  core0.clock.bind(core_clk);
-  core1.clock.bind(core_clk);
-  memory.clock.bind(mem_clk);
+  core0.clock.bind(axi_clk);
+  core1.clock.bind(axi_clk);
+  memory.clock.bind(axi_clk);
 
   // -------------------------------------------------------
   // sockets
