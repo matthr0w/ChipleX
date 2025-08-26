@@ -141,11 +141,11 @@ int sc_main(int argc, char *argv[]) {
   // -------------------------------------------------------
   // statistics
   // -------------------------------------------------------
-  // std::cout << "=== Statistics ===" << std::endl;
-  // std::cout << "--- General ---" << std::endl;
-  // // times
-  // std::cout << "Simulation Time: " << sc_time_stamp() << std::endl;
-  // std::cout << "Execution Time: " << std::dec << duration.count() << " ms\n";
+  std::cout << "=== Statistics ===" << std::endl;
+  std::cout << "--- General ---" << std::endl;
+  // times
+  std::cout << "Simulation Time: " << sc_time_stamp() << std::endl;
+  std::cout << "Execution Time: " << std::dec << duration.count() << " ms\n";
   // // latencies
   // std::cout << "Transaction Latencies:" << std::endl;
   // LatencyTracker::instance().report();
