@@ -89,32 +89,30 @@ public:
     {}
 };
 
-/** ARM::TLM::TaggedInitiatorSocket specialised for AXI4 payloads/phases. */
+/** ARM::TLM::SimpleInitiatorSocketTagged specialised for AXI4 payloads/phases. */
 template <typename Module, typename Types = ProtocolType>
-class TaggedInitiatorSocket
-    : public ARM::TLM::TaggedInitiatorSocket<Module, Types>
+class SimpleInitiatorSocketTagged : public ARM::TLM::SimpleInitiatorSocketTagged<Module, Types>
 {
 private:
-    typedef typename ARM::TLM::TaggedInitiatorSocket<Module, Types> BaseType;
+    typedef typename ARM::TLM::SimpleInitiatorSocketTagged<Module, Types> BaseType;
 
 public:
-    TaggedInitiatorSocket(const char* name_, Module& t, int id,
+    SimpleInitiatorSocketTagged(const char* name_, Module& t, int id,
         typename BaseType::NBFunc bw,
         TLM::Protocol protocol_, unsigned width_)
     : BaseType(name_, t, id, bw, protocol_, width_)
     {}
 };
 
-/** ARM::TLM::TaggedTargetSocket specialised for AXI4 payloads/phases. */
+/** ARM::TLM::SimpleTargetSocketTagged specialised for AXI4 payloads/phases. */
 template <typename Module, typename Types = ProtocolType>
-class TaggedTargetSocket
-    : public ARM::TLM::TaggedTargetSocket<Module, Types>
+class SimpleTargetSocketTagged : public ARM::TLM::SimpleTargetSocketTagged<Module, Types>
 {
 private:
-    typedef typename ARM::TLM::TaggedTargetSocket<Module, Types> BaseType;
+    typedef typename ARM::TLM::SimpleTargetSocketTagged<Module, Types> BaseType;
 
 public:
-    TaggedTargetSocket(const char* name_, Module& t, int id,
+    SimpleTargetSocketTagged(const char* name_, Module& t, int id,
         typename BaseType::NBFunc fw,
         TLM::Protocol protocol_, unsigned width_,
         typename BaseType::DebugFunc dbg = nullptr)

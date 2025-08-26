@@ -407,7 +407,7 @@ public:
 };
 
 template <typename Module, typename Types>
-class TaggedTargetSocket : public BaseTargetSocket<Types>
+class SimpleTargetSocketTagged : public BaseTargetSocket<Types>
 {
 protected:
     typedef typename Types::tlm_payload_type PayloadType;
@@ -425,13 +425,16 @@ protected:
     class Proxy : public tlm::tlm_fw_transport_if<Types>
     {
     public:
-        const TaggedTargetSocket<Module, Types>& owner;
+        /** Owner of the proxy. */
+        const SimpleTargetSocketTagged<Module, Types>& owner;
+
+        /** Object and functions to which to defer interface calls. */
         Module& t;
         NBFunc fw;
         DebugFunc dbg;
         int id;
 
-        Proxy(const TaggedTargetSocket<Module, Types>& owner_,
+        Proxy(const SimpleTargetSocketTagged<Module, Types>& owner_,
               Module& t_, NBFunc fw_, DebugFunc dbg_, int id_)
         : owner(owner_), t(t_), fw(fw_), dbg(dbg_), id(id_)
         {}
@@ -447,7 +450,7 @@ protected:
         {
             std::ostringstream message;
             message << owner.name() << ": b_transport not implemented";
-            SC_REPORT_ERROR("/ARM/TLM/TaggedTargetSocket",
+            SC_REPORT_ERROR("/ARM/TLM/SimpleTargetSocketTagged",
                             message.str().c_str());
         }
 
@@ -468,7 +471,7 @@ protected:
     Proxy proxy;
 
 public:
-    TaggedTargetSocket(const char* name_, Module& t, int id,
+    SimpleTargetSocketTagged(const char* name_, Module& t, int id,
                        NBFunc fw, Protocol protocol_,
                        unsigned port_width_,
                        DebugFunc dbg = nullptr)
@@ -478,6 +481,7 @@ public:
         this->bind(proxy);
     }
 
+    /** Convenience function for bw without time. */
     tlm::tlm_sync_enum nb_transport_bw(PayloadType& trans, PhaseType& phase)
     {
         sc_core::sc_time delay = sc_core::SC_ZERO_TIME;
@@ -486,24 +490,30 @@ public:
 };
 
 template <typename Module, typename Types>
-class TaggedInitiatorSocket : public BaseInitiatorSocket<Types>
+class SimpleInitiatorSocketTagged : public BaseInitiatorSocket<Types>
 {
 protected:
     typedef typename Types::tlm_payload_type PayloadType;
     typedef typename Types::tlm_phase_type PhaseType;
 
 public:
+    /** Tagged non blocking transport function pointer. */
     typedef tlm::tlm_sync_enum (Module::* NBFunc)(int id, PayloadType&, PhaseType&);
 
+protected:
+    /** Proxy object implementing the bw transport interface. */
     class Proxy : public tlm::tlm_bw_transport_if<Types>
     {
     public:
-        const TaggedInitiatorSocket<Module, Types>& owner;
+        /** Owner of the proxy. */
+        const SimpleInitiatorSocketTagged<Module, Types>& owner;
+
+        /** Object and function(s) to which to defer interface calls. */
         Module& t;
         NBFunc bw;
         int id;
 
-        Proxy(const TaggedInitiatorSocket<Module, Types>& owner_,
+        Proxy(const SimpleInitiatorSocketTagged<Module, Types>& owner_,
               Module& t_, NBFunc bw_, int id_)
         : owner(owner_), t(t_), bw(bw_), id(id_)
         {}
@@ -519,7 +529,7 @@ public:
         {
             std::ostringstream message;
             message << owner.name() << ": DMI not implemented";
-            SC_REPORT_ERROR("/ARM/TLM/TaggedInitiatorSocket",
+            SC_REPORT_ERROR("/ARM/TLM/SimpleInitiatorSocketTagged",
                             message.str().c_str());
         }
     };
@@ -527,7 +537,7 @@ public:
     Proxy proxy;
 
 public:
-    TaggedInitiatorSocket(const char* name_, Module& t, int id,
+    SimpleInitiatorSocketTagged(const char* name_, Module& t, int id,
                           NBFunc bw, Protocol protocol_,
                           unsigned port_width_)
     : BaseInitiatorSocket<Types>(name_, protocol_, port_width_),
@@ -536,13 +546,13 @@ public:
         tlm::tlm_initiator_socket<0, Types>::bind(proxy);
     }
 
+    /** Convenience function for fw without time. */
     tlm::tlm_sync_enum nb_transport_fw(PayloadType& trans, PhaseType& phase)
     {
         sc_core::sc_time delay = sc_core::SC_ZERO_TIME;
         return (*this)->nb_transport_fw(trans, phase, delay);
     }
 };
-
 
 }
 }

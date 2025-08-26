@@ -5,7 +5,6 @@
 #include <tlm>
 
 #include "include/ARM/TLM/arm_axi4.h"
-#include "include/logging.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -15,9 +14,9 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  std::vector<std::unique_ptr<ARM::AXI4::TaggedTargetSocket<AXIBus>>>
+  std::vector<std::unique_ptr<ARM::AXI4::SimpleTargetSocketTagged<AXIBus>>>
       mgr_tsockets;
-  std::vector<std::unique_ptr<ARM::AXI4::TaggedInitiatorSocket<AXIBus>>>
+  std::vector<std::unique_ptr<ARM::AXI4::SimpleInitiatorSocketTagged<AXIBus>>>
       sub_isockets;
 
   AXIBus(sc_module_name name, unsigned int chip_id, unsigned int num_managers,

@@ -1,5 +1,7 @@
 #include "AXIBus.h"
 
+#include "include/logging.h"
+
 AXIBus::AXIBus(sc_module_name name, unsigned int chip_id,
                unsigned int num_managers, unsigned int num_subordinates)
     : sc_module(name), chip_id(chip_id) {
@@ -10,7 +12,7 @@ AXIBus::AXIBus(sc_module_name name, unsigned int chip_id,
     std::ostringstream nm;
     nm << "targ_" << i;
     mgr_tsockets.emplace_back(
-        std::make_unique<ARM::AXI4::TaggedTargetSocket<AXIBus>>(
+        std::make_unique<ARM::AXI4::SimpleTargetSocketTagged<AXIBus>>(
             nm.str().c_str(), *this, i, &AXIBus::nb_transport_fw,
             ARM::TLM::PROTOCOL_AXI4, 32));
   }
@@ -20,7 +22,7 @@ AXIBus::AXIBus(sc_module_name name, unsigned int chip_id,
     std::ostringstream nm;
     nm << "init_" << i;
     sub_isockets.emplace_back(
-        std::make_unique<ARM::AXI4::TaggedInitiatorSocket<AXIBus>>(
+        std::make_unique<ARM::AXI4::SimpleInitiatorSocketTagged<AXIBus>>(
             nm.str().c_str(), *this, i, &AXIBus::nb_transport_bw,
             ARM::TLM::PROTOCOL_AXI4, 32));
   }
@@ -103,7 +105,6 @@ tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
 
   // forward to subordinate
   return sub_isockets[sid]->nb_transport_fw(payload, phase);
-
 }
 
 tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
