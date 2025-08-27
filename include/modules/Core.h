@@ -134,47 +134,47 @@ private:
   // AXI methods
   // -------------------------------------------------------
 private:
-  RequestHandle *read_internal(int request_id, int destination_id,
+  RequestHandle *read_internal(uint32_t request_id, int destination_id,
                                uint32_t address, bool fixed_address,
                                unsigned char *data, unsigned int data_length,
                                ARM::AXI::Burst burst, bool is_volatile);
 
-  RequestHandle *write_internal(int request_id, int destination_id,
+  RequestHandle *write_internal(uint32_t request_id, int destination_id,
                                 uint32_t address, bool fixed_address,
                                 unsigned char *data, unsigned int data_length,
                                 ARM::AXI::Burst burst, bool is_volatile);
 
 public:
-  RequestHandle *read(int request_id, int destination_id, uint32_t address,
+  RequestHandle *read(uint32_t request_id, int destination_id, uint32_t address,
                       unsigned char *data, unsigned int data_length,
                       bool is_volatile);
 
-  RequestHandle *read_fixed(int request_id, int destination_id,
+  RequestHandle *read_fixed(uint32_t request_id, int destination_id,
                             uint32_t address, unsigned char *data,
                             unsigned int data_length, bool is_volatile);
 
-  RequestHandle *read_wrap(int request_id, int destination_id, uint32_t address,
+  RequestHandle *read_wrap(uint32_t request_id, int destination_id, uint32_t address,
                            unsigned char *data, unsigned int data_length,
                            bool is_volatile);
 
-  RequestHandle *write(int request_id, int destination_id, uint32_t address,
+  RequestHandle *write(uint32_t request_id, int destination_id, uint32_t address,
                        unsigned char *data, unsigned int data_length,
                        bool is_volatile);
 
-  RequestHandle *write(int request_id, int destination_id, unsigned char *data,
+  RequestHandle *write(uint32_t request_id, int destination_id, unsigned char *data,
                        unsigned int data_length);
 
-  RequestHandle *write_fixed(int request_id, int destination_id,
+  RequestHandle *write_fixed(uint32_t request_id, int destination_id,
                              uint32_t address, unsigned char *data,
                              unsigned int data_length, bool is_volatile);
 
-  RequestHandle *write_fixed(int request_id, int destination_id,
+  RequestHandle *write_fixed(uint32_t request_id, int destination_id,
                              unsigned char *data, unsigned int data_length);
 
-  RequestHandle *write_wrap(int request_id, int destination_id,
+  RequestHandle *write_wrap(uint32_t request_id, int destination_id,
                             uint32_t address, unsigned char *data,
                             unsigned int data_length, bool is_volatile);
 
-  RequestHandle *write_wrap(int request_id, int destination_id,
+  RequestHandle *write_wrap(uint32_t request_id, int destination_id,
                             unsigned char *data, unsigned int data_length);
 };

@@ -176,12 +176,11 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
 // -------------------------------------------------------
 // AXI methods
 // -------------------------------------------------------
-Core::RequestHandle *Core::read_internal(int request_id, int destination_id,
-                                         uint32_t address, bool fixed_address,
-                                         unsigned char *data,
-                                         unsigned int data_length,
-                                         ARM::AXI::Burst burst,
-                                         bool is_volatile) {
+Core::RequestHandle *
+Core::read_internal(uint32_t request_id, int destination_id, uint32_t address,
+                    bool fixed_address, unsigned char *data,
+                    unsigned int data_length, ARM::AXI::Burst burst,
+                    bool is_volatile) {
   auto *handle = new RequestHandle();
 
   unsigned axi_bytes = axi_width / 8;
@@ -191,6 +190,17 @@ Core::RequestHandle *Core::read_internal(int request_id, int destination_id,
 
   ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
       ARM::AXI::COMMAND_READ, address, size, len, burst);
+
+  UserSignals user;
+  user.core = core_id;
+  user.source = chip_id;
+  user.destination = destination_id;
+  user.fixed_address = fixed_address;
+
+  payload->id = request_id;
+  payload->user = user.encode();
+  payload->cache = is_volatile ? ARM::AXI::CACHE_AR_DEVICE_NB
+                               : ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
 
   SC_LOG_DEBUG_NO_TX(this,
                      "Sending request: READ from 0x" << std::hex << address);
@@ -206,7 +216,7 @@ Core::RequestHandle *Core::read_internal(int request_id, int destination_id,
   return handle;
 }
 
-Core::RequestHandle *Core::read(int request_id, int destination_id,
+Core::RequestHandle *Core::read(uint32_t request_id, int destination_id,
                                 uint32_t address, unsigned char *data,
                                 unsigned int data_length, bool is_volatile) {
   if (data_length > MAX_INCR_BURST_SIZE) {
@@ -221,7 +231,7 @@ Core::RequestHandle *Core::read(int request_id, int destination_id,
                        data_length, ARM::AXI::BURST_INCR, is_volatile);
 }
 
-Core::RequestHandle *Core::read_fixed(int request_id, int destination_id,
+Core::RequestHandle *Core::read_fixed(uint32_t request_id, int destination_id,
                                       uint32_t address, unsigned char *data,
                                       unsigned int data_length,
                                       bool is_volatile) {
@@ -237,7 +247,7 @@ Core::RequestHandle *Core::read_fixed(int request_id, int destination_id,
                        data_length, ARM::AXI::BURST_FIXED, is_volatile);
 }
 
-Core::RequestHandle *Core::read_wrap(int request_id, int destination_id,
+Core::RequestHandle *Core::read_wrap(uint32_t request_id, int destination_id,
                                      uint32_t address, unsigned char *data,
                                      unsigned int data_length,
                                      bool is_volatile) {
@@ -253,12 +263,11 @@ Core::RequestHandle *Core::read_wrap(int request_id, int destination_id,
                        data_length, ARM::AXI::BURST_WRAP, is_volatile);
 }
 
-Core::RequestHandle *Core::write_internal(int request_id, int destination_id,
-                                          uint32_t address, bool fixed_address,
-                                          unsigned char *data,
-                                          unsigned int data_length,
-                                          ARM::AXI::Burst burst,
-                                          bool is_volatile) {
+Core::RequestHandle *
+Core::write_internal(uint32_t request_id, int destination_id, uint32_t address,
+                     bool fixed_address, unsigned char *data,
+                     unsigned int data_length, ARM::AXI::Burst burst,
+                     bool is_volatile) {
   auto *handle = new RequestHandle();
 
   unsigned axi_bytes = axi_width / 8;
@@ -268,6 +277,17 @@ Core::RequestHandle *Core::write_internal(int request_id, int destination_id,
 
   ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
       ARM::AXI::COMMAND_WRITE, address, size, len, burst);
+
+  UserSignals user;
+  user.core = core_id;
+  user.source = chip_id;
+  user.destination = destination_id;
+  user.fixed_address = fixed_address;
+
+  payload->id = request_id;
+  payload->user = user.encode();
+  payload->cache = is_volatile ? ARM::AXI::CACHE_AW_DEVICE_NB
+                               : ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
   payload->write_in(data);
 
@@ -285,7 +305,7 @@ Core::RequestHandle *Core::write_internal(int request_id, int destination_id,
   return handle;
 }
 
-Core::RequestHandle *Core::write(int request_id, int destination_id,
+Core::RequestHandle *Core::write(uint32_t request_id, int destination_id,
                                  uint32_t address, unsigned char *data,
                                  unsigned int data_length, bool is_volatile) {
   if (data_length > MAX_INCR_BURST_SIZE) {
@@ -300,7 +320,7 @@ Core::RequestHandle *Core::write(int request_id, int destination_id,
                         data, data_length, ARM::AXI::BURST_INCR, is_volatile);
 }
 
-Core::RequestHandle *Core::write(int request_id, int destination_id,
+Core::RequestHandle *Core::write(uint32_t request_id, int destination_id,
                                  unsigned char *data,
                                  unsigned int data_length) {
   if (data_length > MAX_INCR_BURST_SIZE) {
@@ -317,7 +337,7 @@ Core::RequestHandle *Core::write(int request_id, int destination_id,
                         data, data_length, ARM::AXI::BURST_INCR, is_volatile);
 }
 
-Core::RequestHandle *Core::write_fixed(int request_id, int destination_id,
+Core::RequestHandle *Core::write_fixed(uint32_t request_id, int destination_id,
                                        uint32_t address, unsigned char *data,
                                        unsigned int data_length,
                                        bool is_volatile) {
@@ -333,7 +353,7 @@ Core::RequestHandle *Core::write_fixed(int request_id, int destination_id,
                         data, data_length, ARM::AXI::BURST_FIXED, is_volatile);
 }
 
-Core::RequestHandle *Core::write_fixed(int request_id, int destination_id,
+Core::RequestHandle *Core::write_fixed(uint32_t request_id, int destination_id,
                                        unsigned char *data,
                                        unsigned int data_length) {
   if (data_length > MAX_INCR_BURST_SIZE) {
@@ -350,7 +370,7 @@ Core::RequestHandle *Core::write_fixed(int request_id, int destination_id,
                         data, data_length, ARM::AXI::BURST_FIXED, is_volatile);
 }
 
-Core::RequestHandle *Core::write_wrap(int request_id, int destination_id,
+Core::RequestHandle *Core::write_wrap(uint32_t request_id, int destination_id,
                                       uint32_t address, unsigned char *data,
                                       unsigned int data_length,
                                       bool is_volatile) {
@@ -366,7 +386,7 @@ Core::RequestHandle *Core::write_wrap(int request_id, int destination_id,
                         data, data_length, ARM::AXI::BURST_WRAP, is_volatile);
 }
 
-Core::RequestHandle *Core::write_wrap(int request_id, int destination_id,
+Core::RequestHandle *Core::write_wrap(uint32_t request_id, int destination_id,
                                       unsigned char *data,
                                       unsigned int data_length) {
   if (data_length > MAX_INCR_BURST_SIZE) {
