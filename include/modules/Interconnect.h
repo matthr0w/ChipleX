@@ -6,6 +6,7 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
+#include "ARM/TLM/arm_axi4.h"
 #include "logging.h"
 
 #include "common/Tracker.h"
@@ -17,75 +18,113 @@ using namespace tlm_utils;
 
 SC_MODULE(Interconnect) {
 public:
+  sc_core::sc_in<bool> clock;
+
   // -------------------------------------------------------
   // trackers
   // -------------------------------------------------------
   UtilizationTracker utilization_tracker;
-  BufferUsageTracker tx_tracker;
-  BufferUsageTracker rx_tracker;
-  unsigned int incoming_flits;
 
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket<Interconnect> protocol_tsocket;
-  simple_initiator_socket<Interconnect> protocol_isocket;
+  ARM::AXI::SimpleTargetSocket<Interconnect> axi_tsocket;
 
-  simple_target_socket<Interconnect> phy_tsocket;
-  simple_initiator_socket<Interconnect> phy_isocket;
+  simple_target_socket_tagged<Interconnect> *phy_tsockets;
+  simple_initiator_socket_tagged<Interconnect> *phy_isockets;
 
-  Interconnect(sc_module_name name, unsigned int buffer_size,
-               unsigned int flit_size, double bandwidth, double distance);
+  simple_initiator_socket_tagged<Interconnect> *irq_sockets;
+
+  Interconnect(sc_module_name name, unsigned chip_id, unsigned num_cores,
+               unsigned num_interconnects, unsigned buffer_size,
+               unsigned flit_size, unsigned overhead_size, double bandwidth,
+               double distance, unsigned axi_width);
+  ~Interconnect();
 
 private:
-  void process_tx_buffer();
-  void process_rx_buffer();
+  enum ChannelState { CLEAR, REQ, ACK };
 
-  std::deque<tlm_generic_payload *> tx_buffer;
-  std::deque<tlm_generic_payload *> rx_buffer;
-  unsigned int tx_buffer_used_bytes;
-  unsigned int rx_buffer_used_bytes;
+  ChannelState r_state = CLEAR;
+  ChannelState b_state = CLEAR;
+
+  std::deque<ARM::AXI::Payload *> ar_queue;
+  std::deque<ARM::AXI::Payload *> aw_queue;
+  std::deque<ARM::AXI::Payload *> w_queue;
+  std::deque<tlm_generic_payload *> phy_request_queue;
+
+  ARM::AXI::Payload *r_outgoing = nullptr;
+  ARM::AXI::Payload *b_outgoing = nullptr;
+
+  std::vector<uint8_t> staging_buffer;
+  size_t staging_buffer_ptr = 0;
+
+  std::vector<std::vector<uint8_t>> tx_buffers;
+  std::vector<std::vector<uint8_t>> rx_buffers;
+  std::vector<size_t> tx_ptrs;
+  std::vector<size_t> rx_ptrs;
+
+  // fsm
+  bool active_txn = false;
+  bool r_flit_sent = false;
+  bool wlast = false;
+
+  unsigned beat_idx = 0;
+  unsigned flit_header_bytes;
+  unsigned flit_data_bytes;
+
+  // flit metadata
+  enum Command : uint8_t { READ_COMMAND = 0, WRITE_COMMAND = 1 };
+  uint16_t flit_count = 0;
+  uint16_t flit_id = 0;
+  uint8_t request_id = 0;
+  uint8_t core_id = 0;
+  uint8_t source_id = 0;
+  uint8_t destination_id = 0;
+  Command command = READ_COMMAND;
+  uint32_t address = UINT32_MAX;
+  uint16_t size = 0;
+  bool fixed_address = true;
+
+  void clock_posedge();
+  void clock_negedge();
 
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
-  const unsigned int buffer_size;
-  const unsigned int flit_size;
+  const unsigned chip_id;
+  const unsigned buffer_size;
+  const unsigned flit_size;
+  const unsigned overhead_size;
   const double bandwidth;
   const double distance;
-
-  // -------------------------------------------------------
-  // events
-  // -------------------------------------------------------
-  sc_event tx_buffer_in_event;
-  sc_event tx_buffer_out_event;
-  sc_event rx_buffer_in_event;
-  sc_event rx_buffer_out_event;
-  sc_event protocol_transaction_done;
-  sc_event phy_transaction_done;
-
-  // -------------------------------------------------------
-  // peqs
-  // -------------------------------------------------------
-  peq_with_get<tlm_generic_payload> protocol_peq;
-  void process_protocol_transaction();
-  peq_with_get<tlm_generic_payload> phy_peq;
-  void process_phy_transaction();
+  const unsigned axi_width;
 
   // -------------------------------------------------------
   // transport functions
   // -------------------------------------------------------
-  tlm_sync_enum nb_transport_fw_protocol(tlm_generic_payload & transaction,
-                                         tlm_phase & phase, sc_time & delay);
+  tlm_sync_enum nb_transport_fw_axi(ARM::AXI::Payload & payload,
+                                    ARM::AXI::Phase & phase);
 
-  tlm_sync_enum nb_transport_bw_protocol(tlm_generic_payload & transaction,
-                                         tlm_phase & phase, sc_time & delay);
+  tlm_sync_enum nb_transport_fw_phy(int id, tlm_generic_payload &transaction,
+                                    tlm_phase &phase, sc_time &delay);
 
-  tlm_sync_enum nb_transport_fw_phy(tlm_generic_payload & transaction,
-                                    tlm_phase & phase, sc_time & delay);
+  tlm_sync_enum nb_transport_bw_phy(int id, tlm_generic_payload &transaction,
+                                    tlm_phase &phase, sc_time &delay);
 
-  tlm_sync_enum nb_transport_bw_phy(tlm_generic_payload & transaction,
-                                    tlm_phase & phase, sc_time & delay);
+  // -------------------------------------------------------
+  // helper functions
+  // -------------------------------------------------------
+  void write_flit_header(uint8_t *flit_base, uint16_t flit_count,
+                         uint16_t flit_id, uint8_t request_id, uint8_t core_id,
+                         uint8_t source_id, uint8_t destination_id,
+                         Command command, uint32_t address, uint16_t size,
+                         bool fixed_address);
+
+  // -------------------------------------------------------
+  // debug functions
+  // -------------------------------------------------------
+  void dump_staging_buffer();
+  void dump_phy_buffers();
 
   // -------------------------------------------------------
   // delay model
