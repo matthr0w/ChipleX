@@ -2,10 +2,10 @@
 
 #include "logging.h"
 
-Memory::Memory(sc_module_name name, unsigned int size)
+Memory::Memory(sc_module_name name, unsigned int size, unsigned int axi_width)
     : sc_module(name), size(size), utilization_tracker(this->name()),
-      tsocket("target", *this, &Memory::nb_transport_fw,
-              ARM::TLM::PROTOCOL_AXI4, 32),
+      tsocket("tsocket", *this, &Memory::nb_transport_fw,
+              ARM::TLM::PROTOCOL_AXI4, axi_width),
       clock("clock"), mem(size * 1024, 0), write_flags(mem.size(), false),
       offchip_base_address(size * 1024 / 2) {
   SC_METHOD(clock_posedge);
@@ -23,7 +23,7 @@ void Memory::clock_posedge() {
   if (r_state == ACK)
     r_state = CLEAR;
 
-  // handle read
+  // --- READ request ---
   if (!r_outgoing && !ar_queue.empty()) {
     if (active_addr == UINT32_MAX) {
       set_active_address(*ar_queue.front());
@@ -41,7 +41,8 @@ void Memory::clock_posedge() {
 
       std::vector<uint8_t> staging(total_len);
       for (unsigned i = 0; i < beats; ++i) {
-        const uint32_t a = set_beat_address(active_addr, i, beat_bytes, beats, burst);
+        const uint32_t a =
+            set_beat_address(active_addr, i, beat_bytes, beats, burst);
         std::memcpy(&staging[i * beat_bytes], &mem[a], beat_bytes);
       }
 
@@ -49,7 +50,7 @@ void Memory::clock_posedge() {
     }
   }
 
-  // handle write
+  // --- WRITE request ---
   else if (!b_outgoing && !aw_queue.empty()) {
     if (active_addr == UINT32_MAX) {
       set_active_address(*aw_queue.front());
@@ -70,7 +71,8 @@ void Memory::clock_posedge() {
       b_outgoing->write_out(staging.data());
 
       for (unsigned i = 0; i < beats; ++i) {
-        const uint32_t a = set_beat_address(active_addr, i, beat_bytes, beats, burst);
+        const uint32_t a =
+            set_beat_address(active_addr, i, beat_bytes, beats, burst);
         std::memcpy(&mem[a], &staging[i * beat_bytes], beat_bytes);
       }
 
@@ -80,7 +82,7 @@ void Memory::clock_posedge() {
 }
 
 void Memory::clock_negedge() {
-  if (r_state == CLEAR && r_outgoing) {
+  if (r_outgoing) {
     ARM::AXI::Phase phase =
         (r_beat_count == 1) ? ARM::AXI::R_VALID_LAST : ARM::AXI::R_VALID;
 

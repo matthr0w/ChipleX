@@ -25,7 +25,7 @@ public:
   // -------------------------------------------------------
   ARM::AXI::SimpleTargetSocket<Memory> tsocket;
 
-  Memory(sc_module_name name, unsigned int size);
+  Memory(sc_module_name name, unsigned int size, unsigned int axi_width);
 
 private:
   enum ChannelState { CLEAR, REQ, ACK };
@@ -42,13 +42,15 @@ private:
 
   unsigned r_beat_count;
 
+  // fsm
   bool active_txn = false;
   uint32_t active_addr = UINT32_MAX;
-  uint32_t offchip_base_address;
 
+  // memory
   std::vector<uint8_t> mem;
   std::vector<bool> write_flags;
   std::map<uint32_t, unsigned int> allocated_ranges;
+  uint32_t offchip_base_address;
 
   void clock_posedge();
   void clock_negedge();
