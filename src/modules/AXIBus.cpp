@@ -45,7 +45,7 @@ tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
   if (auto it = payloads2sub.find(&payload); it != payloads2sub.end())
     sub_id = it->second;
   else {
-    sub_id = route_payload(payload); // currently returns 0
+    sub_id = route_payload(payload);
     payloads2sub[&payload] = sub_id;
     payloads2mgr[&payload] = mgr_id;
   }
@@ -132,6 +132,14 @@ tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
   }
 
   return reply;
+}
+
+// -------------------------------------------------------
+// helper functions
+// -------------------------------------------------------
+int AXIBus::route_payload(ARM::AXI::Payload &payload) {
+  UserSignals user = UserSignals::decode(payload.user);
+  return user.destination == chip_id ? 0 : 1;
 }
 
 // -------------------------------------------------------
@@ -259,7 +267,7 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
              << " |  \033[32m[AXI]\033[0m   | " << std::setw(32) << name()
              << " | ";
 
-  // channel source/dest info
+  // channel source/destination info
   auto mgr_it = payloads2mgr.find(&payload);
   auto sub_it = payloads2sub.find(&payload);
   if (mgr_it != payloads2mgr.end() && sub_it != payloads2sub.end()) {

@@ -67,7 +67,7 @@ private:
   // -------------------------------------------------------
   // helper functions
   // -------------------------------------------------------
-  int route_payload(ARM::AXI::Payload & payload) { return 0; } // fixed for now
+  int route_payload(ARM::AXI::Payload & payload);
 
   // -------------------------------------------------------
   // debug functions
