@@ -15,16 +15,6 @@ using CoreFunctions =
               >;
 using CoreKey = std::pair<int, int>;
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
-
-struct ImageHeader {
-  uint32_t width;
-  uint32_t height;
-};
-
 inline std::map<CoreKey, CoreFunctions> core_code = {
     // FPGA Core0
     {{0, 0},
@@ -34,67 +24,29 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
     // Chiplet1 Core0
     {{1, 0},
      {[](Core &core, UtilizationTracker *tracker) {
-        int width, height, channels;
-        unsigned char *input_img =
-            stbi_load("include/usercode/tum_input.jpg", &width, &height, &channels, 3);
+        size_t num_bytes = 64;
+        uint8_t *data = new uint8_t[num_bytes];
 
-        unsigned header_size = sizeof(ImageHeader);
-        unsigned img_size = width * height * channels;
-        unsigned buffer_size = header_size + img_size;
-
-        unsigned char *write_buffer = new unsigned char[buffer_size];
-        unsigned char *read_buffer = new unsigned char[buffer_size];
-
-        ImageHeader *header = reinterpret_cast<ImageHeader *>(write_buffer);
-        header->width = width;
-        header->height = height;
-
-        std::memcpy(write_buffer + header_size, input_img, img_size);
-
-        stbi_image_free(input_img);
-
-        Core::RequestHandle *h = nullptr;
-        unsigned offset = 0;
-        while (offset < buffer_size) {
-          unsigned chunk_size =
-              std::min(core.MAX_INCR_BURST_SIZE, buffer_size - offset);
-
-          h = core.write(
-              1, 1, 0x0 + offset,
-              reinterpret_cast<unsigned char *>(write_buffer + offset),
-              chunk_size, true);
-
-          offset += chunk_size;
+        for (size_t i = 0; i < num_bytes; ++i) {
+          data[i] = static_cast<uint8_t>(10);
         }
+
+        auto h =
+            core.write(1, 2, 0x1000, reinterpret_cast<unsigned char *>(data),
+                       num_bytes, true);
+
+        SC_LOG_DEBUG_NO_TX(&core, "WRITE OP - CORE CONTINUE");
 
         h->wait();
 
-        delete[] write_buffer;
+        SC_LOG_DEBUG_NO_TX(&core, "WRITE OP - DATA READY");
 
-        offset = 0;
-        while (offset < buffer_size) {
-          unsigned chunk_size =
-              std::min(core.MAX_INCR_BURST_SIZE, buffer_size - offset);
+        h = core.read(2, 2, 0x1000, reinterpret_cast<unsigned char *>(data),
+                      num_bytes, true);
 
-          h = core.read(2, 1, 0x0 + offset,
-                        reinterpret_cast<unsigned char *>(read_buffer + offset),
-                        chunk_size, true);
-
-          offset += chunk_size;
-        }
+        SC_LOG_DEBUG_NO_TX(&core, "READ OP - CORE CONTINUE");
 
         h->wait();
-
-        header = reinterpret_cast<ImageHeader *>(read_buffer);
-        width = header->width;
-        height = header->height;
-
-        unsigned char *img_data = read_buffer + sizeof(ImageHeader);
-
-        stbi_write_jpg("tum_output.jpg", width, height, 3, img_data,
-                       100);
-
-        delete[] read_buffer;
 
         sc_stop();
       },
