@@ -7,7 +7,7 @@ Core::Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
       isocket("isocket", *this, &Core::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4,
               axi_width),
       clock("clock") {
-  // irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
+  irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
 
   MAX_INCR_BURST_SIZE = std::min(256 * axi_width / 8, 4096u);
   MAX_FIXED_BURST_SIZE = 16 * axi_width / 8;

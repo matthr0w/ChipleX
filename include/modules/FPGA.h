@@ -4,6 +4,7 @@
 
 #include "modules/AXIBus.h"
 #include "modules/Core.h"
+#include "modules/Interconnect.h"
 #include "modules/Memory.h"
 
 #include "common/Tracker.h"
@@ -28,7 +29,7 @@ private:
   // -------------------------------------------------------
   const unsigned int num_cores = 1;
   const unsigned int num_axi_managers = 1;
-  const unsigned int num_axi_subordinates = 1;
+  const unsigned int num_axi_subordinates = 2;
   const unsigned int num_interconnects = num_chiplets;
 
   // FPGA config
@@ -78,17 +79,14 @@ public:
   Core core;
   Memory memory;
   // Cache cache;
-  // std::vector<Interconnect *> interconnects;
+  Interconnect interconnect;
 
   SC_CTOR(FPGA);
-  ~FPGA();
 
 private:
   // AXI
   sc_clock axi_clk;
   AXIBus axi_bus;
-
-  // InterconnectProtocol interconnect_protocol;
 
   void initialize();
 };

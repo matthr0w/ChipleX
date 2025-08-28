@@ -104,29 +104,29 @@ int sc_main(int argc, char *argv[]) {
   }
 
   // connect chiplets in a ring topology
-  // for (unsigned int i = 0; i < num_chiplets; ++i) {
-  //   int next = (i + 1) % num_chiplets;
-  //   int prev = (i - 1 + num_chiplets) % num_chiplets;
+  for (unsigned i = 0; i < num_chiplets; ++i) {
+    int next = (i + 1) % num_chiplets;
+    int prev = (i - 1 + num_chiplets) % num_chiplets;
 
-  //   // connect interconnect2 to next chiplet interconnect1
-  //   chiplets[i]->interconnects[2]->phy_isocket.bind(
-  //       chiplets[next]->interconnects[1]->phy_tsocket);
+    // connect interconnect2 to next chiplet interconnect1
+    chiplets[i]->interconnect.phy_isockets[2].bind(
+        chiplets[next]->interconnect.phy_tsockets[1]);
 
-  //   // connect interconnect1 to previous chiplet interconnect2
-  //   chiplets[i]->interconnects[1]->phy_isocket.bind(
-  //       chiplets[prev]->interconnects[2]->phy_tsocket);
-  // }
+    // connect interconnect1 to previous chiplet interconnect2
+    chiplets[i]->interconnect.phy_isockets[1].bind(
+        chiplets[prev]->interconnect.phy_tsockets[2]);
+  }
 
-  // // connect chiplets to FPGA
-  // for (unsigned int i = 0; i < num_chiplets; ++i) {
-  //   // connect interconnect0 to FPGA interconnect
-  //   chiplets[i]->interconnects[0]->phy_isocket.bind(
-  //       fpga.interconnects[i]->phy_tsocket);
+  // connect chiplets to FPGA
+  for (unsigned i = 0; i < num_chiplets; ++i) {
+    // connect interconnect0 to FPGA interconnect
+    chiplets[i]->interconnect.phy_isockets[0].bind(
+        fpga.interconnect.phy_tsockets[i]);
 
-  //   // connect FPGA interconnect to interconnect0
-  //   fpga.interconnects[i]->phy_isocket.bind(
-  //       chiplets[i]->interconnects[0]->phy_tsocket);
-  // }
+    // connect FPGA interconnect to interconnect0
+    fpga.interconnect.phy_isockets[i].bind(
+        chiplets[i]->interconnect.phy_tsockets[0]);
+  }
 
   if (sim_duration == SC_ZERO_TIME) {
     sc_start();

@@ -27,7 +27,7 @@ public:
   // sockets
   // -------------------------------------------------------
   ARM::AXI::SimpleInitiatorSocket<Core> isocket;
-  // simple_target_socket<Core> irq_socket;
+  simple_target_socket<Core> irq_socket;
 
   Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
        unsigned int axi_width, sc_time irq_delay);
@@ -57,8 +57,6 @@ public:
         ::wait(done);
       }
     }
-
-    ARM::AXI::Payload *get_payload() const { return payload; }
   };
 
   unsigned MAX_INCR_BURST_SIZE = 0;
@@ -153,16 +151,16 @@ public:
                             uint32_t address, unsigned char *data,
                             unsigned int data_length, bool is_volatile);
 
-  RequestHandle *read_wrap(uint32_t request_id, int destination_id, uint32_t address,
-                           unsigned char *data, unsigned int data_length,
-                           bool is_volatile);
+  RequestHandle *read_wrap(uint32_t request_id, int destination_id,
+                           uint32_t address, unsigned char *data,
+                           unsigned int data_length, bool is_volatile);
 
-  RequestHandle *write(uint32_t request_id, int destination_id, uint32_t address,
-                       unsigned char *data, unsigned int data_length,
-                       bool is_volatile);
+  RequestHandle *write(uint32_t request_id, int destination_id,
+                       uint32_t address, unsigned char *data,
+                       unsigned int data_length, bool is_volatile);
 
-  RequestHandle *write(uint32_t request_id, int destination_id, unsigned char *data,
-                       unsigned int data_length);
+  RequestHandle *write(uint32_t request_id, int destination_id,
+                       unsigned char *data, unsigned int data_length);
 
   RequestHandle *write_fixed(uint32_t request_id, int destination_id,
                              uint32_t address, unsigned char *data,

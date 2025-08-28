@@ -4,6 +4,7 @@
 
 #include "modules/AXIBus.h"
 #include "modules/Core.h"
+#include "modules/Interconnect.h"
 #include "modules/Memory.h"
 
 #include "common/Tracker.h"
@@ -29,7 +30,7 @@ private:
   // -------------------------------------------------------
   const unsigned int num_cores = 2;
   const unsigned int num_axi_managers = 2;
-  const unsigned int num_axi_subordinates = 1;
+  const unsigned int num_axi_subordinates = 2;
   const unsigned int num_interconnects = 3;
 
   // chiplet config
@@ -82,17 +83,14 @@ public:
   Memory memory;
   // Cache cache0;
   // Cache cache1;
-  // std::vector<Interconnect *> interconnects;
+  Interconnect interconnect;
 
   SC_CTOR(Chiplet);
-  ~Chiplet();
 
 private:
   // AXI
   sc_clock axi_clk;
   AXIBus axi_bus;
-
-  // InterconnectProtocol interconnect_protocol;
 
   void initialize();
 };
