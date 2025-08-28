@@ -25,7 +25,7 @@ public:
   // -------------------------------------------------------
   ARM::AXI::SimpleTargetSocket<Memory> tsocket;
 
-  Memory(sc_module_name name, unsigned int size, unsigned int axi_width);
+  Memory(sc_module_name name, unsigned int axi_width, unsigned int size);
 
 private:
   enum ChannelState { CLEAR, REQ, ACK };

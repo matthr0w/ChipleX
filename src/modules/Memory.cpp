@@ -2,7 +2,7 @@
 
 #include "logging.h"
 
-Memory::Memory(sc_module_name name, unsigned int size, unsigned int axi_width)
+Memory::Memory(sc_module_name name, unsigned int axi_width, unsigned int size)
     : sc_module(name), size(size), utilization_tracker(this->name()),
       tsocket("tsocket", *this, &Memory::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),

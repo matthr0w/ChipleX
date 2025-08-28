@@ -14,11 +14,11 @@ FPGA::FPGA(sc_module_name name)
       // cache("Cache", axi_utils, fpga_id, cache_size, cache_block_size,
       //       cache_store_buffer_size, cache_arbitration_delay,
       //       cache_access_delay),
-      interconnect("Interconnect", fpga_id, num_cores, num_interconnects,
-                   interconnect_buffer_size, interconnect_flit_size,
-                   interconnect_overhead_size, interconnect_bandwidth_chiplets,
-                   chiplet_distance_um, axi_width),
-      memory("Memory", ram_size, axi_width) {
+      interconnect("Interconnect", fpga_id, axi_width, num_cores,
+                   num_interconnects, interconnect_buffer_size,
+                   interconnect_flit_size, interconnect_overhead_size,
+                   interconnect_bandwidth_chiplets, chiplet_distance_um),
+      memory("Memory", axi_width, ram_size) {
   initialize();
 }
 

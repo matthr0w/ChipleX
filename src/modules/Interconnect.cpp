@@ -3,14 +3,14 @@
 #include "common/RoutingTable.h"
 
 Interconnect::Interconnect(sc_module_name name, unsigned int chip_id,
-                           unsigned int num_cores,
+                           unsigned int axi_width, unsigned int num_cores,
                            unsigned int num_interconnects,
                            unsigned int buffer_size, unsigned int flit_size,
                            unsigned int overhead_size, double bandwidth,
-                           double distance, unsigned int axi_width)
-    : sc_module(name), chip_id(chip_id), buffer_size(buffer_size),
-      flit_size(flit_size), overhead_size(overhead_size), bandwidth(bandwidth),
-      distance(distance), axi_width(axi_width),
+                           double distance)
+    : sc_module(name), chip_id(chip_id), axi_width(axi_width),
+      buffer_size(buffer_size), flit_size(flit_size),
+      overhead_size(overhead_size), bandwidth(bandwidth), distance(distance),
       utilization_tracker(this->name()),
       axi_tsocket("axi_tsocket", *this, &Interconnect::nb_transport_fw_axi,
                   ARM::TLM::PROTOCOL_AXI4, axi_width),

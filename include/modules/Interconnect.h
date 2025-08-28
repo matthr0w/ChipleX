@@ -35,10 +35,10 @@ public:
 
   simple_initiator_socket_tagged<Interconnect> *irq_sockets;
 
-  Interconnect(sc_module_name name, unsigned chip_id, unsigned num_cores,
-               unsigned num_interconnects, unsigned buffer_size,
-               unsigned flit_size, unsigned overhead_size, double bandwidth,
-               double distance, unsigned axi_width);
+  Interconnect(sc_module_name name, unsigned chip_id, unsigned axi_width,
+               unsigned num_cores, unsigned num_interconnects,
+               unsigned buffer_size, unsigned flit_size, unsigned overhead_size,
+               double bandwidth, double distance);
   ~Interconnect();
 
 private:
