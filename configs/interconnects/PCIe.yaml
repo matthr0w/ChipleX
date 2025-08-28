@@ -3,13 +3,12 @@ interconnect_protocol:
   # https://pcisig.com/blog/evolution-pci-express-specification-its-sixth-generation-third-decade-and-still-going-strong
   flit_size: 256 # bytes
   overhead_size: 20 # bytes
-  pre_delay: 5.0 # ns
-  post_delay: 5.0 # ns
   fec_delay: 3.0 # ns
   irq_delay: 2.0 # ns
   
 interconnect:
-  buffer_size: 512 # bytes
+  staging_buffer_size: 1024 # bytes
+  link_buffer_size: 512 # bytes
   # https://pcisig.com/pci-express-6.0-specification
   bandwidth_chiplets: 128.0 # GB/s
   bandwidth_fpga: 128.0 # GB/s

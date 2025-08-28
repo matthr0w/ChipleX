@@ -1,12 +1,11 @@
 interconnect_protocol:
   flit_size: 64 # bytes
   overhead_size: 0 # bytes
-  pre_delay: 2.0 # ns
-  post_delay: 2.0 # ns
   irq_delay: 2.0 # ns
   
 interconnect:
-  buffer_size: 512 # bytes
+  staging_buffer_size: 1024 # bytes
+  link_buffer_size: 512 # bytes
   bandwidth_chiplets: 10.0 # GB/s
   bandwidth_fpga: 5.0 # GB/s
   efficiency: 2.0 # pJ/bit

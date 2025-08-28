@@ -37,7 +37,8 @@ public:
 
   Interconnect(sc_module_name name, unsigned chip_id, unsigned axi_width,
                unsigned num_cores, unsigned num_interconnects,
-               unsigned buffer_size, unsigned flit_size, unsigned overhead_size,
+               unsigned flit_size, unsigned overhead_size,
+               unsigned staging_buffer_size, unsigned link_buffer_size,
                double bandwidth, double distance);
   ~Interconnect();
 
@@ -92,12 +93,13 @@ private:
   // parameters
   // -------------------------------------------------------
   const unsigned chip_id;
-  const unsigned buffer_size;
+  const unsigned axi_width;
   const unsigned flit_size;
   const unsigned overhead_size;
+  const unsigned staging_buffer_size;
+  const unsigned link_buffer_size;
   const double bandwidth;
   const double distance;
-  const unsigned axi_width;
 
   // -------------------------------------------------------
   // transport functions

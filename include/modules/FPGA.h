@@ -15,7 +15,7 @@ using namespace tlm_utils;
 
 SC_MODULE(FPGA) {
 private:
-  const unsigned int fpga_id;
+  const unsigned fpga_id;
 
   // -------------------------------------------------------
   // configs
@@ -27,43 +27,37 @@ private:
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
-  const unsigned int num_cores = 1;
-  const unsigned int num_axi_managers = 1;
-  const unsigned int num_axi_subordinates = 2;
-  const unsigned int num_interconnects = num_chiplets;
+  const unsigned num_cores = 1;
+  const unsigned num_axi_managers = 1;
+  const unsigned num_axi_subordinates = 2;
+  const unsigned num_interconnects = num_chiplets;
 
   // FPGA config
-  const unsigned int cores_clk_cycle =
-      fpga_config.get<unsigned int>("cores.clk_cycle");
+  const unsigned cores_clk_cycle = fpga_config.get<unsigned>("cores.clk_cycle");
 
-  const unsigned int cache_size = fpga_config.get<unsigned int>("cache.size");
-  const unsigned int cache_block_size =
-      fpga_config.get<unsigned int>("cache.block_size");
-  const unsigned int cache_store_buffer_size =
-      fpga_config.get<unsigned int>("cache.store_buffer_size");
+  const unsigned cache_size = fpga_config.get<unsigned>("cache.size");
+  const unsigned cache_block_size =
+      fpga_config.get<unsigned>("cache.block_size");
+  const unsigned cache_store_buffer_size =
+      fpga_config.get<unsigned>("cache.store_buffer_size");
 
-  const unsigned int axi_width = fpga_config.get<unsigned int>("axi.width");
-  const unsigned int axi_clk_cycle =
-      fpga_config.get<unsigned int>("axi.clk_cycle");
+  const unsigned axi_width = fpga_config.get<unsigned>("axi.width");
+  const unsigned axi_clk_cycle = fpga_config.get<unsigned>("axi.clk_cycle");
 
-  const unsigned int ram_size = fpga_config.get<unsigned int>("ram.size");
-  const unsigned int ram_clk_cycle =
-      fpga_config.get<unsigned int>("ram.clk_cycle");
+  const unsigned ram_size = fpga_config.get<unsigned>("ram.size");
+  const unsigned ram_clk_cycle = fpga_config.get<unsigned>("ram.clk_cycle");
 
   // interconnect config
-  const unsigned int interconnect_flit_size =
-      interconnect_config.get<unsigned int>("interconnect_protocol.flit_size");
-  const unsigned int interconnect_overhead_size =
-      interconnect_config.get<unsigned int>(
-          "interconnect_protocol.overhead_size");
-  const sc_time interconnect_pre_delay =
-      interconnect_config.get<sc_time>("interconnect_protocol.pre_delay");
-  const sc_time interconnect_post_delay =
-      interconnect_config.get<sc_time>("interconnect_protocol.post_delay");
+  const unsigned interconnect_flit_size =
+      interconnect_config.get<unsigned>("interconnect_protocol.flit_size");
+  const unsigned interconnect_overhead_size =
+      interconnect_config.get<unsigned>("interconnect_protocol.overhead_size");
   const sc_time interconnect_irq_delay =
       interconnect_config.get<sc_time>("interconnect_protocol.irq_delay");
-  const unsigned int interconnect_buffer_size =
-      interconnect_config.get<unsigned int>("interconnect.buffer_size");
+  const unsigned interconnect_staging_buffer_size =
+      interconnect_config.get<unsigned>("interconnect.staging_buffer_size");
+  const unsigned interconnect_link_buffer_size =
+      interconnect_config.get<unsigned>("interconnect.link_buffer_size");
   const double interconnect_bandwidth_chiplets =
       interconnect_config.get<double>("interconnect.bandwidth_chiplets");
   const double interconnect_bandwidth_fpga =

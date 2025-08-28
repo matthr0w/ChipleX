@@ -2,16 +2,17 @@
 
 #include "common/RoutingTable.h"
 
-Interconnect::Interconnect(sc_module_name name, unsigned int chip_id,
-                           unsigned int axi_width, unsigned int num_cores,
-                           unsigned int num_interconnects,
-                           unsigned int buffer_size, unsigned int flit_size,
-                           unsigned int overhead_size, double bandwidth,
+Interconnect::Interconnect(sc_module_name name, unsigned chip_id,
+                           unsigned axi_width, unsigned num_cores,
+                           unsigned num_interconnects, unsigned flit_size,
+                           unsigned overhead_size, unsigned link_buffer_size,
+                           unsigned staging_buffer_size, double bandwidth,
                            double distance)
     : sc_module(name), chip_id(chip_id), axi_width(axi_width),
-      buffer_size(buffer_size), flit_size(flit_size),
-      overhead_size(overhead_size), bandwidth(bandwidth), distance(distance),
-      utilization_tracker(this->name()),
+      flit_size(flit_size), overhead_size(overhead_size),
+      staging_buffer_size(staging_buffer_size),
+      link_buffer_size(link_buffer_size), bandwidth(bandwidth),
+      distance(distance), utilization_tracker(this->name()),
       axi_tsocket("axi_tsocket", *this, &Interconnect::nb_transport_fw_axi,
                   ARM::TLM::PROTOCOL_AXI4, axi_width),
       clock("clock") {
@@ -29,10 +30,10 @@ Interconnect::Interconnect(sc_module_name name, unsigned int chip_id,
 
   irq_sockets = new simple_initiator_socket_tagged<Interconnect>[num_cores];
 
-  staging_buffer.resize(1024, 0);
+  staging_buffer.resize(staging_buffer_size, 0);
 
-  tx_buffers.resize(num_interconnects, std::vector<uint8_t>(buffer_size, 0));
-  rx_buffers.resize(num_interconnects, std::vector<uint8_t>(buffer_size, 0));
+  tx_buffers.resize(num_interconnects, std::vector<uint8_t>(link_buffer_size, 0));
+  rx_buffers.resize(num_interconnects, std::vector<uint8_t>(link_buffer_size, 0));
 
   tx_ptrs.resize(tx_buffers.size(), 0);
   rx_ptrs.resize(rx_buffers.size(), 0);
@@ -294,14 +295,14 @@ tlm_sync_enum Interconnect::nb_transport_fw_axi(ARM::AXI::Payload &payload,
     phase = ARM::AXI::AW_READY;
     return TLM_UPDATED;
   case ARM::AXI::W_VALID:
-    if (staging_buffer_ptr + axi_width > 1024)
+    if (staging_buffer_ptr + axi_width > staging_buffer_size)
       return TLM_ACCEPTED; // backpressure
     w_queue.push_back(&payload);
     payload.ref();
     phase = ARM::AXI::W_READY;
     return TLM_UPDATED;
   case ARM::AXI::W_VALID_LAST:
-    if (staging_buffer_ptr + axi_width > 1024)
+    if (staging_buffer_ptr + axi_width > staging_buffer_size)
       return TLM_ACCEPTED; // backpressure
     wlast = true;
     w_queue.push_back(&payload);
