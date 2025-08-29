@@ -5,8 +5,7 @@ Core::Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
     : sc_module(name), chip_id(chip_id), core_id(core_id), axi_width(axi_width),
       irq_delay(irq_delay), utilization_tracker(this->name()),
       isocket("isocket", *this, &Core::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4,
-              axi_width),
-      clock("clock") {
+              axi_width) {
   irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
 
   MAX_INCR_BURST_SIZE = std::min(256 * axi_width / 8, 4096u);
@@ -125,9 +124,6 @@ tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
   switch (phase) {
   case BEGIN_REQ:
     delay += delays.irq_transfer(transaction);
-
-    // auto *transaction_copy =
-    // static_cast<ChipletPayload *>(&transaction)->clone();
 
     irq_queue.push_back(&transaction);
     interrupt_request.notify(delay);

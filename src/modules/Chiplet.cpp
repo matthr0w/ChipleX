@@ -33,7 +33,9 @@ void Chiplet::initialize() {
   core0.clock.bind(axi_clk);
   core1.clock.bind(axi_clk);
   memory.clock.bind(axi_clk);
-  interconnect.clock.bind(axi_clk);
+  interconnect.axi_clock.bind(axi_clk);
+  interconnect.protocol_clock.bind(axi_clk);
+  interconnect.phy_clock.bind(axi_clk);
 
   // -------------------------------------------------------
   // sockets
