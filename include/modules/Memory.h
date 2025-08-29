@@ -42,10 +42,6 @@ private:
 
   unsigned r_beat_count;
 
-  // fsm
-  bool active_txn = false;
-  uint32_t active_addr = UINT32_MAX;
-
   // memory
   std::vector<uint8_t> mem;
   std::vector<bool> write_flags;
@@ -54,6 +50,12 @@ private:
 
   void clock_posedge();
   void clock_negedge();
+
+  // -------------------------------------------------------
+  // state variables
+  // -------------------------------------------------------
+  bool active_txn = false;
+  uint32_t active_addr = UINT32_MAX;
 
   // -------------------------------------------------------
   // parameters

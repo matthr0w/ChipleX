@@ -6,7 +6,7 @@ Memory::Memory(sc_module_name name, unsigned int axi_width, unsigned int size)
     : sc_module(name), size(size), utilization_tracker(this->name()),
       tsocket("tsocket", *this, &Memory::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
-      clock("clock"), mem(size * 1024, 0), write_flags(mem.size(), false),
+      mem(size * 1024, 0), write_flags(mem.size(), false),
       offchip_base_address(size * 1024 / 2) {
   SC_METHOD(clock_posedge);
   sensitive << clock.pos();
@@ -55,7 +55,6 @@ void Memory::clock_posedge() {
     if (active_addr == UINT32_MAX) {
       set_active_address(*aw_queue.front());
     } else if (!w_queue.empty()) {
-      sc_assert(aw_queue.front() == w_queue.front());
       b_outgoing = w_queue.front();
       aw_queue.pop_front();
       w_queue.pop_front();

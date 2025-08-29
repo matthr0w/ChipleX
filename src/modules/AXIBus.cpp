@@ -54,9 +54,9 @@ tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
 
   // ---- READ CHANNEL ARBITRATION ----
   if (is_ar_valid(phase)) {
-    if (!S.R.busy) {
+    if (!S.R.locked) {
       // lock read channel for this payload
-      S.R.busy = true;
+      S.R.locked = true;
       S.R.cur = &payload;
       S.R.mgr = mgr_id;
     } else if (S.R.cur != &payload) {
@@ -68,9 +68,9 @@ tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
 
   // ---- WRITE CHANNEL ARBITRATION ----
   if (is_aw_valid(phase)) {
-    if (!S.W.busy) {
+    if (!S.W.locked) {
       // lock write channel for this payload
-      S.W.busy = true;
+      S.W.locked = true;
       S.W.cur = &payload;
       S.W.mgr = mgr_id;
     } else if (S.W.cur != &payload) {
@@ -82,7 +82,7 @@ tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
 
   // write data beats can only flow for the locked write tx
   if (is_w_valid(phase) || is_w_valid_last(phase)) {
-    if (!S.W.busy || S.W.cur != &payload) {
+    if (!S.W.locked || S.W.cur != &payload) {
       return TLM_ACCEPTED; // stall W beats until AW locked this channel
     }
   }

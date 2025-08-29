@@ -26,7 +26,7 @@ public:
 
 private:
   struct ChannelState {
-    bool busy = false;
+    bool locked = false;
     ARM::AXI::Payload *cur =
         nullptr;  // transaction currently using this channel
     int mgr = -1; // manager id
