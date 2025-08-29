@@ -18,7 +18,9 @@ using namespace tlm_utils;
 
 SC_MODULE(Interconnect) {
 public:
-  sc_core::sc_in<bool> clock;
+  sc_core::sc_in<bool> axi_clock;
+  sc_core::sc_in<bool> protocol_clock;
+  sc_core::sc_in<bool> phy_clock;
 
   // -------------------------------------------------------
   // trackers
@@ -51,10 +53,16 @@ private:
   std::deque<ARM::AXI::Payload *> ar_queue;
   std::deque<ARM::AXI::Payload *> aw_queue;
   std::deque<ARM::AXI::Payload *> w_queue;
-  std::deque<tlm_generic_payload *> phy_request_queue;
 
   ARM::AXI::Payload *r_outgoing = nullptr;
   ARM::AXI::Payload *b_outgoing = nullptr;
+
+  struct PHYRequest {
+    int interconnect_id;
+    tlm_generic_payload *transaction;
+  };
+
+  std::deque<PHYRequest> phy_queue;
 
   std::vector<uint8_t> staging_buffer;
   size_t staging_buffer_ptr = 0;
@@ -64,14 +72,9 @@ private:
   std::vector<size_t> tx_ptrs;
   std::vector<size_t> rx_ptrs;
 
-  // fsm
-  bool active_txn = false;
-  bool r_flit_sent = false;
-  bool wlast = false;
-
   unsigned beat_idx = 0;
-  unsigned flit_header_bytes;
-  unsigned flit_data_bytes;
+  size_t flit_header_bytes;
+  size_t flit_data_bytes;
 
   // flit metadata
   enum Command : uint8_t { READ_COMMAND = 0, WRITE_COMMAND = 1 };
@@ -86,8 +89,17 @@ private:
   uint16_t size = 0;
   bool fixed_address = true;
 
-  void clock_posedge();
-  void clock_negedge();
+  void axi_clock_posedge();
+  void protocol_clock_posedge();
+  void phy_clock_posedge();
+
+  // -------------------------------------------------------
+  // state variables
+  // -------------------------------------------------------
+  bool axi_active_txn = false;
+  bool axi_wlast_beat = false;
+  bool protocol_rreq_flit_sent = false;
+  std::vector<bool> phy_active_tx;
 
   // -------------------------------------------------------
   // parameters
@@ -105,6 +117,9 @@ private:
   // transport functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw_axi(ARM::AXI::Payload & payload,
+                                    ARM::AXI::Phase & phase);
+
+  tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload & payload,
                                     ARM::AXI::Phase & phase);
 
   tlm_sync_enum nb_transport_fw_phy(int id, tlm_generic_payload &transaction,
@@ -126,7 +141,8 @@ private:
   // debug functions
   // -------------------------------------------------------
   void dump_staging_buffer();
-  void dump_phy_buffers();
+  void dump_tx_buffers();
+  void dump_rx_buffers();
 
   // -------------------------------------------------------
   // delay model
