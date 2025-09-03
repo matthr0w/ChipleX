@@ -12,15 +12,17 @@
 #include "common/Tracker.h"
 #include "common/protocol/ChipletPayload.h"
 
+#include "modules/DMAEngine.h"
+
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-SC_MODULE(Interconnect) {
+SC_MODULE(Interconnect), public VirtualAXIInitiatorIF {
 public:
-  sc_core::sc_in<bool> axi_clock;
-  sc_core::sc_in<bool> protocol_clock;
-  sc_core::sc_in<bool> phy_clock;
+  sc_in<bool> axi_clock;
+  sc_in<bool> protocol_clock;
+  sc_in<bool> phy_clock;
 
   // -------------------------------------------------------
   // trackers
@@ -41,7 +43,7 @@ public:
                unsigned num_cores, unsigned num_interconnects,
                unsigned flit_size, unsigned overhead_size,
                unsigned staging_buffer_size, unsigned link_buffer_size,
-               double bandwidth, double distance);
+               double bandwidth, double distance, DMAEngine *dma_engine);
   ~Interconnect();
 
 private:
@@ -94,9 +96,19 @@ private:
   void phy_clock_posedge();
 
   // -------------------------------------------------------
+  // dma engine
+  // -------------------------------------------------------
+  DMAEngine *dma_engine = nullptr;
+  int dma_vm_id = -1;
+
+  // -------------------------------------------------------
   // state variables
   // -------------------------------------------------------
-  bool axi_active_txn = false;
+  bool axi_active_tx = false;
+  bool axi_active_rx = false;
+  int axi_active_rx_idx = -1;
+  bool axi_active_read = false;
+  bool axi_rlast_beat = false;
   bool axi_wlast_beat = false;
   bool protocol_rreq_flit_sent = false;
   std::vector<bool> phy_active_tx;
@@ -119,9 +131,11 @@ private:
   tlm_sync_enum nb_transport_fw_axi(ARM::AXI::Payload & payload,
                                     ARM::AXI::Phase & phase);
 
+public: // needs to be public for dma engine
   tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload & payload,
                                     ARM::AXI::Phase & phase);
 
+private:
   tlm_sync_enum nb_transport_fw_phy(int id, tlm_generic_payload &transaction,
                                     tlm_phase &phase, sc_time &delay);
 
@@ -131,11 +145,25 @@ private:
   // -------------------------------------------------------
   // helper functions
   // -------------------------------------------------------
-  void write_flit_header(uint8_t *flit_base, uint16_t flit_count,
-                         uint16_t flit_id, uint8_t request_id, uint8_t core_id,
-                         uint8_t source_id, uint8_t destination_id,
-                         Command command, uint32_t address, uint16_t size,
-                         bool fixed_address);
+  struct FlitHeader {
+    uint16_t flit_count;
+    uint16_t flit_id;
+    uint8_t request_id;
+    uint8_t core_id;
+    uint8_t source_id;
+    uint8_t destination_id;
+    Command command;
+    uint32_t address;
+    uint16_t size;
+    bool fixed_address;
+  };
+
+  size_t read_flit_header(uint8_t *flit_base, FlitHeader &flit_header);
+  size_t write_flit_header(uint8_t *flit_base, FlitHeader &flit_header);
+
+  bool send_dma_request(ARM::AXI::Payload & payload) {
+    return dma_engine->forward_from_virtual(dma_vm_id, payload);
+  }
 
   // -------------------------------------------------------
   // debug functions

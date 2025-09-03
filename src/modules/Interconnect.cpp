@@ -7,14 +7,17 @@ Interconnect::Interconnect(sc_module_name name, unsigned chip_id,
                            unsigned num_interconnects, unsigned flit_size,
                            unsigned overhead_size, unsigned link_buffer_size,
                            unsigned staging_buffer_size, double bandwidth,
-                           double distance)
+                           double distance, DMAEngine *dma_engine)
     : sc_module(name), chip_id(chip_id), axi_width(axi_width),
       flit_size(flit_size), overhead_size(overhead_size),
       staging_buffer_size(staging_buffer_size),
       link_buffer_size(link_buffer_size), bandwidth(bandwidth),
-      distance(distance), utilization_tracker(this->name()),
+      distance(distance), dma_engine(dma_engine),
+      utilization_tracker(this->name()),
       axi_tsocket("axi_tsocket", *this, &Interconnect::nb_transport_fw_axi,
                   ARM::TLM::PROTOCOL_AXI4, axi_width) {
+  dma_vm_id = dma_engine->register_virtual_initiator(this);
+
   phy_tsockets =
       new simple_target_socket_tagged<Interconnect>[num_interconnects];
   phy_isockets =
@@ -62,42 +65,6 @@ Interconnect::~Interconnect() {
   delete[] phy_tsockets;
   delete[] phy_isockets;
 }
-
-// RX BUFFER HANDLING
-// at source and read operation:
-//    transaction was an off-chip read request
-//    -> set to write operation, send to RAM via AXI
-//    -> send IRQ to core
-// at destination and read operation:
-//    transaction is an off-chip read request
-//    -> send to RAM via AXI
-//    -> send back to source via interconnects
-// at destination and write operation:
-//    transaction is an off-chip write request
-//    -> send to RAM via AXI
-//    -> send IRQ to core
-// not at source or destination
-//    transaction is not at the destination
-//    -> send to destination via interconnects
-// if (at_source && read_op) {
-//   transaction->set_command(TLM_WRITE_COMMAND);
-//   send_axi_request(*transaction);
-//   if (flit_id == flit_count - 1) { // send IRQ on last flit
-//     send_irq(*transaction, TLM_READ_COMMAND);
-//   }
-// } else if (at_destination) {
-//   if (read_op) {
-//     send_axi_request(*transaction);
-//     send_phy_request(*transaction);
-//   } else if (write_op) {
-//     send_axi_request(*transaction);
-//     if (flit_id == flit_count - 1) { // send IRQ on last flit
-//       send_irq(*transaction, TLM_WRITE_COMMAND);
-//     }
-//   }
-// } else {
-//   send_phy_request(*transaction);
-// }
 
 // ============================================================================
 // AXI Clock - Handle AXI side transactions and staging buffer input
@@ -186,7 +153,7 @@ void Interconnect::axi_clock_posedge() {
 }
 
 // ============================================================================
-// Protocol Clock - Construct and enqueue flits into Tx buffers
+// Protocol Clock - Construct and process flits in link buffers
 // ============================================================================
 void Interconnect::protocol_clock_posedge() {
   // -------------------------------------------------------
@@ -195,9 +162,12 @@ void Interconnect::protocol_clock_posedge() {
   if (r_outgoing && !protocol_rreq_flit_sent) {
     std::vector<uint8_t> flit(flit_size, 0);
 
-    write_flit_header(flit.data(), flit_count, /*flit_id*/ 0, request_id,
-                      core_id, source_id, destination_id, READ_COMMAND, address,
-                      size, fixed_address);
+    FlitHeader header{flit_count,   0,         request_id,
+                      core_id,      source_id, destination_id,
+                      READ_COMMAND, address,   size,
+                      fixed_address};
+
+    write_flit_header(flit.data(), header);
 
     const unsigned tx_idx = RoutingTable::get_route(chip_id, destination_id);
     const size_t tail = tx_ptrs[tx_idx];
@@ -207,7 +177,6 @@ void Interconnect::protocol_clock_posedge() {
       std::memcpy(&tx_buffers[tx_idx][tail], flit.data(), flit_size);
       tx_ptrs[tx_idx] += flit_size;
       protocol_rreq_flit_sent = true;
-      dump_tx_buffers();
     }
   }
 
@@ -224,7 +193,7 @@ void Interconnect::protocol_clock_posedge() {
       r_state = ACK;
       r_outgoing->unref();
       r_outgoing = nullptr;
-      axi_active_txn = false;
+      axi_active_tx = false;
     }
   }
 
@@ -254,14 +223,18 @@ void Interconnect::protocol_clock_posedge() {
       flit_payload = flit_data_bytes;
     } else if (axi_wlast_beat && w_queue.empty()) {
       flit_payload = staging_buffer_ptr; // final, possibly padded flit
+    } else if (axi_rlast_beat) {
+      flit_payload = staging_buffer_ptr; // final, possibly padded flit
     }
 
     if (flit_payload > 0) {
       std::vector<uint8_t> flit(flit_size, 0);
 
-      write_flit_header(flit.data(), flit_count, flit_id, request_id, core_id,
-                        source_id, destination_id, WRITE_COMMAND, address,
-                        flit_payload, fixed_address);
+      FlitHeader header{flit_count,   flit_id,        request_id,    core_id,
+                        source_id,    destination_id, WRITE_COMMAND, address,
+                        flit_payload, fixed_address};
+
+      write_flit_header(flit.data(), header);
 
       std::memcpy(flit.data() + flit_header_bytes, staging_buffer.data(),
                   flit_payload);
@@ -283,14 +256,20 @@ void Interconnect::protocol_clock_posedge() {
         // Increment for next flit
         address += flit_payload;
         flit_id++;
-        dump_tx_buffers();
       }
     }
 
     // Reset after last beat
     if (axi_wlast_beat && w_queue.empty() && staging_buffer_ptr == 0) {
-      axi_active_txn = false;
+      axi_active_tx = false;
       axi_wlast_beat = false;
+      beat_idx = 0;
+      flit_count = 0;
+      flit_id = 0;
+    } else if (axi_rlast_beat && staging_buffer_ptr == 0) {
+      axi_active_tx = false;
+      axi_active_read = false;
+      axi_rlast_beat = false;
       beat_idx = 0;
       flit_count = 0;
       flit_id = 0;
@@ -300,6 +279,113 @@ void Interconnect::protocol_clock_posedge() {
   // -------------------------------------------------------
   // Process Rx buffers
   // -------------------------------------------------------
+  for (size_t rx_idx = 0; rx_idx < rx_buffers.size(); ++rx_idx) {
+    if (rx_ptrs[rx_idx] < flit_size || axi_active_rx)
+      continue;
+
+    auto *flit_base = rx_buffers[rx_idx].data();
+    FlitHeader flit_header;
+
+    size_t offset = read_flit_header(flit_base, flit_header);
+
+    bool at_source = flit_header.source_id == chip_id;
+    bool at_destination = flit_header.destination_id == chip_id;
+    bool is_read = flit_header.command == READ_COMMAND;
+    bool is_write = flit_header.command == WRITE_COMMAND;
+
+    // at source and read operation:
+    //    transaction was an off-chip read request
+    //    -> set to write operation, send to RAM via AXI
+    //    -> send IRQ to core
+    // at destination and read operation:
+    //    transaction is an off-chip read request
+    //    -> send to RAM via AXI
+    //    -> send back to source via interconnects (backward path!)
+    // at destination and write operation:
+    //    transaction is an off-chip write request
+    //    -> send to RAM via AXI
+    //    -> send IRQ to core
+    // not at source or destination
+    //    transaction is not at the destination
+    //    -> send to destination via interconnects
+
+    if (at_source) {
+      unsigned axi_bytes = axi_width / 8;
+      unsigned beats = (flit_size - offset + axi_bytes - 1) / axi_bytes;
+      uint8_t len = beats - 1;
+      ARM::AXI::Size size = get_axi_size(axi_width);
+
+      ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
+          ARM::AXI::COMMAND_WRITE, flit_header.address, size, len,
+          ARM::AXI::BURST_INCR);
+
+      UserSignals user;
+      user.core = flit_header.core_id;
+      user.source = flit_header.source_id;
+      user.destination = flit_header.destination_id;
+      user.fixed_address = flit_header.fixed_address;
+
+      payload->id = request_id;
+      payload->user = user.encode();
+      payload->cache = ARM::AXI::CACHE_AR_DEVICE_NB;
+
+      payload->write_in(flit_base + offset);
+
+      bool result = send_dma_request(*payload);
+
+      if (result) {
+        axi_active_rx = true;
+        axi_active_rx_idx = rx_idx;
+      }
+    } else if (at_destination) {
+      unsigned axi_bytes = axi_width / 8;
+      unsigned beats = (flit_size - offset + axi_bytes - 1) / axi_bytes;
+      uint8_t len = beats - 1;
+      ARM::AXI::Size size = get_axi_size(axi_width);
+      ARM::AXI::Command command =
+          is_read ? ARM::AXI::COMMAND_READ : ARM::AXI::COMMAND_WRITE;
+
+      ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
+          command, flit_header.address, size, len, ARM::AXI::BURST_INCR);
+
+      UserSignals user;
+      user.core = flit_header.core_id;
+      user.source = flit_header.source_id;
+      user.destination = flit_header.destination_id;
+      user.fixed_address = flit_header.fixed_address;
+
+      payload->id = request_id;
+      payload->user = user.encode();
+      payload->cache = ARM::AXI::CACHE_AR_DEVICE_NB;
+
+      if (is_write)
+        payload->write_in(flit_base + offset);
+
+      bool result = send_dma_request(*payload);
+
+      if (result) {
+        axi_active_rx = true;
+        axi_active_rx_idx = rx_idx;
+      }
+    } else {
+      const unsigned tx_idx =
+          RoutingTable::get_route(chip_id, flit_header.destination_id);
+      const size_t tail = tx_ptrs[tx_idx];
+      const size_t room = tx_buffers[tx_idx].size() - tail;
+
+      if (room >= flit_size) {
+        std::memcpy(&tx_buffers[tx_idx][tail], rx_buffers[rx_idx].data(),
+                    flit_size);
+        tx_ptrs[tx_idx] += flit_size;
+
+        // Consume from Rx buffer
+        std::memmove(rx_buffers[rx_idx].data(),
+                     rx_buffers[rx_idx].data() + flit_size,
+                     rx_ptrs[rx_idx] - flit_size);
+        rx_ptrs[rx_idx] -= flit_size;
+      }
+    }
+  }
 }
 
 // ============================================================================
@@ -349,7 +435,6 @@ void Interconnect::phy_clock_posedge() {
       std::memcpy(&rx_buffers[rx_idx][tail],
                   request.transaction->get_data_ptr(), flit_size);
       rx_ptrs[rx_idx] += flit_size;
-      dump_rx_buffers();
 
       tlm_phase phase = BEGIN_RESP;
       sc_time delay = SC_ZERO_TIME;
@@ -365,9 +450,9 @@ tlm_sync_enum Interconnect::nb_transport_fw_axi(ARM::AXI::Payload &payload,
                                                 ARM::AXI::Phase &phase) {
   switch (phase) {
   case ARM::AXI::AR_VALID:
-    if (axi_active_txn)
+    if (axi_active_tx)
       return TLM_ACCEPTED; // backpressure
-    axi_active_txn = true;
+    axi_active_tx = true;
     ar_queue.push_back(&payload);
     payload.ref();
     phase = ARM::AXI::AR_READY;
@@ -376,9 +461,9 @@ tlm_sync_enum Interconnect::nb_transport_fw_axi(ARM::AXI::Payload &payload,
     r_state = ACK;
     return TLM_ACCEPTED;
   case ARM::AXI::AW_VALID:
-    if (axi_active_txn)
+    if (axi_active_tx)
       return TLM_ACCEPTED; // backpressure
-    axi_active_txn = true;
+    axi_active_tx = true;
     aw_queue.push_back(&payload);
     payload.ref();
     phase = ARM::AXI::AW_READY;
@@ -401,6 +486,81 @@ tlm_sync_enum Interconnect::nb_transport_fw_axi(ARM::AXI::Payload &payload,
   case ARM::AXI::B_READY:
     b_state = ACK;
     return TLM_ACCEPTED;
+  default:
+    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
+    return TLM_ACCEPTED;
+  }
+}
+
+tlm_sync_enum Interconnect::nb_transport_bw_axi(ARM::AXI::Payload &payload,
+                                                ARM::AXI::Phase &phase) {
+  switch (phase) {
+  case ARM::AXI::AR_READY:
+    return TLM_ACCEPTED;
+  case ARM::AXI::R_VALID:
+    if (axi_active_tx && !axi_active_read)
+      return TLM_ACCEPTED; // backpressure
+    axi_active_tx = true;
+    axi_active_read = true;
+    {
+      const unsigned beats = payload.get_beat_count();
+      const unsigned beat_bytes = payload.get_beat_data_length();
+      const size_t total_len = beats * beat_bytes;
+      flit_count = (total_len + flit_data_bytes - 1) / flit_data_bytes;
+
+      // Decode AXI signals
+      const UserSignals user = UserSignals::decode(payload.user);
+      request_id = payload.id;
+      core_id = user.core;
+      source_id = user.source;
+      destination_id = user.source;
+      address = payload.get_address();
+      fixed_address = user.fixed_address;
+    }
+    {
+      const size_t beat_bytes = payload.get_beat_data_length();
+      const int rx_idx = axi_active_rx_idx;
+      // Copy from payload buffer into staging buffer
+      payload.read_out_beat(beat_idx, &staging_buffer[staging_buffer_ptr]);
+      beat_idx += 1;
+      staging_buffer_ptr += beat_bytes;
+      dump_staging_buffer();
+    }
+    phase = ARM::AXI::R_READY;
+    return TLM_UPDATED;
+  case ARM::AXI::R_VALID_LAST: {
+    const size_t beat_bytes = payload.get_beat_data_length();
+    const int rx_idx = axi_active_rx_idx;
+    // Copy from payload buffer into staging buffer
+    payload.read_out_beat(beat_idx, &staging_buffer[staging_buffer_ptr]);
+    staging_buffer_ptr += beat_bytes;
+    // Consume read request flit from Rx buffer
+    std::memmove(rx_buffers[rx_idx].data(),
+                 rx_buffers[rx_idx].data() + flit_size,
+                 rx_ptrs[rx_idx] - flit_size);
+    rx_ptrs[rx_idx] -= flit_size;
+    dump_staging_buffer();
+  }
+    axi_rlast_beat = true;
+    phase = ARM::AXI::R_READY;
+    return TLM_UPDATED;
+  case ARM::AXI::AW_READY:
+    return TLM_ACCEPTED;
+  case ARM::AXI::W_READY:
+    return TLM_ACCEPTED;
+  case ARM::AXI::B_VALID: {
+    const int rx_idx = axi_active_rx_idx;
+    // Consume from Rx buffer
+    std::memmove(rx_buffers[rx_idx].data(),
+                 rx_buffers[rx_idx].data() + flit_size,
+                 rx_ptrs[rx_idx] - flit_size);
+    rx_ptrs[rx_idx] -= flit_size;
+  }
+    axi_active_rx = false;
+    axi_active_rx_idx = -1;
+    // TODO: IRQ to core
+    phase = ARM::AXI::B_READY;
+    return TLM_UPDATED;
   default:
     SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
     return TLM_ACCEPTED;
@@ -448,8 +608,6 @@ Interconnect::nb_transport_bw_phy(int id, tlm_generic_payload &transaction,
     phy_active_tx[id] = false;
     delete &transaction;
 
-    dump_tx_buffers();
-
     phase = END_RESP;
     return TLM_COMPLETED;
   }
@@ -460,85 +618,64 @@ Interconnect::nb_transport_bw_phy(int id, tlm_generic_payload &transaction,
 // -------------------------------------------------------
 // helper functions
 // -------------------------------------------------------
-void Interconnect::write_flit_header(uint8_t *flit_base, uint16_t flit_count,
-                                     uint16_t flit_id, uint8_t request_id,
-                                     uint8_t core_id, uint8_t source_id,
-                                     uint8_t destination_id, Command command,
-                                     uint32_t address, uint16_t size,
-                                     bool fixed_address) {
+size_t Interconnect::read_flit_header(uint8_t *flit_base,
+                                      Interconnect::FlitHeader &flit_header) {
+  // interconnect transport overhead
+  size_t offset = overhead_size;
+
+  std::memcpy(&flit_header.flit_count, flit_base + offset, sizeof(uint16_t));
+  offset += sizeof(uint16_t);
+  std::memcpy(&flit_header.flit_id, flit_base + offset, sizeof(uint16_t));
+  offset += sizeof(uint16_t);
+  std::memcpy(&flit_header.request_id, flit_base + offset, sizeof(uint8_t));
+  offset += sizeof(uint8_t);
+  std::memcpy(&flit_header.core_id, flit_base + offset, sizeof(uint8_t));
+  offset += sizeof(uint8_t);
+  std::memcpy(&flit_header.source_id, flit_base + offset, sizeof(uint8_t));
+  offset += sizeof(uint8_t);
+  std::memcpy(&flit_header.destination_id, flit_base + offset, sizeof(uint8_t));
+  offset += sizeof(uint8_t);
+  std::memcpy(&flit_header.command, flit_base + offset, sizeof(uint8_t));
+  offset += sizeof(uint8_t);
+  std::memcpy(&flit_header.address, flit_base + offset, sizeof(uint32_t));
+  offset += sizeof(uint32_t);
+  std::memcpy(&flit_header.size, flit_base + offset, sizeof(uint16_t));
+  offset += sizeof(uint16_t);
+  std::memcpy(&flit_header.fixed_address, flit_base + offset, sizeof(bool));
+  offset += sizeof(bool);
+
+  return offset;
+}
+
+size_t Interconnect::write_flit_header(uint8_t *flit_base,
+                                       Interconnect::FlitHeader &flit_header) {
   // interconnect transport overhead
   std::memset(flit_base, 0, overhead_size);
   size_t offset = overhead_size;
 
-  std::memcpy(flit_base + offset, &flit_count, sizeof(uint16_t));
+  std::memcpy(flit_base + offset, &flit_header.flit_count, sizeof(uint16_t));
   offset += sizeof(uint16_t);
-  std::memcpy(flit_base + offset, &flit_id, sizeof(uint16_t));
+  std::memcpy(flit_base + offset, &flit_header.flit_id, sizeof(uint16_t));
   offset += sizeof(uint16_t);
-
-  std::memcpy(flit_base + offset, &request_id, sizeof(uint8_t));
+  std::memcpy(flit_base + offset, &flit_header.request_id, sizeof(uint8_t));
   offset += sizeof(uint8_t);
-  std::memcpy(flit_base + offset, &core_id, sizeof(uint8_t));
+  std::memcpy(flit_base + offset, &flit_header.core_id, sizeof(uint8_t));
   offset += sizeof(uint8_t);
-  std::memcpy(flit_base + offset, &source_id, sizeof(uint8_t));
+  std::memcpy(flit_base + offset, &flit_header.source_id, sizeof(uint8_t));
   offset += sizeof(uint8_t);
-  std::memcpy(flit_base + offset, &destination_id, sizeof(uint8_t));
+  std::memcpy(flit_base + offset, &flit_header.destination_id, sizeof(uint8_t));
   offset += sizeof(uint8_t);
-
-  std::memcpy(flit_base + offset, &command, sizeof(uint8_t));
+  std::memcpy(flit_base + offset, &flit_header.command, sizeof(uint8_t));
   offset += sizeof(uint8_t);
-  std::memcpy(flit_base + offset, &address, sizeof(uint32_t));
+  std::memcpy(flit_base + offset, &flit_header.address, sizeof(uint32_t));
   offset += sizeof(uint32_t);
-  std::memcpy(flit_base + offset, &size, sizeof(uint16_t));
+  std::memcpy(flit_base + offset, &flit_header.size, sizeof(uint16_t));
   offset += sizeof(uint16_t);
-
-  std::memcpy(flit_base + offset, &fixed_address, sizeof(bool));
+  std::memcpy(flit_base + offset, &flit_header.fixed_address, sizeof(bool));
   offset += sizeof(bool);
+
+  return offset;
 }
-
-// void Interconnect::send_irq(tlm_generic_payload &transaction,
-//                             tlm_command command) {
-//   ChipletExtension *ext = nullptr;
-//   tlm_phase phase = BEGIN_REQ;
-//   sc_time delay = SC_ZERO_TIME;
-//   tlm_sync_enum tlm_resp;
-
-//   transaction.get_extension(ext);
-
-//   unsigned int flit_data_size =
-//   get_available_data_bytes_per_flit(transaction); unsigned int data_size =
-//       (ext->flit_count * flit_data_size) - ext->flit_padding;
-
-//   unsigned int address_offset = (ext->flit_count - 1) * flit_data_size;
-
-//   auto *irq = new ChipletPayload();
-
-//   irq->set_command(command);
-//   irq->set_address(transaction.get_address() - address_offset);
-//   irq->set_data_length(data_size);
-//   irq->set_request_id(ext->request_id);
-//   irq->set_core_id(ext->core_id);
-//   irq->set_source_id(ext->source_id);
-//   irq->set_destination_id(ext->destination_id);
-
-//   if (command == TLM_READ_COMMAND) {
-//     // send read IRQs to request core
-//     SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core" << ext->core_id);
-//     tlm_resp = irq_sockets[ext->core_id]->nb_transport_fw(*irq, phase,
-//     delay);
-//   } else {
-//     // send write IRQs to Core0
-//     SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core0");
-//     tlm_resp = irq_sockets[0]->nb_transport_fw(*irq, phase, delay);
-//   }
-
-//   if (tlm_resp == TLM_COMPLETED) {
-//     wait(delay);
-//   }
-
-//   SC_LOG_DEBUG(this, transaction, "Sending IRQ to Core done");
-
-//   delete irq;
-// }
 
 // -------------------------------------------------------
 // debug functions

@@ -47,8 +47,6 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         SC_LOG_DEBUG_NO_TX(&core, "READ OP - CORE CONTINUE");
 
         h->wait();
-
-        sc_stop();
       },
       [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {}}}};

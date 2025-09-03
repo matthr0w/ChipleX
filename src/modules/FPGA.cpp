@@ -14,12 +14,12 @@ FPGA::FPGA(sc_module_name name)
       // cache("Cache", axi_utils, fpga_id, cache_size, cache_block_size,
       //       cache_store_buffer_size, cache_arbitration_delay,
       //       cache_access_delay),
-      interconnect("Interconnect", fpga_id, axi_width, num_cores,
-                   num_interconnects, interconnect_flit_size,
-                   interconnect_overhead_size, interconnect_staging_buffer_size,
-                   interconnect_link_buffer_size,
-                   interconnect_bandwidth_chiplets, chiplet_distance_um),
-      memory("Memory", axi_width, ram_size) {
+      memory("Memory", axi_width, ram_size), dma_engine("DMAEngine", axi_width),
+      interconnect(
+          "Interconnect", fpga_id, axi_width, num_cores, num_interconnects,
+          interconnect_flit_size, interconnect_overhead_size,
+          interconnect_staging_buffer_size, interconnect_link_buffer_size,
+          interconnect_bandwidth_chiplets, chiplet_distance_um, &dma_engine) {
   initialize();
 }
 
@@ -29,6 +29,7 @@ void FPGA::initialize() {
   // -------------------------------------------------------
   core.clock.bind(axi_clk);
   memory.clock.bind(axi_clk);
+  dma_engine.clock.bind(axi_clk);
   interconnect.axi_clock.bind(axi_clk);
   interconnect.protocol_clock.bind(axi_clk);
   interconnect.phy_clock.bind(axi_clk);
@@ -46,8 +47,10 @@ void FPGA::initialize() {
   // caches
   // cache.isocket.bind(axi_manager_core.tsocket);
 
+  // dma engine
+  dma_engine.isocket.bind(*axi_bus.mgr_tsockets[1]);
+
   // interconnect
-  // interconnect_protocol.axi_isocket.bind(axi_manager_interconnect.tsocket);
   interconnect.irq_sockets[0].bind(core.irq_socket);
 
   // trackers

@@ -4,6 +4,7 @@
 
 #include "modules/AXIBus.h"
 #include "modules/Core.h"
+#include "modules/DMAEngine.h"
 #include "modules/Interconnect.h"
 #include "modules/Memory.h"
 
@@ -28,7 +29,7 @@ private:
   // parameters
   // -------------------------------------------------------
   const unsigned num_cores = 1;
-  const unsigned num_axi_managers = 1;
+  const unsigned num_axi_managers = 2;
   const unsigned num_axi_subordinates = 2;
   const unsigned num_interconnects = num_chiplets;
 
@@ -71,8 +72,9 @@ public:
   std::vector<UtilizationTracker *> utilization_trackers;
 
   Core core;
-  Memory memory;
   // Cache cache;
+  Memory memory;
+  DMAEngine dma_engine;
   Interconnect interconnect;
 
   SC_CTOR(FPGA);
