@@ -45,8 +45,32 @@ private:
   // memory
   std::vector<uint8_t> mem;
   std::vector<bool> write_flags;
-  std::map<uint32_t, unsigned int> allocated_ranges;
+  std::map<uint32_t, unsigned> allocated_ranges;
   uint32_t offchip_base_address;
+
+  struct FlitKey {
+    int request_id;
+    int source_id;
+    int core_id;
+
+    bool operator==(const FlitKey &other) const {
+      return request_id == other.request_id && source_id == other.source_id &&
+             core_id == other.core_id;
+    }
+  };
+
+  struct FlitKeyHash {
+    std::size_t operator()(const FlitKey &key) const {
+      std::size_t h1 = std::hash<int>()(key.request_id);
+      std::size_t h2 = std::hash<int>()(key.source_id);
+      std::size_t h3 = std::hash<int>()(key.core_id);
+      return h1 ^ (h2 << 1) ^ (h3 << 2);
+    }
+  };
+
+  std::unordered_map<FlitKey, uint32_t, FlitKeyHash> pending_flit_writes;
+  unsigned flit_data_size = 0;
+  unsigned flit_id = 0;
 
   void clock_posedge();
   void clock_negedge();
@@ -72,14 +96,13 @@ private:
   // helper functions
   // -------------------------------------------------------
   void set_active_address(ARM::AXI::Payload & payload);
-  uint32_t set_beat_address(uint64_t base, unsigned beat_idx,
+  uint32_t set_flit_address(ARM::AXI::Payload & payload);
+  uint32_t set_beat_address(uint32_t base, unsigned beat_idx,
                             unsigned beat_bytes, unsigned beats,
                             ARM::AXI::Burst burst);
 
-  uint32_t allocate_dynamic_address(ARM::AXI::Payload & payload, bool onchip,
-                                    uint32_t size);
-  void deallocate_dynamic_address(ARM::AXI::Payload & payload, uint32_t address,
-                                  unsigned int size);
+  uint32_t allocate_dynamic_address(bool onchip, unsigned size);
+  void deallocate_dynamic_address(uint32_t address, unsigned size);
 
   // -------------------------------------------------------
   // debug functions

@@ -162,10 +162,12 @@ tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload,
 // helper functions
 // -------------------------------------------------------
 void Memory::set_active_address(ARM::AXI::Payload &payload) {
-  uint32_t address = payload.get_base_address();
-  unsigned int data_size = payload.get_data_length();
+  uint32_t address = payload.get_address();
+  unsigned data_size = payload.get_data_length();
 
-  bool is_onchip = true;
+  const UserSignals user = UserSignals::decode(payload.user);
+
+  bool is_onchip = user.destination == user.source;
 
   bool read_op = payload.get_command() == ARM::AXI::COMMAND_READ;
   bool write_op = payload.get_command() == ARM::AXI::COMMAND_WRITE;
@@ -174,45 +176,138 @@ void Memory::set_active_address(ARM::AXI::Payload &payload) {
     if (read_op) {
       // on-chip read request
       // free allocated address range on read
-      deallocate_dynamic_address(payload, address, data_size);
+      deallocate_dynamic_address(address, data_size);
       active_addr = address;
-      // } else if (write_op && ext->flit_id != -1) {
-      //   // off-chip read response
-      //   set_flit_address(transaction);
-    } else if (write_op) { //&& ext->fixed_address) {
+    } else if (write_op && user.flit_count == 0) {
+      // off-chip read response
+      active_addr = set_flit_address(payload);
+    } else if (write_op && user.fixed_address) {
       // on-chip fixed write request
       allocated_ranges[address] = data_size;
       active_addr = address;
+    } else if (write_op && !user.fixed_address) {
+      // on-chip dynamic write request
+      active_addr = allocate_dynamic_address(true, data_size);
     }
-    // } else if (write_op && !ext->fixed_address) {
-    //   // on-chip dynamic write request
-    //   uint32_t dynamic_address =
-    //       allocate_dynamic_address(transaction, true, data_size);
-    //   transaction.set_address(dynamic_address);
-    // }
+  } else {
+    if (read_op) {
+      // off-chip read request
+      active_addr = address + offchip_base_address;
+      // free allocated address range on read
+      deallocate_dynamic_address(address + offchip_base_address, data_size);
+    } else if (write_op && user.fixed_address) {
+      // off-chip fixed write request
+      active_addr = address + offchip_base_address;
+      allocated_ranges[address + offchip_base_address] = data_size;
+    } else if (write_op && !user.fixed_address) {
+      // off-chip dynamic write request
+      active_addr = set_flit_address(payload);
+    }
   }
-  // } else {
-  //   if (read_op) {
-  //     // off-chip read request
-  //     transaction.set_address(address + offchip_base_address);
-  //     // free allocated address range on read
-  //     deallocate_dynamic_address(transaction, transaction.get_address(),
-  //                                transaction.get_data_length());
-  //     // for read response: source becomes destination
-  //     static_cast<ChipletPayload *>(&transaction)
-  //         ->set_destination_id(ext->source_id);
-  //   } else if (write_op && ext->fixed_address) {
-  //     // off-chip fixed write request
-  //     transaction.set_address(address + offchip_base_address);
-  //     allocated_ranges[address + offchip_base_address] = data_size;
-  //   } else if (write_op && !ext->fixed_address) {
-  //     // off-chip dynamic write request
-  //     set_flit_address(transaction);
-  //   }
-  // }
 }
 
-uint32_t Memory::set_beat_address(uint64_t base, unsigned beat_idx,
+uint32_t Memory::set_flit_address(ARM::AXI::Payload &payload) {
+  const UserSignals user = UserSignals::decode(payload.user);
+
+  int request_id = payload.id;
+  int source_id = user.source;
+  int core_id = user.core;
+
+  FlitKey flit_key = {request_id, source_id, core_id};
+
+  if (flit_id == 0) {
+    flit_data_size = payload.get_data_length();
+    unsigned request_data_size = flit_data_size * user.flit_count;
+    // allocate dynamic address range with first flit
+    uint32_t flit_base_address =
+        allocate_dynamic_address(false, request_data_size);
+    pending_flit_writes[flit_key] = flit_base_address;
+    flit_id += 1;
+    return flit_base_address;
+  } else {
+    // increment dynamic address for upcoming flits
+    auto it = pending_flit_writes.find(flit_key);
+
+    uint32_t flit_base_address = it->second;
+    uint32_t flit_address = flit_base_address + flit_id * flit_data_size;
+
+    if (flit_id == user.flit_count - 1) {
+      // deallocate flit padding on last flit
+      deallocate_dynamic_address(flit_address + payload.get_data_length(),
+                                 flit_data_size - payload.get_data_length());
+      flit_id = 0;
+      // remove pending on last flit
+      pending_flit_writes.erase(it);
+    } else {
+      flit_id += 1;
+    }
+
+    return flit_address;
+  }
+}
+
+uint32_t Memory::allocate_dynamic_address(bool onchip, unsigned length) {
+  uint32_t base_address = onchip ? 0 : offchip_base_address;
+  uint32_t max_address = onchip ? offchip_base_address : size * 1024;
+
+  uint32_t address = base_address;
+  for (const auto &[start, len] : allocated_ranges) {
+    if (address + length <= start) {
+      break;
+    }
+    address = start + len;
+  }
+
+  if (address + length > max_address) {
+    SC_LOG_DEBUG_NO_TX(this, "Out of memory for dynamic address allocation");
+    address = base_address;
+  }
+
+  SC_LOG_DEBUG_NO_TX(this, "Allocate: " << std::hex << address << " - "
+                                        << address + length);
+
+  allocated_ranges[address] = length;
+  return address;
+}
+
+void Memory::deallocate_dynamic_address(uint32_t address, unsigned length) {
+  auto it = allocated_ranges.lower_bound(address);
+  if (it != allocated_ranges.begin() &&
+      (it == allocated_ranges.end() || it->first > address)) {
+    --it;
+  }
+
+  if (it == allocated_ranges.end() || address < it->first) {
+    SC_LOG_DEBUG_NO_TX(this,
+                       "Tried to deallocate an unallocated address range");
+    return;
+  }
+
+  uint32_t start = it->first;
+  uint32_t end = start + it->second;
+  uint32_t new_start = address + length;
+  uint32_t new_end = end;
+
+  SC_LOG_DEBUG_NO_TX(this, "Deallocate: " << std::hex << start << " - " << end);
+
+  allocated_ranges.erase(it);
+
+  if (address > start) {
+    // left part remains
+    SC_LOG_DEBUG_NO_TX(this,
+                       "Allocate: " << std::hex << start << " - " << address);
+    allocated_ranges[start] = address - start;
+  }
+
+  if (new_start < new_end) {
+    // right part remains
+    SC_LOG_DEBUG_NO_TX(this, "Allocate: " << std::hex << new_start << " - "
+                                          << new_end);
+    allocated_ranges[new_start] = new_end - new_start;
+  }
+}
+
+uint32_t Memory::set_beat_address(uint32_t base, unsigned beat_idx,
                                   unsigned beat_bytes, unsigned beats,
                                   ARM::AXI::Burst burst) {
   switch (burst) {
@@ -232,68 +327,6 @@ uint32_t Memory::set_beat_address(uint64_t base, unsigned beat_idx,
   default:
     // treat unknown as INCR (safe fallback)
     return base + static_cast<uint32_t>(beat_idx * beat_bytes);
-  }
-}
-
-uint32_t Memory::allocate_dynamic_address(ARM::AXI::Payload &payload,
-                                          bool onchip, uint32_t size) {
-  uint32_t base_address = onchip ? 0 : offchip_base_address;
-  uint32_t max_address = onchip ? offchip_base_address : size * 1024;
-
-  uint32_t address = base_address;
-  for (const auto &[start, len] : allocated_ranges) {
-    if (address + size <= start) {
-      break;
-    }
-    address = start + len;
-  }
-
-  if (address + size > max_address) {
-    SC_LOG_DEBUG_NO_TX(this, "Out of memory for dynamic address allocation");
-    address = base_address;
-  }
-
-  SC_LOG_DEBUG_NO_TX(this, "Allocate: " << std::hex << address << " - "
-                                        << address + size);
-
-  allocated_ranges[address] = size;
-  return address;
-}
-
-void Memory::deallocate_dynamic_address(ARM::AXI::Payload &payload,
-                                        uint32_t address, unsigned int size) {
-  auto it = allocated_ranges.lower_bound(address);
-  if (it != allocated_ranges.begin() &&
-      (it == allocated_ranges.end() || it->first > address)) {
-    --it;
-  }
-
-  if (it == allocated_ranges.end() || address < it->first) {
-    SC_LOG_DEBUG_NO_TX(this,
-                       "Tried to deallocate an unallocated address range");
-    return;
-  }
-
-  uint32_t start = it->first;
-  uint32_t end = start + it->second;
-  uint32_t new_start = address + size;
-  uint32_t new_end = end;
-
-  SC_LOG_DEBUG_NO_TX(this, "Deallocate: " << std::hex << start << " - " << end);
-
-  allocated_ranges.erase(it);
-
-  if (address > start) {
-    // left part remains
-    SC_LOG_DEBUG_NO_TX(this, std::hex << start << " - " << address);
-    allocated_ranges[start] = address - start;
-  }
-
-  if (new_start < new_end) {
-    // right part remains
-    SC_LOG_DEBUG_NO_TX(this, "Allocate: " << std::hex << new_start << " - "
-                                          << new_end);
-    allocated_ranges[new_start] = new_end - new_start;
   }
 }
 
