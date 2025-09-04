@@ -311,7 +311,7 @@ void Interconnect::protocol_clock_posedge() {
 
     if (at_source) {
       unsigned axi_bytes = axi_width / 8;
-      unsigned beats = (flit_size - offset + axi_bytes - 1) / axi_bytes;
+      unsigned beats = (flit_header.size + axi_bytes - 1) / axi_bytes;
       uint8_t len = beats - 1;
       ARM::AXI::Size size = get_axi_size(axi_width);
 
@@ -339,7 +339,7 @@ void Interconnect::protocol_clock_posedge() {
       }
     } else if (at_destination) {
       unsigned axi_bytes = axi_width / 8;
-      unsigned beats = (flit_size - offset + axi_bytes - 1) / axi_bytes;
+      unsigned beats = (flit_header.size + axi_bytes - 1) / axi_bytes;
       uint8_t len = beats - 1;
       ARM::AXI::Size size = get_axi_size(axi_width);
       ARM::AXI::Command command =
