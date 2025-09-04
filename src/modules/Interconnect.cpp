@@ -324,6 +324,7 @@ void Interconnect::protocol_clock_posedge() {
       user.source = flit_header.source_id;
       user.destination = flit_header.destination_id;
       user.fixed_address = flit_header.fixed_address;
+      user.flit_count = flit_header.flit_count;
 
       payload->id = request_id;
       payload->user = user.encode();
@@ -353,6 +354,7 @@ void Interconnect::protocol_clock_posedge() {
       user.source = flit_header.source_id;
       user.destination = flit_header.destination_id;
       user.fixed_address = flit_header.fixed_address;
+      user.flit_count = flit_header.flit_count;
 
       payload->id = request_id;
       payload->user = user.encode();
@@ -366,6 +368,7 @@ void Interconnect::protocol_clock_posedge() {
       if (result) {
         axi_active_rx = true;
         axi_active_rx_idx = rx_idx;
+        axi_active_flit_id = flit_header.flit_id;
       }
     } else {
       const unsigned tx_idx =
@@ -556,9 +559,17 @@ tlm_sync_enum Interconnect::nb_transport_bw_axi(ARM::AXI::Payload &payload,
                  rx_ptrs[rx_idx] - flit_size);
     rx_ptrs[rx_idx] -= flit_size;
   }
+    {
+      // Decode AXI signals
+      const UserSignals user = UserSignals::decode(payload.user);
+      uint16_t active_flit_count = user.flit_count;
+      // IRQ to cores
+      if (axi_active_flit_id == active_flit_count - 1) {
+        send_irq(payload);
+      }
+    }
     axi_active_rx = false;
     axi_active_rx_idx = -1;
-    // TODO: IRQ to core
     phase = ARM::AXI::B_READY;
     return TLM_UPDATED;
   default:
@@ -675,6 +686,35 @@ size_t Interconnect::write_flit_header(uint8_t *flit_base,
   offset += sizeof(bool);
 
   return offset;
+}
+
+void Interconnect::send_irq(ARM::AXI::Payload &payload) {
+  tlm_phase phase = BEGIN_REQ;
+  sc_time delay = SC_ZERO_TIME;
+  tlm_sync_enum tlm_resp;
+
+  const UserSignals user = UserSignals::decode(payload.user);
+
+  unsigned int data_size =
+      (user.flit_count - 1) * flit_data_bytes + payload.get_data_length();
+
+  unsigned int address_offset = (user.flit_count - 1) * flit_data_bytes;
+
+  auto *irq = new ChipletPayload();
+
+  irq->set_command(TLM_READ_COMMAND);
+  irq->set_address(payload.get_address() - address_offset);
+  irq->set_data_length(data_size);
+
+  if (user.destination == user.source) {
+    // send read IRQs to request core
+    SC_LOG_DEBUG_NO_TX(this, "Sending IRQ to Core" << user.core);
+    tlm_resp = irq_sockets[user.core]->nb_transport_fw(*irq, phase, delay);
+  } else {
+    // send write IRQs to Core0
+    SC_LOG_DEBUG_NO_TX(this, "Sending IRQ to Core0");
+    tlm_resp = irq_sockets[0]->nb_transport_fw(*irq, phase, delay);
+  }
 }
 
 // -------------------------------------------------------

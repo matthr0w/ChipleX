@@ -107,6 +107,7 @@ private:
   bool axi_active_tx = false;
   bool axi_active_rx = false;
   int axi_active_rx_idx = -1;
+  int axi_active_flit_id = -1;
   bool axi_active_read = false;
   bool axi_rlast_beat = false;
   bool axi_wlast_beat = false;
@@ -164,6 +165,8 @@ private:
   bool send_dma_request(ARM::AXI::Payload & payload) {
     return dma_engine->forward_from_virtual(dma_vm_id, payload);
   }
+
+  void send_irq(ARM::AXI::Payload & payload);
 
   // -------------------------------------------------------
   // debug functions
