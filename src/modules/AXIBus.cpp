@@ -264,7 +264,7 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
 
   std::ostringstream _sc_stream;
   _sc_stream << std::left << std::setw(16) << sc_time_stamp()
-             << " |  \033[32m[AXI]\033[0m   | " << std::setw(32) << name()
+             << " | \033[34m[DEBUG]\033[0m  | " << std::setw(32) << name()
              << " | ";
 
   // channel source/destination info
