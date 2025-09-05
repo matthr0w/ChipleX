@@ -1,10 +1,10 @@
 #pragma once
 
-#include "common/Tracker.h"
-
 #include "configs.h"
 #include "globals.h"
 #include "logging.h"
+
+#include "common/Tracker.h"
 
 #include "modules/Core.h"
 
@@ -33,19 +33,15 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         auto h =
             core.write(1, 2, 0x1000, reinterpret_cast<unsigned char *>(data),
-                       num_bytes, true);
-
-        SC_LOG_DEBUG_NO_TX(&core, "WRITE OP - CORE CONTINUE");
-
+                       num_bytes, false);
         h->wait();
 
-        SC_LOG_DEBUG_NO_TX(&core, "WRITE OP - DATA READY");
-
         h = core.read(2, 2, 0x1000, reinterpret_cast<unsigned char *>(data),
-                      num_bytes, true);
+                      num_bytes, false);
+        h->wait();
 
-        SC_LOG_DEBUG_NO_TX(&core, "READ OP - CORE CONTINUE");
-
+        h = core.write(1, 2, 0x1000, reinterpret_cast<unsigned char *>(data),
+                       num_bytes, false);
         h->wait();
       },
       [](Core &core, UtilizationTracker *tracker,
