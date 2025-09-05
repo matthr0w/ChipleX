@@ -3,6 +3,7 @@
 #include <systemc>
 
 #include "modules/AXIBus.h"
+#include "modules/Cache.h"
 #include "modules/Core.h"
 #include "modules/DMAEngine.h"
 #include "modules/Interconnect.h"
@@ -72,7 +73,7 @@ public:
   std::vector<UtilizationTracker *> utilization_trackers;
 
   Core core;
-  // Cache cache;
+  Cache cache;
   Memory memory;
   DMAEngine dma_engine;
   Interconnect interconnect;

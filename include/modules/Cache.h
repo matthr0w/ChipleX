@@ -2,20 +2,19 @@
 
 #include <systemc>
 #include <tlm>
-#include <tlm_utils/simple_initiator_socket.h>
-#include <tlm_utils/simple_target_socket.h>
 #include <vector>
 
-#include "logging.h"
+#include "ARM/TLM/arm_axi4.h"
 
 #include "common/Tracker.h"
 
 using namespace sc_core;
 using namespace tlm;
-using namespace tlm_utils;
 
 SC_MODULE(Cache) {
 public:
+  sc_in<bool> clock;
+
   // -------------------------------------------------------
   // trackers
   // -------------------------------------------------------
@@ -24,39 +23,33 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  simple_target_socket<Cache> tsocket;
-  simple_initiator_socket<Cache> isocket;
+  ARM::AXI::SimpleTargetSocket<Cache> tsocket;
+  ARM::AXI::SimpleInitiatorSocket<Cache> isocket;
 
-  Cache(sc_module_name name, unsigned int chip_id, unsigned int cache_size,
-        unsigned int cache_block_size, unsigned int cache_store_buffer_size,
-        sc_time cache_arbitration_delay, sc_time cache_access_delay);
-
-  void dump();
-  void report_rates();
+  Cache(sc_module_name name, unsigned chip_id, unsigned axi_width,
+        unsigned cache_size, unsigned cache_block_size,
+        unsigned cache_store_buffer_size);
 
 private:
-  void send_axi_request(tlm_generic_payload & transaction, tlm_command command,
-                        uint32_t address, unsigned char *data,
-                        unsigned int data_length);
+  enum ChannelState { CLEAR, REQ, ACK };
 
-  struct Request {
-    tlm_generic_payload *transaction;
-    tlm_phase *phase;
-    sc_time *delay;
-  };
+  ChannelState ar_state = CLEAR;
+  ChannelState aw_state = CLEAR;
+  ChannelState w_state = CLEAR;
 
-  std::deque<Request> request_queue;
-  void process_request_queue();
+  std::deque<ARM::AXI::Payload *> ar_queue_in;
+  std::deque<ARM::AXI::Payload *> aw_queue_in;
+  std::deque<ARM::AXI::Payload *> w_queue_in;
+  std::deque<ARM::AXI::Payload *> ar_queue_out;
+  std::deque<ARM::AXI::Payload *> aw_queue_out;
+  std::deque<ARM::AXI::Payload *> w_queue_out;
 
-  struct StoreBufferEntry {
-    tlm_generic_payload *transaction;
-    uint32_t address;
-    std::vector<uint8_t> data;
-    bool wlast;
-  };
+  ARM::AXI::Payload *r_outgoing = nullptr;
+  ARM::AXI::Payload *b_outgoing = nullptr;
 
-  std::deque<StoreBufferEntry> store_buffer;
-  void drain_store_buffer();
+  unsigned r_beat_count = 0;
+  unsigned w_beat_count_in = 0;
+  unsigned w_beat_count_out = 0;
 
   struct CacheLine {
     bool valid = false;
@@ -67,71 +60,83 @@ private:
   };
 
   std::vector<CacheLine> cache_lines;
-  unsigned int num_lines;
-  unsigned int num_accesses;
-  unsigned int num_hits;
-  unsigned int num_misses;
 
-  void access_cache(tlm_generic_payload & transaction);
+  struct CacheLineRequest {
+    CacheLine *line = nullptr;
+    uint32_t address = 0;
+    uint32_t tag = 0;
+  };
 
-  std::unordered_map<tlm::tlm_generic_payload *, bool> cache_skipped;
+  std::deque<CacheLineRequest> cache_line_requests;
+  std::unordered_map<ARM::AXI::Payload *, CacheLineRequest>
+      active_cache_line_requests;
+
+  struct StoreBufferEntry {
+    uint32_t address;
+    std::vector<uint8_t> data;
+    bool valid = false;
+    bool ongoing = false;
+  };
+
+  std::deque<StoreBufferEntry> store_buffer;
+  size_t store_buffer_head = 0;
+  size_t store_buffer_tail = 0;
+
+  uint8_t *beat_data;
+
+  std::unordered_map<ARM::AXI::Payload *, bool> cache_skipped;
+
+  void clock_posedge();
+  void clock_negedge();
+
+  // debug output
+  unsigned num_lines;
+  unsigned num_accesses;
+  unsigned num_hits;
+  unsigned num_misses;
+
+  // -------------------------------------------------------
+  // state variables
+  // -------------------------------------------------------
+  bool active_txn = false;
+  bool r_beat_ready = false;
+  bool b_beat_ready = false;
 
   // -------------------------------------------------------
   // parameters
   // -------------------------------------------------------
-  const unsigned int chip_id;
-  const unsigned int cache_size;
-  const unsigned int cache_block_size;
-  const unsigned int cache_store_buffer_size;
-  const sc_time cache_arbitration_delay;
-  const sc_time cache_access_delay;
-
-  // -------------------------------------------------------
-  // events
-  // -------------------------------------------------------
-  sc_event req_evt;
-  sc_event resp_evt;
-  sc_event axi_resp_evt;
-  sc_event store_buffer_in_evt;
-  sc_event store_buffer_out_evt;
-
-  // -------------------------------------------------------
-  // peqs
-  // -------------------------------------------------------
-  peq_with_get<tlm_generic_payload> peq;
-  void process_transaction();
+  const unsigned chip_id;
+  const unsigned axi_width;
+  const unsigned cache_size;
+  const unsigned cache_block_size;
+  const unsigned cache_store_buffer_size;
 
   // -------------------------------------------------------
   // transport functions
   // -------------------------------------------------------
-  tlm_sync_enum nb_transport_fw(tlm_generic_payload & transaction,
-                                tlm_phase & phase, sc_time & delay);
+  tlm_sync_enum nb_transport_fw(ARM::AXI::Payload & payload,
+                                ARM::AXI::Phase & phase);
 
-  tlm_sync_enum nb_transport_bw(tlm_generic_payload & transaction,
-                                tlm_phase & phase, sc_time & delay);
+  tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload,
+                                ARM::AXI::Phase & phase);
 
   // -------------------------------------------------------
-  // delay model
+  // helper functions
   // -------------------------------------------------------
-  struct DelayModel {
-  private:
-    const Cache &module;
+  uint32_t set_beat_address(uint32_t base, unsigned beat_idx,
+                            unsigned beat_bytes, unsigned beats,
+                            ARM::AXI::Burst burst);
 
-  public:
-    DelayModel(const Cache &m) : module(m) {}
+  void enqueue_cacheline_read();
+  void complete_cacheline_read(ARM::AXI::Payload * payload);
 
-    sc_time cache_arbitration(tlm_generic_payload &transaction) const {
-      SC_LOG_DELAY(&module, transaction, "Cache Arbitration",
-                   module.cache_arbitration_delay);
-      return module.cache_arbitration_delay;
-    }
+  void enqueue_storebuffer_write();
+  void complete_storebuffer_write(ARM::AXI::Payload * payload);
 
-    sc_time cache_access(tlm_generic_payload &transaction) const {
-      SC_LOG_DELAY(&module, transaction, "Cache Access",
-                   module.cache_access_delay);
-      return module.cache_access_delay;
-    }
-  };
-
-  DelayModel delays{*this};
+  // -------------------------------------------------------
+  // debug functions
+  // -------------------------------------------------------
+public:
+  void dump();
+  void report_rates();
 };

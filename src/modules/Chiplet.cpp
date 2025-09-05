@@ -11,12 +11,10 @@ Chiplet::Chiplet(sc_module_name name)
               num_axi_subordinates),
       core0("Core0", chiplet_id, 0, axi_width, interconnect_irq_delay),
       core1("Core1", chiplet_id, 1, axi_width, interconnect_irq_delay),
-      // cache0("Cache0", axi_utils, chiplet_id, cache_size, cache_block_size,
-      //        cache_store_buffer_size, cache_arbitration_delay,
-      //        cache_access_delay),
-      // cache1("Cache1", axi_utils, chiplet_id, cache_size, cache_block_size,
-      //        cache_store_buffer_size, cache_arbitration_delay,
-      //        cache_access_delay),
+      cache0("Cache0", chiplet_id, axi_width, cache_size, cache_block_size,
+             cache_store_buffer_size),
+      cache1("Cache1", chiplet_id, axi_width, cache_size, cache_block_size,
+             cache_store_buffer_size),
       memory("Memory", axi_width, ram_size), dma_engine("DMAEngine", axi_width),
       interconnect(
           "Interconnect", chiplet_id, axi_width, num_cores, num_interconnects,
@@ -32,6 +30,8 @@ void Chiplet::initialize() {
   // -------------------------------------------------------
   core0.clock.bind(axi_clk);
   core1.clock.bind(axi_clk);
+  cache0.clock.bind(axi_clk);
+  cache1.clock.bind(axi_clk);
   memory.clock.bind(axi_clk);
   dma_engine.clock.bind(axi_clk);
   interconnect.axi_clock.bind(axi_clk);
@@ -46,12 +46,12 @@ void Chiplet::initialize() {
   axi_bus.sub_isockets[1]->bind(interconnect.axi_tsocket);
 
   // cores
-  core0.isocket.bind(*axi_bus.mgr_tsockets[0]);
-  core1.isocket.bind(*axi_bus.mgr_tsockets[1]);
+  core0.isocket.bind(cache0.tsocket);
+  core1.isocket.bind(cache1.tsocket);
 
   // caches
-  // cache0.isocket.bind(axi_manager_core0.tsocket);
-  // cache1.isocket.bind(axi_manager_core1.tsocket);
+  cache0.isocket.bind(*axi_bus.mgr_tsockets[0]);
+  cache1.isocket.bind(*axi_bus.mgr_tsockets[1]);
 
   // dma engine
   dma_engine.isocket.bind(*axi_bus.mgr_tsockets[2]);

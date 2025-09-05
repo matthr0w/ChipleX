@@ -3,6 +3,7 @@
 #include <systemc>
 
 #include "modules/AXIBus.h"
+#include "modules/Cache.h"
 #include "modules/Core.h"
 #include "modules/DMAEngine.h"
 #include "modules/Interconnect.h"
@@ -75,8 +76,8 @@ public:
 
   Core core0;
   Core core1;
-  // Cache cache0;
-  // Cache cache1;
+  Cache cache0;
+  Cache cache1;
   Memory memory;
   DMAEngine dma_engine;
   Interconnect interconnect;
