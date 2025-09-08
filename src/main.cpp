@@ -85,22 +85,24 @@ int sc_main(int argc, char *argv[]) {
   // assign user code
   // chiplets
   for (unsigned int i = 0; i < num_chiplets; ++i) {
-    auto it_core0 = core_code.find({i + 1, 0});
-    if (it_core0 != core_code.end()) {
-      chiplets[i]->core0.thread_fn = it_core0->second.first;
-      chiplets[i]->core0.interrupt_fn = it_core0->second.second;
-    }
-    auto it_core1 = core_code.find({i + 1, 1});
-    if (it_core1 != core_code.end()) {
-      chiplets[i]->core1.thread_fn = it_core1->second.first;
-      chiplets[i]->core1.interrupt_fn = it_core1->second.second;
+    auto &chiplet = chiplets[i];
+
+    for (unsigned int c = 0; c < chiplet->num_cores; ++c) {
+      auto it = core_code.find({i + 1, c});
+      if (it != core_code.end()) {
+        chiplet->cores[c]->thread_fn = it->second.first;
+        chiplet->cores[c]->interrupt_fn = it->second.second;
+      }
     }
   }
+
   // FPGA
-  auto it_core = core_code.find({0, 0});
-  if (it_core != core_code.end()) {
-    fpga.core.thread_fn = it_core->second.first;
-    fpga.core.interrupt_fn = it_core->second.second;
+  for (unsigned int c = 0; c < fpga.num_cores; ++c) {
+    auto it = core_code.find({0, c});
+    if (it != core_code.end()) {
+      fpga.cores[c]->thread_fn = it->second.first;
+      fpga.cores[c]->interrupt_fn = it->second.second;
+    }
   }
 
   // connect chiplets in a ring topology
@@ -109,23 +111,23 @@ int sc_main(int argc, char *argv[]) {
     int prev = (i - 1 + num_chiplets) % num_chiplets;
 
     // connect interconnect2 to next chiplet interconnect1
-    chiplets[i]->interconnect.phy_isockets[2].bind(
-        chiplets[next]->interconnect.phy_tsockets[1]);
+    chiplets[i]->interconnect->isockets[2]->bind(
+        *chiplets[next]->interconnect->tsockets[1]);
 
     // connect interconnect1 to previous chiplet interconnect2
-    chiplets[i]->interconnect.phy_isockets[1].bind(
-        chiplets[prev]->interconnect.phy_tsockets[2]);
+    chiplets[i]->interconnect->isockets[1]->bind(
+        *chiplets[prev]->interconnect->tsockets[2]);
   }
 
   // connect chiplets to FPGA
   for (unsigned i = 0; i < num_chiplets; ++i) {
     // connect interconnect0 to FPGA interconnect
-    chiplets[i]->interconnect.phy_isockets[0].bind(
-        fpga.interconnect.phy_tsockets[i]);
+    chiplets[i]->interconnect->isockets[0]->bind(
+        *fpga.interconnect->tsockets[i]);
 
     // connect FPGA interconnect to interconnect0
-    fpga.interconnect.phy_isockets[i].bind(
-        chiplets[i]->interconnect.phy_tsockets[0]);
+    fpga.interconnect->isockets[i]->bind(
+        *chiplets[i]->interconnect->tsockets[0]);
   }
 
   if (sim_duration == SC_ZERO_TIME) {

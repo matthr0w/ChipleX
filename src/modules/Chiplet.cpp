@@ -1,4 +1,5 @@
 #include "modules/Chiplet.h"
+#include "modules/interconnects/utils.h"
 
 #include "globals.h"
 
@@ -9,61 +10,51 @@ Chiplet::Chiplet(sc_module_name name)
       axi_clk("AXI_Clk", axi_clk_cycle, sc_core::SC_NS, 0.5),
       axi_bus("AXI_Bus", chiplet_id, axi_width, num_axi_managers,
               num_axi_subordinates),
-      core0("Core0", chiplet_id, 0, axi_width, interconnect_irq_delay),
-      core1("Core1", chiplet_id, 1, axi_width, interconnect_irq_delay),
-      cache0("Cache0", chiplet_id, axi_width, cache_size, cache_block_size,
-             cache_store_buffer_size),
-      cache1("Cache1", chiplet_id, axi_width, cache_size, cache_block_size,
-             cache_store_buffer_size),
-      memory("Memory", axi_width, ram_size), dma_engine("DMAEngine", axi_width),
-      interconnect(
-          "Interconnect", chiplet_id, axi_width, num_cores, num_interconnects,
-          interconnect_flit_size, interconnect_overhead_size,
-          interconnect_staging_buffer_size, interconnect_link_buffer_size,
-          interconnect_bandwidth_chiplets, chiplet_distance_um, &dma_engine) {
-  initialize();
-}
+      memory("Memory", axi_width, ram_size),
+      dma_engine("DMAEngine", axi_width) {
+  // Cores/Caches
+  for (unsigned i = 0; i < num_cores; ++i) {
+    std::string core_name = "Core" + std::to_string(i);
+    cores.push_back(std::make_unique<Core>(core_name.c_str(), chiplet_id, i,
+                                           axi_width, cores_irq_delay));
 
-void Chiplet::initialize() {
-  // -------------------------------------------------------
-  // clocks
-  // -------------------------------------------------------
-  core0.clock.bind(axi_clk);
-  core1.clock.bind(axi_clk);
-  cache0.clock.bind(axi_clk);
-  cache1.clock.bind(axi_clk);
+    std::string cache_name = "Cache" + std::to_string(i);
+    caches.push_back(std::make_unique<Cache>(
+        cache_name.c_str(), chiplet_id, axi_width, cache_size, cache_block_size,
+        cache_store_buffer_size));
+  }
+
+  for (unsigned i = 0; i < num_cores; ++i) {
+    cores[i]->clock.bind(axi_clk);
+    cores[i]->isocket.bind(caches[i]->tsocket);
+    caches[i]->clock.bind(axi_clk);
+    caches[i]->isocket.bind(*axi_bus.mgr_tsockets[i]);
+  }
+
+  // Memory
   memory.clock.bind(axi_clk);
-  dma_engine.clock.bind(axi_clk);
-  interconnect.axi_clock.bind(axi_clk);
-  interconnect.protocol_clock.bind(axi_clk);
-  interconnect.phy_clock.bind(axi_clk);
 
-  // -------------------------------------------------------
-  // sockets
-  // -------------------------------------------------------
-  // AXI
+  // AXI Bus
   axi_bus.sub_isockets[0]->bind(memory.tsocket);
-  axi_bus.sub_isockets[1]->bind(interconnect.axi_tsocket);
 
-  // cores
-  core0.isocket.bind(cache0.tsocket);
-  core1.isocket.bind(cache1.tsocket);
+  // DMA Engine
+  dma_engine.clock.bind(axi_clk);
+  dma_engine.isocket.bind(*axi_bus.mgr_tsockets[num_axi_managers - 1]);
 
-  // caches
-  cache0.isocket.bind(*axi_bus.mgr_tsockets[0]);
-  cache1.isocket.bind(*axi_bus.mgr_tsockets[1]);
+  // Interconnect
+  interconnect =
+      create_interconnect(to_string(connection_type), chiplet_id, axi_width,
+                          num_cores, num_interconnects, dma_engine);
 
-  // dma engine
-  dma_engine.isocket.bind(*axi_bus.mgr_tsockets[2]);
+  interconnect->bind_axi(axi_bus, axi_clk);
+  for (unsigned i = 0; i < num_cores; ++i) {
+    interconnect->bind_core(i, *cores[i]);
+  }
 
-  // interconnect
-  interconnect.irq_sockets[0].bind(core0.irq_socket);
-  interconnect.irq_sockets[1].bind(core1.irq_socket);
-
-  // trackers
+  // Trackers
   // utilization
-  utilization_trackers.push_back(&core0.utilization_tracker);
-  utilization_trackers.push_back(&core1.utilization_tracker);
+  // utilization_trackers.push_back(&core0.utilization_tracker);
+  // utilization_trackers.push_back(&core1.utilization_tracker);
   // utilization_trackers.push_back(&cache0.utilization_tracker);
   // utilization_trackers.push_back(&cache1.utilization_tracker);
   // utilization_trackers.push_back(&memory_controller.utilization_tracker);

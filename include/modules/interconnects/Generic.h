@@ -12,12 +12,14 @@
 #include "common/Tracker.h"
 
 #include "modules/DMAEngine.h"
+#include "modules/interconnects/Base.h"
 
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-SC_MODULE(Interconnect), public VirtualAXIInitiatorIF {
+SC_MODULE(GenericInterconnect), public InterconnectBase,
+    public VirtualAXIInitiatorIF {
 public:
   sc_in<bool> axi_clock;
   sc_in<bool> protocol_clock;
@@ -31,19 +33,26 @@ public:
   // -------------------------------------------------------
   // sockets
   // -------------------------------------------------------
-  ARM::AXI::SimpleTargetSocket<Interconnect> axi_tsocket;
+  ARM::AXI::SimpleTargetSocket<GenericInterconnect> axi_tsocket;
 
-  simple_target_socket_tagged<Interconnect> *phy_tsockets;
-  simple_initiator_socket_tagged<Interconnect> *phy_isockets;
+  simple_target_socket_tagged<GenericInterconnect> *phy_tsockets;
+  simple_initiator_socket_tagged<GenericInterconnect> *phy_isockets;
 
-  simple_initiator_socket_tagged<Interconnect> *irq_sockets;
+  simple_initiator_socket_tagged<GenericInterconnect> *irq_sockets;
 
-  Interconnect(sc_module_name name, unsigned chip_id, unsigned axi_width,
-               unsigned num_cores, unsigned num_interconnects,
-               unsigned flit_size, unsigned overhead_size,
-               unsigned staging_buffer_size, unsigned link_buffer_size,
-               double bandwidth, double distance, DMAEngine *dma_engine);
-  ~Interconnect();
+  GenericInterconnect(sc_module_name name, unsigned chip_id, unsigned axi_width,
+                      unsigned num_cores, unsigned num_interconnects,
+                      unsigned flit_size, unsigned overhead_size,
+                      unsigned staging_buffer_size, unsigned link_buffer_size,
+                      double bandwidth, double distance, DMAEngine *dma_engine);
+  ~GenericInterconnect();
+
+  // InterconnectBase
+  void bind_axi(AXIBus & bus, sc_clock & clk) override;
+  void bind_core(unsigned index, Core &core) override;
+  // DMAEngine
+  tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload & payload,
+                                    ARM::AXI::Phase & phase) override;
 
 private:
   enum ChannelState { CLEAR, REQ, ACK };
@@ -131,11 +140,6 @@ private:
   tlm_sync_enum nb_transport_fw_axi(ARM::AXI::Payload & payload,
                                     ARM::AXI::Phase & phase);
 
-public: // needs to be public for dma engine
-  tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload & payload,
-                                    ARM::AXI::Phase & phase);
-
-private:
   tlm_sync_enum nb_transport_fw_phy(int id, tlm_generic_payload &transaction,
                                     tlm_phase &phase, sc_time &delay);
 
@@ -184,10 +188,10 @@ private:
 
   struct DelayModel {
   private:
-    const Interconnect &module;
+    const GenericInterconnect &module;
 
   public:
-    DelayModel(const Interconnect &m) : module(m) {}
+    DelayModel(const GenericInterconnect &m) : module(m) {}
 
     Transfer transfer_delay(tlm_generic_payload &transaction) const {
       static const Config &interconnect_config =
