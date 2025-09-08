@@ -1,7 +1,6 @@
 interconnect_protocol:
   flit_size: 68 # bytes
   overhead_size: 4 # bytes
-  irq_delay: 2.0 # ns
   retries: 4
   
 interconnect:

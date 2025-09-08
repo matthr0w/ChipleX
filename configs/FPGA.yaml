@@ -1,5 +1,6 @@
 cores:
   clk_cycle: 1 # ns
+  irq_delay: 2 # ns
 
 cache:
   size: 512 # bytes

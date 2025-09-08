@@ -1,7 +1,6 @@
 interconnect_protocol:
   flit_size: 1 # bytes
   overhead_size: 0 # bytes
-  irq_delay: 2.0 # ns
   
 interconnect:
   staging_buffer_size: 1024 # bytes

@@ -1,45 +1,53 @@
 #include "configs.h"
 
 const std::set<std::string> ConfigRegistry::chiplet_specification = {
-    "cores.clk_cycle",  "cache.size",
-    "cache.block_size", "cache.store_buffer_size",
-    "axi.width",        "axi.clk_cycle",
-    "ram.size",         "ram.clk_cycle"};
+    "cores.clk_cycle",
+    "cores.irq_delay",
+    "cache.size",
+    "cache.block_size",
+    "cache.store_buffer_size",
+    "axi.width",
+    "axi.clk_cycle",
+    "ram.size",
+    "ram.clk_cycle"};
 
 const std::set<std::string> ConfigRegistry::fpga_specification = {
-    "cores.clk_cycle",  "cache.size",
-    "cache.block_size", "cache.store_buffer_size",
-    "axi.width",        "axi.clk_cycle",
-    "ram.size",         "ram.clk_cycle"};
+    "cores.clk_cycle",
+    "cores.irq_delay",
+    "cache.size",
+    "cache.block_size",
+    "cache.store_buffer_size",
+    "axi.width",
+    "axi.clk_cycle",
+    "ram.size",
+    "ram.clk_cycle"};
 
 const std::map<std::string, std::set<std::string>>
     ConfigRegistry::interconnect_specifications{
         {"Custom",
          {"interconnect_protocol.flit_size",
           "interconnect_protocol.overhead_size",
-          "interconnect_protocol.irq_delay", "interconnect.staging_buffer_size",
-          "interconnect.link_buffer_size", "interconnect.bandwidth_chiplets",
-          "interconnect.bandwidth_fpga", "interconnect.efficiency"}},
+          "interconnect.staging_buffer_size", "interconnect.link_buffer_size",
+          "interconnect.bandwidth_chiplets", "interconnect.bandwidth_fpga",
+          "interconnect.efficiency"}},
         {"PCIe",
          {"interconnect_protocol.flit_size",
           "interconnect_protocol.overhead_size",
-          "interconnect_protocol.fec_delay", "interconnect_protocol.irq_delay",
-          "interconnect.staging_buffer_size", "interconnect.link_buffer_size",
-          "interconnect.bandwidth_chiplets", "interconnect.bandwidth_fpga",
-          "interconnect.efficiency"}},
+          "interconnect_protocol.fec_delay", "interconnect.staging_buffer_size",
+          "interconnect.link_buffer_size", "interconnect.bandwidth_chiplets",
+          "interconnect.bandwidth_fpga", "interconnect.efficiency"}},
         {"UCIe",
          {"interconnect_protocol.flit_size",
           "interconnect_protocol.overhead_size",
-          "interconnect_protocol.irq_delay", "interconnect_protocol.retries",
-          "interconnect.staging_buffer_size", "interconnect.link_buffer_size",
-          "interconnect.bandwidth_chiplets", "interconnect.bandwidth_fpga",
-          "interconnect.efficiency"}},
+          "interconnect_protocol.retries", "interconnect.staging_buffer_size",
+          "interconnect.link_buffer_size", "interconnect.bandwidth_chiplets",
+          "interconnect.bandwidth_fpga", "interconnect.efficiency"}},
         {"SPI",
          {"interconnect_protocol.flit_size",
           "interconnect_protocol.overhead_size",
-          "interconnect_protocol.irq_delay", "interconnect.staging_buffer_size",
-          "interconnect.link_buffer_size", "interconnect.bandwidth_chiplets",
-          "interconnect.bandwidth_fpga", "interconnect.efficiency"}}};
+          "interconnect.staging_buffer_size", "interconnect.link_buffer_size",
+          "interconnect.bandwidth_chiplets", "interconnect.bandwidth_fpga",
+          "interconnect.efficiency"}}};
 
 std::vector<std::string> split_key(const std::string &key) {
   std::vector<std::string> parts;

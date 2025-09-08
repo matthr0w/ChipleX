@@ -4,7 +4,6 @@ interconnect_protocol:
   flit_size: 256 # bytes
   overhead_size: 20 # bytes
   fec_delay: 3.0 # ns
-  irq_delay: 2.0 # ns
   
 interconnect:
   staging_buffer_size: 1024 # bytes
