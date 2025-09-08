@@ -22,34 +22,18 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(yaml-cpp)
 
-# find source files
-# common sources
-file(GLOB COMMON_SOURCES ${PROJECT_SOURCE_DIR}/common/*.cpp)
-# include sources
-file(GLOB INCLUDE_SOURCES ${PROJECT_SOURCE_DIR}/include/*.cpp)
-# modules sources
-file(GLOB MODULES_SOURCES ${PROJECT_SOURCE_DIR}/modules/*.cpp)
-# usercode sources
-file(GLOB USERCODE_SOURCES ${PROJECT_SOURCE_DIR}/usercode/*.c ${PROJECT_SOURCE_DIR}/usercode/*.cpp)
+file(GLOB_RECURSE PROJECT_SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
+add_executable(sim ${PROJECT_SOURCES})
 
-# add source files
-add_executable(sim main.cpp ${COMMON_SOURCES} ${INCLUDE_SOURCES} ${MODULES_SOURCES} ${USERCODE_SOURCES})
-
-# include SystemC headers
+target_include_directories(sim PRIVATE ${PROJECT_SOURCE_DIR}/include)
 target_include_directories(sim PRIVATE $ENV{SYSTEMC_PATH}/include)
 
-# include project headers
-target_include_directories(sim PRIVATE ${PROJECT_SOURCE_DIR})
-
-# link SystemC library
 target_link_libraries(sim PRIVATE ${SYSTEMC_LIB})
-# link YAML library
 target_link_libraries(sim PUBLIC yaml-cpp::yaml-cpp)
 
 # link statically, and disable PIE (VSCodium flatpak enforces PIE by default)
 set(CMAKE_EXE_LINKER_FLAGS "-static -no-pie")
 
-# set the runtime output directory
 set_target_properties(sim
     PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}"

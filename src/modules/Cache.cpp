@@ -1,0 +1,496 @@
+#include "modules/Cache.h"
+
+#include "logging.h"
+
+Cache::Cache(sc_module_name name, unsigned chip_id, unsigned axi_width,
+             unsigned cache_size, unsigned cache_block_size,
+             unsigned cache_store_buffer_size)
+    : sc_module(name), chip_id(chip_id), axi_width(axi_width),
+      cache_size(cache_size), cache_block_size(cache_block_size),
+      cache_store_buffer_size(cache_store_buffer_size),
+      beat_data(new uint8_t[axi_width >> 3]), utilization_tracker(this->name()),
+      tsocket("tsocket", *this, &Cache::nb_transport_fw,
+              ARM::TLM::PROTOCOL_AXI4, axi_width),
+      isocket("isocket", *this, &Cache::nb_transport_bw,
+              ARM::TLM::PROTOCOL_AXI4, axi_width) {
+  if (cache_size % cache_block_size != 0)
+    SC_REPORT_ERROR(this->name(), "Cache size must be multiple of block size.");
+
+  num_lines = cache_size / cache_block_size;
+  cache_lines.resize(num_lines);
+  store_buffer.resize(cache_store_buffer_size);
+
+  for (auto &line : cache_lines) {
+    line.valid = false;
+    line.tag = 0;
+    line.data.resize(cache_block_size, 0);
+  }
+
+  num_accesses = 0;
+  num_hits = 0;
+  num_misses = 0;
+
+  SC_METHOD(clock_posedge);
+  sensitive << clock.pos();
+  dont_initialize();
+
+  SC_METHOD(clock_negedge);
+  sensitive << clock.neg();
+  dont_initialize();
+}
+
+void Cache::clock_posedge() {
+  if (ar_state == ACK)
+    ar_state = CLEAR;
+
+  if (aw_state == ACK)
+    aw_state = CLEAR;
+
+  if (w_state == ACK)
+    w_state = CLEAR;
+
+  /* READ REQUEST */
+  if (!r_outgoing && !ar_queue_in.empty()) {
+    r_outgoing = ar_queue_in.front();
+    ar_queue_in.pop_front();
+    r_beat_count = 0;
+  }
+
+  if (r_outgoing && active_cache_line_requests.empty()) {
+    uint32_t beat_addr =
+        set_beat_address(r_outgoing->get_address(), r_beat_count,
+                         r_outgoing->get_beat_data_length(),
+                         r_outgoing->get_beat_count(), r_outgoing->get_burst());
+
+    /* Read cache if valid */
+    unsigned remaining = r_outgoing->get_beat_data_length();
+    unsigned beat_offset = 0;
+
+    r_beat_ready = true;
+
+    while (remaining > 0) {
+      num_accesses++;
+
+      uint32_t block_address = beat_addr & ~(cache_block_size - 1);
+      uint32_t block_offset = beat_addr & (cache_block_size - 1);
+
+      uint32_t tag = block_address >>
+                     ((unsigned)(log2(cache_block_size) + log2(num_lines)));
+      uint32_t index =
+          (block_address >> (unsigned)log2(cache_block_size)) % num_lines;
+
+      uint32_t copy_len = std::min(cache_block_size - block_offset, remaining);
+
+      CacheLine &line = cache_lines[index];
+
+      if (!(line.valid && line.tag == tag)) {
+        // Read Miss: enqueue line fetch
+        SC_LOG_DEBUG(this, "Read Miss: Enqueuing line fetch from address 0x"
+                               << std::hex << block_address);
+        num_misses++;
+
+        r_beat_ready = false;
+
+        CacheLineRequest clr;
+        clr.line = &line;
+        clr.address = block_address;
+        clr.tag = tag;
+        cache_line_requests.push_back(clr);
+      } else {
+        // Read Hit
+        SC_LOG_DEBUG(this, "Read Hit: Loading data from cache");
+        num_hits++;
+
+        std::memcpy(beat_data + beat_offset, &line.data[block_offset],
+                    copy_len);
+      }
+
+      beat_addr += copy_len;
+      beat_offset += copy_len;
+      remaining -= copy_len;
+    }
+
+    if (r_beat_ready) {
+      r_outgoing->read_in_beat(beat_data);
+    }
+  }
+
+  /* WRITE REQUEST */
+  if (!b_outgoing && !aw_queue_in.empty()) {
+    b_outgoing = aw_queue_in.front();
+    aw_queue_in.pop_front();
+    w_beat_count_in = 0;
+  }
+
+  if (b_outgoing && !w_queue_in.empty()) {
+    size_t next_tail = (store_buffer_tail + 1) % store_buffer.size();
+
+    // check if store buffer is full
+    if (next_tail != store_buffer_head) {
+      uint32_t beat_addr = set_beat_address(
+          b_outgoing->get_address(), w_beat_count_in,
+          b_outgoing->get_beat_data_length(), b_outgoing->get_beat_count(),
+          b_outgoing->get_burst());
+
+      /* Move into store buffer */
+      StoreBufferEntry &sbe = store_buffer[store_buffer_tail];
+      sbe.address = beat_addr;
+      sbe.data.resize(b_outgoing->get_beat_data_length());
+      b_outgoing->write_out_beat(w_beat_count_in, sbe.data.data());
+      sbe.valid = true;
+
+      store_buffer_tail = next_tail; // advance tail
+
+      /* Overwrite cache if valid */
+      unsigned remaining = b_outgoing->get_beat_data_length();
+      unsigned beat_offset = 0;
+
+      while (remaining > 0) {
+        num_accesses++;
+
+        uint32_t block_address = beat_addr & ~(cache_block_size - 1);
+        uint32_t block_offset = beat_addr & (cache_block_size - 1);
+
+        uint32_t tag = block_address >>
+                       ((unsigned)(log2(cache_block_size) + log2(num_lines)));
+        uint32_t index =
+            (block_address >> (unsigned)log2(cache_block_size)) % num_lines;
+
+        uint32_t copy_len =
+            std::min(cache_block_size - block_offset, remaining);
+
+        CacheLine &line = cache_lines[index];
+
+        if (!(line.valid && line.tag == tag)) {
+          // Write Miss
+          SC_LOG_DEBUG(this, "Write Miss: Writing data only to store buffer");
+          num_misses++;
+        } else {
+          // Write Hit
+          SC_LOG_DEBUG(this,
+                       "Write Hit: Writing data to store buffer and cache");
+          num_hits++;
+
+          std::memcpy(&line.data[block_offset], sbe.data.data() + beat_offset,
+                      copy_len);
+        }
+
+        beat_addr += copy_len;
+        beat_offset += copy_len;
+        remaining -= copy_len;
+      }
+
+      w_queue_in.pop_front();
+      w_beat_count_in++;
+
+      if (w_beat_count_in >= b_outgoing->get_beat_count()) {
+        b_beat_ready = true;
+      }
+    }
+  }
+}
+
+void Cache::clock_negedge() {
+  if (!cache_line_requests.empty())
+    enqueue_cacheline_read();
+
+  if (store_buffer_head != store_buffer_tail)
+    enqueue_storebuffer_write();
+
+  /* Send next clr payload ARVALID */
+  if ((ar_state == CLEAR || ar_state == REQ) && !ar_queue_out.empty()) {
+    ARM::AXI::Payload *payload = ar_queue_out.front();
+    ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
+
+    ar_state = REQ;
+    tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
+    if (reply == TLM_UPDATED) {
+      sc_assert(phase == ARM::AXI::AR_READY);
+      ar_state = ACK;
+      ar_queue_out.pop_front();
+    }
+  }
+
+  /* Send next store buffer payload AWVALID */
+  if ((aw_state == CLEAR || aw_state == REQ) && !aw_queue_out.empty()) {
+    ARM::AXI::Payload *payload = aw_queue_out.front();
+    ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
+
+    aw_state = REQ;
+    tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
+    if (reply == TLM_UPDATED) {
+      sc_assert(phase == ARM::AXI::AW_READY);
+      aw_state = ACK;
+      aw_queue_out.pop_front();
+      w_queue_out.push_back(payload);
+    }
+  }
+
+  /* Send store buffer write beat WVALID */
+  if ((w_state == CLEAR || w_state == REQ) && !w_queue_out.empty()) {
+    ARM::AXI::Payload *payload = w_queue_out.front();
+    ARM::AXI::Phase phase = (w_beat_count_out + 1 == payload->get_beat_count())
+                                ? ARM::AXI::W_VALID_LAST
+                                : ARM::AXI::W_VALID;
+
+    w_state = REQ;
+    tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
+    if (reply == TLM_UPDATED) {
+      sc_assert(phase == ARM::AXI::W_READY);
+      w_state = ACK;
+      w_beat_count_out++;
+      if (w_beat_count_out == payload->get_beat_count()) {
+        w_queue_out.pop_front();
+        w_beat_count_out = 0;
+      }
+    }
+  }
+
+  /* Send read data beat when loaded */
+  if (r_beat_ready) {
+    ARM::AXI::Phase phase = (r_beat_count + 1 == r_outgoing->get_beat_count())
+                                ? ARM::AXI::R_VALID_LAST
+                                : ARM::AXI::R_VALID;
+
+    tlm_sync_enum reply = tsocket.nb_transport_bw(*r_outgoing, phase);
+    if (reply == TLM_UPDATED) {
+      sc_assert(phase == ARM::AXI::R_READY);
+      if (r_beat_count + 1 == r_outgoing->get_beat_count()) {
+        r_outgoing->unref();
+        r_outgoing = nullptr;
+        active_txn = false;
+        r_beat_ready = false;
+      } else {
+        r_beat_count++;
+      }
+    }
+  }
+
+  /* Send write response beat when buffered */
+  if (b_beat_ready) {
+    ARM::AXI::Phase phase = ARM::AXI::B_VALID;
+
+    tlm_sync_enum reply = tsocket.nb_transport_bw(*b_outgoing, phase);
+    if (reply == TLM_UPDATED) {
+      sc_assert(phase == ARM::AXI::B_READY);
+      b_outgoing->unref();
+      b_outgoing = nullptr;
+      active_txn = false;
+      b_beat_ready = false;
+    }
+  }
+}
+
+// -------------------------------------------------------
+// transport functions
+// -------------------------------------------------------
+tlm_sync_enum Cache::nb_transport_fw(ARM::AXI::Payload &payload,
+                                     ARM::AXI::Phase &phase) {
+  /* Skip cache if AXI signal not set */
+  if (payload.cache != ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA) {
+    return isocket.nb_transport_fw(payload, phase);
+  }
+
+  switch (phase) {
+  case ARM::AXI::AR_VALID:
+    if (active_txn)
+      return TLM_ACCEPTED; // backpressure
+    active_txn = true;
+    ar_queue_in.push_back(&payload);
+    payload.ref();
+    phase = ARM::AXI::AR_READY;
+    return TLM_UPDATED;
+  case ARM::AXI::R_READY:
+    return TLM_ACCEPTED;
+  case ARM::AXI::AW_VALID:
+    if (active_txn)
+      return TLM_ACCEPTED; // backpressure
+    active_txn = true;
+    aw_queue_in.push_back(&payload);
+    payload.ref();
+    phase = ARM::AXI::AW_READY;
+    return TLM_UPDATED;
+  case ARM::AXI::W_VALID:
+    if ((store_buffer_tail + 1) % store_buffer.size() == store_buffer_head)
+      return TLM_ACCEPTED; // backpressure
+    w_queue_in.push_back(&payload);
+    phase = ARM::AXI::W_READY;
+    return TLM_UPDATED;
+  case ARM::AXI::W_VALID_LAST:
+    if ((store_buffer_tail + 1) % store_buffer.size() == store_buffer_head)
+      return TLM_ACCEPTED; // backpressure
+    w_queue_in.push_back(&payload);
+    payload.ref();
+    phase = ARM::AXI::W_READY;
+    return TLM_UPDATED;
+  case ARM::AXI::B_READY:
+    return TLM_ACCEPTED;
+  default:
+    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
+    return TLM_ACCEPTED;
+  }
+}
+
+tlm_sync_enum Cache::nb_transport_bw(ARM::AXI::Payload &payload,
+                                     ARM::AXI::Phase &phase) {
+  /* Skip cache if AXI signal not set */
+  if (payload.cache != ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA) {
+    return tsocket.nb_transport_bw(payload, phase);
+  }
+
+  /* Handle cache line requests and store buffer writes */
+  switch (phase) {
+  case ARM::AXI::AR_READY:
+    ar_state = ACK;
+    return TLM_ACCEPTED;
+  case ARM::AXI::R_VALID:
+    phase = ARM::AXI::R_READY;
+    return TLM_UPDATED;
+  case ARM::AXI::R_VALID_LAST:
+    complete_cacheline_read(&payload);
+    phase = ARM::AXI::R_READY;
+    return TLM_UPDATED;
+  case ARM::AXI::AW_READY:
+    aw_state = ACK;
+    return TLM_ACCEPTED;
+  case ARM::AXI::W_READY:
+    w_state = ACK;
+    return TLM_ACCEPTED;
+  case ARM::AXI::B_VALID:
+    complete_storebuffer_write(&payload);
+    phase = ARM::AXI::B_READY;
+    return TLM_UPDATED;
+  default:
+    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
+    return TLM_ACCEPTED;
+  }
+}
+
+// -------------------------------------------------------
+// helper functions
+// -------------------------------------------------------
+uint32_t Cache::set_beat_address(uint32_t base, unsigned beat_idx,
+                                 unsigned beat_bytes, unsigned beats,
+                                 ARM::AXI::Burst burst) {
+  switch (burst) {
+  case ARM::AXI::BURST_FIXED:
+    return base;
+  case ARM::AXI::BURST_INCR:
+    return base + static_cast<uint32_t>(beat_idx * beat_bytes);
+  case ARM::AXI::BURST_WRAP: {
+    const uint32_t burst_size =
+        static_cast<uint32_t>(beat_bytes * beats); // wrap boundary
+    const uint32_t aligned_base =
+        (base / burst_size) * burst_size; // floor to boundary
+    const uint32_t incr_address =
+        base + static_cast<uint64_t>(beat_idx * beat_bytes);
+    return aligned_base | (incr_address & (burst_size - 1));
+  }
+  default:
+    // treat unknown as INCR (safe fallback)
+    return base + static_cast<uint32_t>(beat_idx * beat_bytes);
+  }
+}
+
+void Cache::enqueue_cacheline_read() {
+  CacheLineRequest &clr = cache_line_requests.front();
+
+  unsigned axi_bytes = axi_width / 8;
+  unsigned beats = (cache_block_size + axi_bytes - 1) / axi_bytes;
+  uint8_t len = beats - 1;
+  ARM::AXI::Size size = get_axi_size(axi_width);
+
+  ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
+      ARM::AXI::COMMAND_READ, clr.address, size, len, ARM::AXI::BURST_INCR);
+
+  UserSignals user;
+  user.source = chip_id;
+  user.destination = chip_id;
+  user.fixed_address = true;
+
+  payload->user = user.encode();
+  payload->cache = ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
+
+  ar_queue_out.push_back(payload);
+
+  active_cache_line_requests[payload] = clr;
+
+  cache_line_requests.pop_front();
+}
+
+void Cache::complete_cacheline_read(ARM::AXI::Payload *payload) {
+  auto it = active_cache_line_requests.find(payload);
+  if (it != active_cache_line_requests.end()) {
+    // fill in cache line
+    CacheLineRequest clr = it->second;
+    clr.line->valid = true;
+    clr.line->tag = clr.tag;
+    payload->read_out(clr.line->data.data());
+
+    active_cache_line_requests.erase(it);
+  }
+}
+
+void Cache::enqueue_storebuffer_write() {
+  StoreBufferEntry &sbe = store_buffer[store_buffer_head];
+
+  if (sbe.ongoing)
+    return;
+
+  sbe.ongoing = true;
+
+  unsigned axi_bytes = axi_width / 8;
+  unsigned beats = (sbe.data.size() + axi_bytes - 1) / axi_bytes;
+  uint8_t len = beats - 1;
+  ARM::AXI::Size size = get_axi_size(axi_width);
+
+  ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
+      ARM::AXI::COMMAND_WRITE, sbe.address, size, len, ARM::AXI::BURST_INCR);
+
+  payload->write_in(sbe.data.data());
+
+  UserSignals user;
+  user.source = chip_id;
+  user.destination = chip_id;
+  user.fixed_address = true;
+
+  payload->user = user.encode();
+  payload->cache = ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
+
+  aw_queue_out.push_back(payload);
+}
+
+void Cache::complete_storebuffer_write(ARM::AXI::Payload *payload) {
+  StoreBufferEntry &sbe = store_buffer[store_buffer_head];
+  sbe.ongoing = false;
+
+  // move head forward
+  store_buffer_head = (store_buffer_head + 1) % store_buffer.size();
+}
+
+// -------------------------------------------------------
+// debug functions
+// -------------------------------------------------------
+void Cache::dump() {
+  std::cout << "=== Cache Dump ===\n";
+  for (size_t i = 0; i < cache_lines.size(); ++i) {
+    const auto &line = cache_lines[i];
+    std::cout << "Line " << i << " [valid=" << line.valid
+              << ", tag=" << std::setw(2) << line.tag << "]: ";
+    for (uint8_t b : line.data) {
+      std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)b
+                << " ";
+    }
+    std::cout << std::dec << "\n";
+  }
+}
+
+void Cache::report_rates() {
+  std::cout << "  Cache Accesses: " << num_accesses << std::endl;
+  if (num_accesses > 0) {
+    double hit_rate = double(100) * num_hits / num_accesses;
+    double miss_rate = double(100) * num_misses / num_accesses;
+    std::cout << "  Hit Rate: " << std::dec << hit_rate << "%\n";
+    std::cout << "  Miss Rate: " << std::dec << miss_rate << "%\n";
+  }
+}

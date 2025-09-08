@@ -1,28 +1,16 @@
 cores:
-  clk_cycle: 1.0 # ns
+  clk_cycle: 1 # ns
+  irq_delay: 2 # ns
 
 cache:
   size: 256 # bytes
   block_size: 32 # bytes
   store_buffer_size: 4 # entries
-  arbitration_delay: 1.0 # ns
-  access_delay: 3.0 # ns
 
 axi:
   width: 32 # bits
-  clk_cycle: 5.0 # ns
-  arbitration_delay: 5.0 # ns
-
-bus: # obsolete
-  width: 32 # bits
-  clk_cycle: 5.0 # ns
-  arbitration_delay: 5.0 # ns
-
-memory_controller:
-  address_delay: 3.0 # ns
+  clk_cycle: 5 # ns
 
 ram:
   size: 512 # KB
-  width: 32 # bits
-  clk_cycle: 3.0 # ns
-  access_delay: 20.0 # ns
+  clk_cycle: 3 # ns
