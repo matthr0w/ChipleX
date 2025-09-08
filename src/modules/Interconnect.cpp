@@ -588,7 +588,12 @@ Interconnect::nb_transport_fw_phy(int id, tlm_generic_payload &transaction,
   case BEGIN_REQ:
     if (rx_ptrs[id] + flit_size > rx_buffers[id].size())
       return TLM_ACCEPTED; // backpressure
-    delay += delays.transfer_delay(transaction);
+
+    Transfer transfer = delays.transfer_delay(transaction);
+    delay += transfer.delay;
+
+    if (!transfer.success)
+      return TLM_ACCEPTED;
 
     tlm_generic_payload *tptr = &transaction;
     sc_spawn([this, id, tptr, delay]() {
@@ -700,7 +705,7 @@ void Interconnect::send_irq(ARM::AXI::Payload &payload) {
 
   unsigned int address_offset = (user.flit_count - 1) * flit_data_bytes;
 
-  auto *irq = new ChipletPayload();
+  tlm_generic_payload *irq = new tlm_generic_payload;
 
   irq->set_command(TLM_READ_COMMAND);
   irq->set_address(payload.get_address() - address_offset);

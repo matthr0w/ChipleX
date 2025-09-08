@@ -10,7 +10,6 @@
 #include "logging.h"
 
 #include "common/Tracker.h"
-#include "common/protocol/ChipletPayload.h"
 
 #include "modules/DMAEngine.h"
 
@@ -178,6 +177,11 @@ private:
   // -------------------------------------------------------
   // delay model
   // -------------------------------------------------------
+  struct Transfer {
+    sc_time delay;
+    bool success;
+  };
+
   struct DelayModel {
   private:
     const Interconnect &module;
@@ -185,7 +189,7 @@ private:
   public:
     DelayModel(const Interconnect &m) : module(m) {}
 
-    sc_time transfer_delay(tlm_generic_payload &transaction) const {
+    Transfer transfer_delay(tlm_generic_payload &transaction) const {
       static const Config &interconnect_config =
           ConfigRegistry::instance().get("Interconnect");
 
@@ -228,7 +232,7 @@ private:
           break;
         }
 
-        SC_LOG_ERROR(&module, transaction,
+        SC_LOG_ERROR(&module,
                      "Bit error on attempt " + std::to_string(attempt + 1));
 
         switch (connection_type) {
@@ -248,15 +252,12 @@ private:
         }
       }
 
-      static_cast<ChipletPayload *>(&transaction)
-          ->set_transfer_result(transfer_successful);
-
       if (!transfer_successful) {
-        SC_LOG_ERROR(&module, transaction, "Transfer failed");
+        SC_LOG_ERROR(&module, "Transfer failed");
       }
 
-      SC_LOG_DELAY(&module, transaction, "Die to Die Transfer", delay);
-      return delay;
+      SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
+      return {delay, transfer_successful};
     }
   };
 
