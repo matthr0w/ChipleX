@@ -336,19 +336,8 @@ tlm_sync_enum Cache::nb_transport_fw(ARM::AXI::Payload &payload,
 tlm_sync_enum Cache::nb_transport_bw(ARM::AXI::Payload &payload,
                                      ARM::AXI::Phase &phase) {
   /* Skip cache if AXI signal not set */
-  auto it = cache_skipped.find(&payload);
-  if (it != cache_skipped.end()) {
-
-    ARM::AXI::Phase prev_phase = phase;
-    tlm_sync_enum reply = tsocket.nb_transport_bw(payload, phase);
-
-    if (is_r_valid_last(prev_phase) && is_r_ready(phase)) {
-      cache_skipped.erase(it);
-    } else if (is_b_valid(prev_phase) && is_b_ready(phase)) {
-      cache_skipped.erase(it);
-    }
-
-    return reply;
+  if (payload.cache != ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA) {
+    return tsocket.nb_transport_bw(payload, phase);
   }
 
   /* Handle cache line requests and store buffer writes */

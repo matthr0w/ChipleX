@@ -84,8 +84,6 @@ private:
 
   uint8_t *beat_data;
 
-  std::unordered_map<ARM::AXI::Payload *, bool> cache_skipped;
-
   void clock_posedge();
   void clock_negedge();
 
