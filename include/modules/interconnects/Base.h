@@ -9,20 +9,20 @@
 struct InterconnectBase {
   unsigned num_interconnects;
 
-  simple_target_socket_tagged<InterconnectBase> **tsockets;
-  simple_initiator_socket_tagged<InterconnectBase> **isockets;
+  simple_target_socket_tagged<InterconnectBase> **in_ports;
+  simple_initiator_socket_tagged<InterconnectBase> **out_ports;
 
   InterconnectBase(unsigned num_interconnects)
       : num_interconnects(num_interconnects) {
-    tsockets =
+    in_ports =
         new simple_target_socket_tagged<InterconnectBase> *[num_interconnects];
-    isockets = new simple_initiator_socket_tagged<InterconnectBase>
+    out_ports = new simple_initiator_socket_tagged<InterconnectBase>
         *[num_interconnects];
   }
 
   virtual ~InterconnectBase() {
-    delete[] tsockets;
-    delete[] isockets;
+    delete[] in_ports;
+    delete[] out_ports;
   }
 
   virtual void bind_axi(AXIBus &bus, sc_clock &clk) = 0;

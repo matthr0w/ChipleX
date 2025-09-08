@@ -33,10 +33,10 @@ GenericInterconnect::GenericInterconnect(
   }
 
   for (unsigned i = 0; i < num_interconnects; ++i) {
-    tsockets[i] =
+    in_ports[i] =
         reinterpret_cast<simple_target_socket_tagged<InterconnectBase> *>(
             &phy_tsockets[i]);
-    isockets[i] =
+    out_ports[i] =
         reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
             &phy_isockets[i]);
   }

@@ -111,23 +111,23 @@ int sc_main(int argc, char *argv[]) {
     int prev = (i - 1 + num_chiplets) % num_chiplets;
 
     // connect interconnect2 to next chiplet interconnect1
-    chiplets[i]->interconnect->isockets[2]->bind(
-        *chiplets[next]->interconnect->tsockets[1]);
+    chiplets[i]->interconnect->out_ports[2]->bind(
+        *chiplets[next]->interconnect->in_ports[1]);
 
     // connect interconnect1 to previous chiplet interconnect2
-    chiplets[i]->interconnect->isockets[1]->bind(
-        *chiplets[prev]->interconnect->tsockets[2]);
+    chiplets[i]->interconnect->out_ports[1]->bind(
+        *chiplets[prev]->interconnect->in_ports[2]);
   }
 
   // connect chiplets to FPGA
   for (unsigned i = 0; i < num_chiplets; ++i) {
     // connect interconnect0 to FPGA interconnect
-    chiplets[i]->interconnect->isockets[0]->bind(
-        *fpga.interconnect->tsockets[i]);
+    chiplets[i]->interconnect->out_ports[0]->bind(
+        *fpga.interconnect->in_ports[i]);
 
     // connect FPGA interconnect to interconnect0
-    fpga.interconnect->isockets[i]->bind(
-        *chiplets[i]->interconnect->tsockets[0]);
+    fpga.interconnect->out_ports[i]->bind(
+        *chiplets[i]->interconnect->in_ports[0]);
   }
 
   if (sim_duration == SC_ZERO_TIME) {
