@@ -121,7 +121,7 @@ private:
     DelayModel(const Core &m) : module(m) {}
 
     sc_time irq_transfer(tlm_generic_payload &transaction) const {
-      SC_LOG_DELAY(&module, transaction, "IRQ Transfer", module.irq_delay);
+      SC_LOG_DELAY(&module, "IRQ Transfer", module.irq_delay);
       return module.irq_delay;
     }
   };

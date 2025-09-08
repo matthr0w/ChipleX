@@ -3,6 +3,7 @@
 #include <iomanip>
 
 #include "globals.h"
+#include "logging.h"
 
 AXIBus::AXIBus(sc_module_name name, unsigned int chip_id,
                unsigned int axi_width, unsigned int num_managers,
@@ -147,10 +148,6 @@ int AXIBus::route_payload(ARM::AXI::Payload &payload) {
 // -------------------------------------------------------
 void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
                            tlm::tlm_sync_enum reply, ARM::AXI::Phase) {
-  std::ostringstream stream;
-
-  ARM::AXI::Command command = payload.get_command();
-
   const char *phase_name = "?";
   bool show_addr = true;
   bool show_data = false;
@@ -262,51 +259,47 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
       payload_burst_index.find(&payload) == payload_burst_index.end())
     payload_burst_index[&payload] = 0;
 
-  std::ostringstream _sc_stream;
-  _sc_stream << std::left << std::setw(16) << sc_time_stamp()
-             << " | \033[34m[DEBUG]\033[0m  | " << std::setw(32) << name()
-             << " | ";
+  std::ostringstream message;
 
   // channel source/destination info
   auto mgr_it = payloads2mgr.find(&payload);
   auto sub_it = payloads2sub.find(&payload);
   if (mgr_it != payloads2mgr.end() && sub_it != payloads2sub.end()) {
-    _sc_stream << "MGR[" << mgr_it->second << "] -> SUB[" << sub_it->second
-               << "] | ";
+    message << "MGR[" << mgr_it->second << "] -> SUB[" << sub_it->second
+            << "] | ";
   }
 
   // phase
-  _sc_stream << phase_name << " ";
+  message << phase_name << " ";
 
   if (show_addr) {
-    _sc_stream << "@0x" << std::right << std::setw(8) << std::setfill('0')
-               << std::hex << payload.get_address() << std::dec << ' ';
+    message << "@0x" << std::right << std::setw(8) << std::setfill('0')
+            << std::hex << payload.get_address() << std::dec << ' ';
 
-    if (command != ARM::AXI::COMMAND_SNOOP) {
+    if (payload.get_command() != ARM::AXI::COMMAND_SNOOP) {
       const static char *burst_types[] = {"FIXED", "INCR ", "WRAP "};
       ARM::AXI::Burst burst = payload.get_burst();
 
-      _sc_stream << payload.get_beat_count() << "x"
-                 << (8 * (1 << payload.get_size())) << "bits ";
-      _sc_stream << (burst <= ARM::AXI::BURST_WRAP ? burst_types[burst]
-                                                   : "?????")
-                 << ' ';
+      message << payload.get_beat_count() << "x"
+              << (8 * (1 << payload.get_size())) << "bits ";
+      message << (burst <= ARM::AXI::BURST_WRAP ? burst_types[burst] : "?????")
+              << ' ';
     }
   }
 
   if (show_resp) {
     ARM::AXI::Resp resp = payload.get_resp();
     const static char *resp_types[] = {"OKAY  ", "EXOKAY", "SLVERR", "DECERR"};
-    _sc_stream << (resp <= ARM::AXI::RESP_DECERR ? resp_types[resp] : "??????")
-               << ' ';
+    message << (resp <= ARM::AXI::RESP_DECERR ? resp_types[resp] : "??????")
+            << ' ';
   } else {
-    _sc_stream << "       ";
+    message << "       ";
   }
 
   if (show_data) {
     unsigned burst_index = payload_burst_index[&payload];
-    _sc_stream << (burst_index == payload.get_len() ? "LAST " : "     ")
-               << "DATA:";
+    message << (burst_index == payload.get_len() ? "LAST " : "     ")
+            << "DATA:";
 
     uint64_t byte_strobe(uint64_t(~0));
     switch (payload.get_command()) {
@@ -325,18 +318,17 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
       break;
     }
 
-    _sc_stream << std::uppercase << std::hex;
+    message << std::uppercase << std::hex;
     unsigned size = 1 << payload.get_size();
     for (int i = size - 1; i >= 0; i--) {
       if ((byte_strobe >> (i % 8)) & 1)
-        _sc_stream << std::setw(2) << std::setfill('0')
-                   << unsigned(beat_data[i]);
+        message << std::setw(2) << std::setfill('0') << unsigned(beat_data[i]);
       else
-        _sc_stream << "XX";
+        message << "XX";
       if (i != 0 && !(i % 8))
-        _sc_stream << "_";
+        message << "_";
     }
-    _sc_stream << std::dec;
+    message << std::dec;
 
     if (inc_beat)
       payload_burst_index[&payload] = burst_index + 1;
@@ -345,5 +337,5 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
   if (last_beat && payload_burst_index[&payload] == payload.get_beat_count())
     payload_burst_index.erase(&payload);
 
-  std::cout << _sc_stream.str() << std::endl;
+  SC_LOG_DEBUG(this, message.str());
 }

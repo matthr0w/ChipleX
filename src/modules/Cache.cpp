@@ -85,8 +85,7 @@ void Cache::clock_posedge() {
 
       if (!(line.valid && line.tag == tag)) {
         // Read Miss: enqueue line fetch
-        SC_LOG_DEBUG_NO_TX(this,
-                           "Read Miss: Enqueuing line fetch from address 0x"
+        SC_LOG_DEBUG(this, "Read Miss: Enqueuing line fetch from address 0x"
                                << std::hex << block_address);
         num_misses++;
 
@@ -99,7 +98,7 @@ void Cache::clock_posedge() {
         cache_line_requests.push_back(clr);
       } else {
         // Read Hit
-        SC_LOG_DEBUG_NO_TX(this, "Read Hit: Loading data from cache");
+        SC_LOG_DEBUG(this, "Read Hit: Loading data from cache");
         num_hits++;
 
         std::memcpy(beat_data + beat_offset, &line.data[block_offset],
@@ -164,13 +163,12 @@ void Cache::clock_posedge() {
 
         if (!(line.valid && line.tag == tag)) {
           // Write Miss
-          SC_LOG_DEBUG_NO_TX(this,
-                             "Write Miss: Writing data only to store buffer");
+          SC_LOG_DEBUG(this, "Write Miss: Writing data only to store buffer");
           num_misses++;
         } else {
           // Write Hit
-          SC_LOG_DEBUG_NO_TX(
-              this, "Write Hit: Writing data to store buffer and cache");
+          SC_LOG_DEBUG(this,
+                       "Write Hit: Writing data to store buffer and cache");
           num_hits++;
 
           std::memcpy(&line.data[block_offset], sbe.data.data() + beat_offset,
@@ -411,6 +409,7 @@ void Cache::enqueue_cacheline_read() {
   user.fixed_address = true;
 
   payload->user = user.encode();
+  payload->cache = ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
   ar_queue_out.push_back(payload);
 
@@ -456,6 +455,7 @@ void Cache::enqueue_storebuffer_write() {
   user.fixed_address = true;
 
   payload->user = user.encode();
+  payload->cache = ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
   aw_queue_out.push_back(payload);
 }

@@ -198,8 +198,7 @@ Core::read_internal(uint32_t request_id, int destination_id, uint32_t address,
   payload->cache = is_volatile ? ARM::AXI::CACHE_AR_DEVICE_NB
                                : ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
 
-  SC_LOG_DEBUG_NO_TX(this,
-                     "Sending request: READ from 0x" << std::hex << address);
+  SC_LOG_INFO(this, "Sending request: READ from 0x" << std::hex << address);
 
   handle->payload = payload;
   handle->data = data;
@@ -287,8 +286,7 @@ Core::write_internal(uint32_t request_id, int destination_id, uint32_t address,
 
   payload->write_in(data);
 
-  SC_LOG_DEBUG_NO_TX(this,
-                     "Sending request: Write to 0x" << std::hex << address);
+  SC_LOG_INFO(this, "Sending request: Write to 0x" << std::hex << address);
 
   handle->payload = payload;
   handle->data = data;

@@ -581,7 +581,7 @@ tlm_sync_enum Interconnect::nb_transport_bw_axi(ARM::AXI::Payload &payload,
 tlm_sync_enum
 Interconnect::nb_transport_fw_phy(int id, tlm_generic_payload &transaction,
                                   tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG_NO_TX(this, "Interconnect TLM Protocol " << "PHY" << id << ": "
+  SC_LOG_DEBUG(this, "Interconnect TLM Protocol " << "PHY" << id << ": "
                                                         << phase);
 
   switch (phase) {
@@ -611,7 +611,7 @@ Interconnect::nb_transport_fw_phy(int id, tlm_generic_payload &transaction,
 tlm_sync_enum
 Interconnect::nb_transport_bw_phy(int id, tlm_generic_payload &transaction,
                                   tlm_phase &phase, sc_time &delay) {
-  SC_LOG_DEBUG_NO_TX(this, "Interconnect TLM Protocol " << "PHY" << id << ": "
+  SC_LOG_DEBUG(this, "Interconnect TLM Protocol " << "PHY" << id << ": "
                                                         << phase);
 
   switch (phase) {
@@ -713,11 +713,11 @@ void Interconnect::send_irq(ARM::AXI::Payload &payload) {
 
   if (user.destination == user.source) {
     // send read IRQs to request core
-    SC_LOG_DEBUG_NO_TX(this, "Sending IRQ to Core" << user.core);
+    SC_LOG_DEBUG(this, "Sending IRQ to Core" << user.core);
     tlm_resp = irq_sockets[user.core]->nb_transport_fw(*irq, phase, delay);
   } else {
     // send write IRQs to Core0
-    SC_LOG_DEBUG_NO_TX(this, "Sending IRQ to Core0");
+    SC_LOG_DEBUG(this, "Sending IRQ to Core0");
     tlm_resp = irq_sockets[0]->nb_transport_fw(*irq, phase, delay);
   }
 }

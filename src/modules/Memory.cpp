@@ -259,12 +259,12 @@ uint32_t Memory::allocate_dynamic_address(bool onchip, unsigned length) {
   }
 
   if (address + length > max_address) {
-    SC_LOG_DEBUG_NO_TX(this, "Out of memory for dynamic address allocation");
+    SC_LOG_WARN(this, "Out of memory for dynamic address allocation");
     address = base_address;
   }
 
-  SC_LOG_DEBUG_NO_TX(this, "Allocate: " << std::hex << address << " - "
-                                        << address + length);
+  SC_LOG_DEBUG(this, "Allocate: " << std::hex << address << " - "
+                                  << address + length);
 
   allocated_ranges[address] = length;
   return address;
@@ -278,8 +278,7 @@ void Memory::deallocate_dynamic_address(uint32_t address, unsigned length) {
   }
 
   if (it == allocated_ranges.end() || address < it->first) {
-    SC_LOG_DEBUG_NO_TX(this,
-                       "Tried to deallocate an unallocated address range");
+    SC_LOG_WARN(this, "Tried to deallocate an unallocated address range");
     return;
   }
 
@@ -288,21 +287,20 @@ void Memory::deallocate_dynamic_address(uint32_t address, unsigned length) {
   uint32_t new_start = address + length;
   uint32_t new_end = end;
 
-  SC_LOG_DEBUG_NO_TX(this, "Deallocate: " << std::hex << start << " - " << end);
+  SC_LOG_DEBUG(this, "Deallocate: " << std::hex << start << " - " << end);
 
   allocated_ranges.erase(it);
 
   if (address > start) {
     // left part remains
-    SC_LOG_DEBUG_NO_TX(this,
-                       "Allocate: " << std::hex << start << " - " << address);
+    SC_LOG_DEBUG(this, "Allocate: " << std::hex << start << " - " << address);
     allocated_ranges[start] = address - start;
   }
 
   if (new_start < new_end) {
     // right part remains
-    SC_LOG_DEBUG_NO_TX(this, "Allocate: " << std::hex << new_start << " - "
-                                          << new_end);
+    SC_LOG_DEBUG(this,
+                 "Allocate: " << std::hex << new_start << " - " << new_end);
     allocated_ranges[new_start] = new_end - new_start;
   }
 }
