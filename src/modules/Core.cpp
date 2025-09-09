@@ -1,7 +1,7 @@
 #include "modules/Core.h"
 
-Core::Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
-           unsigned int axi_width, sc_time irq_delay)
+Core::Core(sc_module_name name, unsigned chip_id, unsigned core_id,
+           unsigned axi_width, sc_time irq_delay)
     : sc_module(name), chip_id(chip_id), core_id(core_id), axi_width(axi_width),
       irq_delay(irq_delay), utilization_tracker(this->name()),
       isocket("isocket", *this, &Core::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4,
@@ -12,12 +12,12 @@ Core::Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
   MAX_FIXED_BURST_SIZE = 16 * axi_width / 8;
   MAX_WRAP_BURST_SIZE = 16 * axi_width / 8;
 
-  SC_METHOD(clock_posedge);
-  sensitive << clock.pos();
+  SC_METHOD(clk_posedge);
+  sensitive << clk.pos();
   dont_initialize();
 
-  SC_METHOD(clock_negedge);
-  sensitive << clock.neg();
+  SC_METHOD(clk_negedge);
+  sensitive << clk.neg();
   dont_initialize();
 
   SC_THREAD(core_thread);
@@ -31,16 +31,11 @@ void Core::core_thread() {
 }
 
 void Core::interrupt_thread() {
-  tlm_generic_payload *transaction;
-  tlm_phase phase;
-  sc_time delay;
-  tlm_sync_enum tlm_resp;
-
   while (true) {
     wait(interrupt_request);
 
     while (!irq_queue.empty()) {
-      transaction = irq_queue.front();
+      tlm_generic_payload *transaction = irq_queue.front();
       irq_queue.pop_front();
 
       if (interrupt_fn) {
@@ -52,34 +47,32 @@ void Core::interrupt_thread() {
   }
 }
 
-void Core::clock_posedge() {
-  if (ar_state == ACK)
-    ar_state = CLEAR;
-
-  if (aw_state == ACK)
+void Core::clk_posedge() {
+  if (aw_state == ACK) {
     aw_state = CLEAR;
+    w_queue.push_back(aw_queue.front());
+    aw_queue.pop_front();
+  }
 
-  if (w_state == ACK)
+  if (w_state == ACK) {
     w_state = CLEAR;
-}
-
-void Core::clock_negedge() {
-  /* Send next payload ARVALID */
-  if ((ar_state == CLEAR || ar_state == REQ) && !ar_queue.empty()) {
-    ARM::AXI::Payload *payload = ar_queue.front();
-    ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
-
-    ar_state = REQ;
-    tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
-    if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::AR_READY);
-      ar_state = ACK;
-      ar_queue.pop_front();
+    w_beat_count++;
+    if (w_beat_count == w_queue.front()->get_beat_count()) {
+      w_beat_count = 0;
+      write_done.notify(SC_ZERO_TIME);
+      w_queue.pop_front();
     }
   }
 
+  if (ar_state == ACK) {
+    ar_state = CLEAR;
+    ar_queue.pop_front();
+  }
+}
+
+void Core::clk_negedge() {
   /* Send next payload AWVALID */
-  if ((aw_state == CLEAR || aw_state == REQ) && !aw_queue.empty()) {
+  if (aw_state == CLEAR && !aw_queue.empty()) {
     ARM::AXI::Payload *payload = aw_queue.front();
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
 
@@ -88,13 +81,11 @@ void Core::clock_negedge() {
     if (reply == TLM_UPDATED) {
       sc_assert(phase == ARM::AXI::AW_READY);
       aw_state = ACK;
-      aw_queue.pop_front();
-      w_queue.push_back(payload);
     }
   }
 
   /* Send write beat WVALID */
-  if ((w_state == CLEAR || w_state == REQ) && !w_queue.empty()) {
+  if (w_state == CLEAR && !w_queue.empty()) {
     ARM::AXI::Payload *payload = w_queue.front();
     ARM::AXI::Phase phase = (w_beat_count + 1 == payload->get_beat_count())
                                 ? ARM::AXI::W_VALID_LAST
@@ -105,18 +96,25 @@ void Core::clock_negedge() {
     if (reply == TLM_UPDATED) {
       sc_assert(phase == ARM::AXI::W_READY);
       w_state = ACK;
-      w_beat_count++;
-      if (w_beat_count == payload->get_beat_count()) {
-        w_queue.pop_front();
-        w_beat_count = 0;
-        write_done.notify(SC_ZERO_TIME);
-      }
+    }
+  }
+
+  /* Send next payload ARVALID */
+  if (ar_state == CLEAR && !ar_queue.empty()) {
+    ARM::AXI::Payload *payload = ar_queue.front();
+    ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
+
+    ar_state = REQ;
+    tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
+    if (reply == TLM_UPDATED) {
+      sc_assert(phase == ARM::AXI::AR_READY);
+      ar_state = ACK;
     }
   }
 }
 
 // -------------------------------------------------------
-// transport functions
+// Transport functions
 // -------------------------------------------------------
 tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                         tlm_phase &phase,
@@ -215,11 +213,11 @@ Core::RequestHandle *Core::read(uint32_t request_id, int destination_id,
                                 uint32_t address, unsigned char *data,
                                 unsigned int data_length, bool is_volatile) {
   if (data_length > MAX_INCR_BURST_SIZE) {
-    std::ostringstream oss;
-    oss << "AXI Burst Error: Requested data length (" << data_length
-        << " bytes) exceeds maximum allowed incremental burst size ("
-        << MAX_INCR_BURST_SIZE << " bytes)";
-    SC_REPORT_ERROR(name(), oss.str().c_str());
+    std::ostringstream message;
+    message << "AXI Burst Error: Requested data length (" << data_length
+            << " bytes) exceeds maximum allowed incremental burst size ("
+            << MAX_INCR_BURST_SIZE << " bytes)";
+    SC_REPORT_ERROR(name(), message.str().c_str());
   }
   bool fixed_address = true;
   return read_internal(request_id, destination_id, address, fixed_address, data,
@@ -231,11 +229,11 @@ Core::RequestHandle *Core::read_fixed(uint32_t request_id, int destination_id,
                                       unsigned int data_length,
                                       bool is_volatile) {
   if (data_length > MAX_FIXED_BURST_SIZE) {
-    std::ostringstream oss;
-    oss << "AXI Burst Error: Requested data length (" << data_length
-        << " bytes) exceeds maximum allowed fixed burst size ("
-        << MAX_INCR_BURST_SIZE << " bytes)";
-    SC_REPORT_ERROR(name(), oss.str().c_str());
+    std::ostringstream message;
+    message << "AXI Burst Error: Requested data length (" << data_length
+            << " bytes) exceeds maximum allowed fixed burst size ("
+            << MAX_INCR_BURST_SIZE << " bytes)";
+    SC_REPORT_ERROR(name(), message.str().c_str());
   }
   bool fixed_address = true;
   return read_internal(request_id, destination_id, address, fixed_address, data,
@@ -247,11 +245,11 @@ Core::RequestHandle *Core::read_wrap(uint32_t request_id, int destination_id,
                                      unsigned int data_length,
                                      bool is_volatile) {
   if (data_length > MAX_WRAP_BURST_SIZE) {
-    std::ostringstream oss;
-    oss << "AXI Burst Error: Requested data length (" << data_length
-        << " bytes) exceeds maximum allowed wrap burst size ("
-        << MAX_INCR_BURST_SIZE << " bytes)";
-    SC_REPORT_ERROR(name(), oss.str().c_str());
+    std::ostringstream message;
+    message << "AXI Burst Error: Requested data length (" << data_length
+            << " bytes) exceeds maximum allowed wrap burst size ("
+            << MAX_INCR_BURST_SIZE << " bytes)";
+    SC_REPORT_ERROR(name(), message.str().c_str());
   }
   bool fixed_address = true;
   return read_internal(request_id, destination_id, address, fixed_address, data,
@@ -303,11 +301,11 @@ Core::RequestHandle *Core::write(uint32_t request_id, int destination_id,
                                  uint32_t address, unsigned char *data,
                                  unsigned int data_length, bool is_volatile) {
   if (data_length > MAX_INCR_BURST_SIZE) {
-    std::ostringstream oss;
-    oss << "AXI Burst Error: Requested data length (" << data_length
-        << " bytes) exceeds maximum allowed incremental burst size ("
-        << MAX_INCR_BURST_SIZE << " bytes)";
-    SC_REPORT_ERROR(name(), oss.str().c_str());
+    std::ostringstream message;
+    message << "AXI Burst Error: Requested data length (" << data_length
+            << " bytes) exceeds maximum allowed incremental burst size ("
+            << MAX_INCR_BURST_SIZE << " bytes)";
+    SC_REPORT_ERROR(name(), message.str().c_str());
   }
   bool fixed_address = true;
   return write_internal(request_id, destination_id, address, fixed_address,
@@ -318,11 +316,11 @@ Core::RequestHandle *Core::write(uint32_t request_id, int destination_id,
                                  unsigned char *data,
                                  unsigned int data_length) {
   if (data_length > MAX_INCR_BURST_SIZE) {
-    std::ostringstream oss;
-    oss << "AXI Burst Error: Requested data length (" << data_length
-        << " bytes) exceeds maximum allowed incremental burst size ("
-        << MAX_INCR_BURST_SIZE << " bytes)";
-    SC_REPORT_ERROR(name(), oss.str().c_str());
+    std::ostringstream message;
+    message << "AXI Burst Error: Requested data length (" << data_length
+            << " bytes) exceeds maximum allowed incremental burst size ("
+            << MAX_INCR_BURST_SIZE << " bytes)";
+    SC_REPORT_ERROR(name(), message.str().c_str());
   }
   uint32_t address = 0x0;
   bool fixed_address = false;
@@ -336,11 +334,11 @@ Core::RequestHandle *Core::write_fixed(uint32_t request_id, int destination_id,
                                        unsigned int data_length,
                                        bool is_volatile) {
   if (data_length > MAX_INCR_BURST_SIZE) {
-    std::ostringstream oss;
-    oss << "AXI Burst Error: Requested data length (" << data_length
-        << " bytes) exceeds maximum allowed fixed burst size ("
-        << MAX_INCR_BURST_SIZE << " bytes)";
-    SC_REPORT_ERROR(name(), oss.str().c_str());
+    std::ostringstream message;
+    message << "AXI Burst Error: Requested data length (" << data_length
+            << " bytes) exceeds maximum allowed fixed burst size ("
+            << MAX_INCR_BURST_SIZE << " bytes)";
+    SC_REPORT_ERROR(name(), message.str().c_str());
   }
   bool fixed_address = true;
   return write_internal(request_id, destination_id, address, fixed_address,
@@ -351,11 +349,11 @@ Core::RequestHandle *Core::write_fixed(uint32_t request_id, int destination_id,
                                        unsigned char *data,
                                        unsigned int data_length) {
   if (data_length > MAX_INCR_BURST_SIZE) {
-    std::ostringstream oss;
-    oss << "AXI Burst Error: Requested data length (" << data_length
-        << " bytes) exceeds maximum allowed fixed burst size ("
-        << MAX_INCR_BURST_SIZE << " bytes)";
-    SC_REPORT_ERROR(name(), oss.str().c_str());
+    std::ostringstream message;
+    message << "AXI Burst Error: Requested data length (" << data_length
+            << " bytes) exceeds maximum allowed fixed burst size ("
+            << MAX_INCR_BURST_SIZE << " bytes)";
+    SC_REPORT_ERROR(name(), message.str().c_str());
   }
   uint32_t address = 0x0;
   bool fixed_address = false;
@@ -369,11 +367,11 @@ Core::RequestHandle *Core::write_wrap(uint32_t request_id, int destination_id,
                                       unsigned int data_length,
                                       bool is_volatile) {
   if (data_length > MAX_INCR_BURST_SIZE) {
-    std::ostringstream oss;
-    oss << "AXI Burst Error: Requested data length (" << data_length
-        << " bytes) exceeds maximum allowed wrap burst size ("
-        << MAX_INCR_BURST_SIZE << " bytes)";
-    SC_REPORT_ERROR(name(), oss.str().c_str());
+    std::ostringstream message;
+    message << "AXI Burst Error: Requested data length (" << data_length
+            << " bytes) exceeds maximum allowed wrap burst size ("
+            << MAX_INCR_BURST_SIZE << " bytes)";
+    SC_REPORT_ERROR(name(), message.str().c_str());
   }
   bool fixed_address = true;
   return write_internal(request_id, destination_id, address, fixed_address,
@@ -384,11 +382,11 @@ Core::RequestHandle *Core::write_wrap(uint32_t request_id, int destination_id,
                                       unsigned char *data,
                                       unsigned int data_length) {
   if (data_length > MAX_INCR_BURST_SIZE) {
-    std::ostringstream oss;
-    oss << "AXI Burst Error: Requested data length (" << data_length
-        << " bytes) exceeds maximum allowed wrap burst size ("
-        << MAX_INCR_BURST_SIZE << " bytes)";
-    SC_REPORT_ERROR(name(), oss.str().c_str());
+    std::ostringstream message;
+    message << "AXI Burst Error: Requested data length (" << data_length
+            << " bytes) exceeds maximum allowed wrap burst size ("
+            << MAX_INCR_BURST_SIZE << " bytes)";
+    SC_REPORT_ERROR(name(), message.str().c_str());
   }
   uint32_t address = 0x0;
   bool fixed_address = false;

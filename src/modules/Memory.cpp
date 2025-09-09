@@ -8,52 +8,40 @@ Memory::Memory(sc_module_name name, unsigned int axi_width, unsigned int size)
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       mem(size * 1024, 0), write_flags(mem.size(), false),
       offchip_base_address(size * 1024 / 2) {
-  SC_METHOD(clock_posedge);
-  sensitive << clock.pos();
+  SC_METHOD(clk_posedge);
+  sensitive << clk.pos();
   dont_initialize();
 
-  SC_METHOD(clock_negedge);
-  sensitive << clock.neg();
+  SC_METHOD(clk_negedge);
+  sensitive << clk.neg();
   dont_initialize();
 }
 
-void Memory::clock_posedge() {
-  if (b_state == ACK)
+void Memory::clk_posedge() {
+  if (b_state == ACK) {
     b_state = CLEAR;
-  if (r_state == ACK)
+    b_outgoing->unref();
+    b_outgoing = nullptr;
+    active_addr = UINT32_MAX;
+  }
+
+  if (r_state == ACK) {
     r_state = CLEAR;
-
-  // --- READ request ---
-  if (!r_outgoing && !ar_queue.empty()) {
-    if (active_addr == UINT32_MAX) {
-      set_active_address(*ar_queue.front());
-    } else {
-      r_outgoing = ar_queue.front();
-      ar_queue.pop_front();
-
-      r_beat_count = r_outgoing->get_beat_count();
-      unsigned beats = r_beat_count;
-      unsigned beat_bytes = r_outgoing->get_beat_data_length();
-      ARM::AXI::Burst burst = r_outgoing->get_burst();
-
-      size_t total_len = static_cast<size_t>(beats * beat_bytes);
-      sc_assert(total_len == r_outgoing->get_data_length());
-
-      std::vector<uint8_t> staging(total_len);
-      for (unsigned i = 0; i < beats; ++i) {
-        const uint32_t a =
-            set_beat_address(active_addr, i, beat_bytes, beats, burst);
-        std::memcpy(&staging[i * beat_bytes], &mem[a], beat_bytes);
-      }
-
-      r_outgoing->read_in(staging.data());
+    r_beat_count--;
+    if (r_beat_count == 0) {
+      r_outgoing->unref();
+      r_outgoing = nullptr;
+      active_addr = UINT32_MAX;
     }
   }
 
-  // --- WRITE request ---
-  else if (!b_outgoing && !aw_queue.empty()) {
+  /* WRITE REQUEST */
+  if (!b_outgoing && !aw_queue.empty()) {
     if (active_addr == UINT32_MAX) {
       set_active_address(*aw_queue.front());
+
+      ARM::AXI::Phase phase = ARM::AXI::AW_READY;
+      tsocket.nb_transport_bw(*aw_queue.front(), phase);
     } else if (!w_queue.empty()) {
       b_outgoing = w_queue.front();
       aw_queue.pop_front();
@@ -66,21 +54,62 @@ void Memory::clock_posedge() {
       size_t total_len = static_cast<size_t>(beats * beat_bytes);
       sc_assert(total_len == b_outgoing->get_data_length());
 
-      std::vector<uint8_t> staging(total_len);
-      b_outgoing->write_out(staging.data());
+      std::vector<uint8_t> buffer(total_len);
+      b_outgoing->write_out(buffer.data());
 
       for (unsigned i = 0; i < beats; ++i) {
         const uint32_t a =
             set_beat_address(active_addr, i, beat_bytes, beats, burst);
-        std::memcpy(&mem[a], &staging[i * beat_bytes], beat_bytes);
+        std::memcpy(&mem[a], &buffer[i * beat_bytes], beat_bytes);
       }
 
       b_outgoing->unref();
     }
   }
+
+  /* READ REQUEST */
+  else if (!r_outgoing && !ar_queue.empty()) {
+    if (active_addr == UINT32_MAX) {
+      set_active_address(*ar_queue.front());
+
+      ARM::AXI::Phase phase = ARM::AXI::AR_READY;
+      tsocket.nb_transport_bw(*ar_queue.front(), phase);
+    } else {
+      r_outgoing = ar_queue.front();
+      ar_queue.pop_front();
+
+      r_beat_count = r_outgoing->get_beat_count();
+      unsigned beats = r_beat_count;
+      unsigned beat_bytes = r_outgoing->get_beat_data_length();
+      ARM::AXI::Burst burst = r_outgoing->get_burst();
+
+      size_t total_len = static_cast<size_t>(beats * beat_bytes);
+      sc_assert(total_len == r_outgoing->get_data_length());
+
+      std::vector<uint8_t> buffer(total_len);
+      for (unsigned i = 0; i < beats; ++i) {
+        const uint32_t a =
+            set_beat_address(active_addr, i, beat_bytes, beats, burst);
+        std::memcpy(&buffer[i * beat_bytes], &mem[a], beat_bytes);
+      }
+
+      r_outgoing->read_in(buffer.data());
+    }
+  }
 }
 
-void Memory::clock_negedge() {
+void Memory::clk_negedge() {
+  if (b_outgoing) {
+    ARM::AXI::Phase phase = ARM::AXI::B_VALID;
+
+    b_state = REQ;
+    tlm_sync_enum reply = tsocket.nb_transport_bw(*b_outgoing, phase);
+    if (reply == TLM_UPDATED) {
+      sc_assert(phase == ARM::AXI::B_READY);
+      b_state = ACK;
+    }
+  }
+
   if (r_outgoing) {
     ARM::AXI::Phase phase =
         (r_beat_count == 1) ? ARM::AXI::R_VALID_LAST : ARM::AXI::R_VALID;
@@ -90,57 +119,27 @@ void Memory::clock_negedge() {
     if (reply == TLM_UPDATED) {
       sc_assert(phase == ARM::AXI::R_READY);
       r_state = ACK;
-      r_beat_count--;
-      if (r_beat_count == 0) {
-        r_outgoing->unref();
-        r_outgoing = nullptr;
-        active_txn = false;
-        active_addr = UINT32_MAX;
-      }
-    }
-  }
-
-  if (b_outgoing) {
-    ARM::AXI::Phase phase = ARM::AXI::B_VALID;
-
-    b_state = REQ;
-    tlm_sync_enum reply = tsocket.nb_transport_bw(*b_outgoing, phase);
-    if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::B_READY);
-      b_state = ACK;
-      b_outgoing->unref();
-      b_outgoing = nullptr;
-      active_txn = false;
-      active_addr = UINT32_MAX;
     }
   }
 }
 
 // -------------------------------------------------------
-// transport functions
+// Transport functions
 // -------------------------------------------------------
 tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload,
                                       ARM::AXI::Phase &phase) {
   switch (phase) {
   case ARM::AXI::AR_VALID:
-    if (active_txn)
-      return TLM_ACCEPTED; // backpressure
-    active_txn = true;
     ar_queue.push_back(&payload);
     payload.ref();
-    phase = ARM::AXI::AR_READY;
-    return TLM_UPDATED;
+    return TLM_ACCEPTED;
   case ARM::AXI::R_READY:
     r_state = ACK;
     return TLM_ACCEPTED;
   case ARM::AXI::AW_VALID:
-    if (active_txn)
-      return TLM_ACCEPTED; // backpressure
-    active_txn = true;
     aw_queue.push_back(&payload);
     payload.ref();
-    phase = ARM::AXI::AW_READY;
-    return TLM_UPDATED;
+    return TLM_ACCEPTED;
   case ARM::AXI::W_VALID:
     phase = ARM::AXI::W_READY;
     return TLM_UPDATED;
@@ -159,7 +158,7 @@ tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload,
 }
 
 // -------------------------------------------------------
-// helper functions
+// Helper functions
 // -------------------------------------------------------
 void Memory::set_active_address(ARM::AXI::Payload &payload) {
   uint32_t address = payload.get_address();
@@ -174,33 +173,33 @@ void Memory::set_active_address(ARM::AXI::Payload &payload) {
 
   if (is_onchip) {
     if (read_op) {
-      // on-chip read request
-      // free allocated address range on read
+      // On-chip read request
+      // Free allocated address range on read
       deallocate_dynamic_address(address, data_size);
       active_addr = address;
-    } else if (write_op && user.flit_count == 0) {
-      // off-chip read response
+    } else if (write_op && user.flit_count != 0) {
+      // Off-chip read response
       active_addr = set_flit_address(payload);
     } else if (write_op && user.fixed_address) {
-      // on-chip fixed write request
+      // On-chip fixed write request
       allocated_ranges[address] = data_size;
       active_addr = address;
     } else if (write_op && !user.fixed_address) {
-      // on-chip dynamic write request
+      // On-chip dynamic write request
       active_addr = allocate_dynamic_address(true, data_size);
     }
   } else {
     if (read_op) {
-      // off-chip read request
+      // Off-chip read request
       active_addr = address + offchip_base_address;
-      // free allocated address range on read
+      // Free allocated address range on read
       deallocate_dynamic_address(address + offchip_base_address, data_size);
     } else if (write_op && user.fixed_address) {
-      // off-chip fixed write request
+      // Off-chip fixed write request
       active_addr = address + offchip_base_address;
       allocated_ranges[address + offchip_base_address] = data_size;
     } else if (write_op && !user.fixed_address) {
-      // off-chip dynamic write request
+      // Off-chip dynamic write request
       active_addr = set_flit_address(payload);
     }
   }
@@ -218,25 +217,25 @@ uint32_t Memory::set_flit_address(ARM::AXI::Payload &payload) {
   if (flit_id == 0) {
     flit_data_size = payload.get_data_length();
     unsigned request_data_size = flit_data_size * user.flit_count;
-    // allocate dynamic address range with first flit
+    // Allocate dynamic address range with first flit
     uint32_t flit_base_address =
         allocate_dynamic_address(false, request_data_size);
     pending_flit_writes[flit_key] = flit_base_address;
     flit_id += 1;
     return flit_base_address;
   } else {
-    // increment dynamic address for upcoming flits
+    // Increment dynamic address for upcoming flits
     auto it = pending_flit_writes.find(flit_key);
 
     uint32_t flit_base_address = it->second;
     uint32_t flit_address = flit_base_address + flit_id * flit_data_size;
 
     if (flit_id == user.flit_count - 1) {
-      // deallocate flit padding on last flit
+      // Deallocate flit padding on last flit
       deallocate_dynamic_address(flit_address + payload.get_data_length(),
                                  flit_data_size - payload.get_data_length());
       flit_id = 0;
-      // remove pending on last flit
+      // Remove pending on last flit
       pending_flit_writes.erase(it);
     } else {
       flit_id += 1;
@@ -292,13 +291,13 @@ void Memory::deallocate_dynamic_address(uint32_t address, unsigned length) {
   allocated_ranges.erase(it);
 
   if (address > start) {
-    // left part remains
+    // Left part remains
     SC_LOG_DEBUG(this, "Allocate: " << std::hex << start << " - " << address);
     allocated_ranges[start] = address - start;
   }
 
   if (new_start < new_end) {
-    // right part remains
+    // Right part remains
     SC_LOG_DEBUG(this,
                  "Allocate: " << std::hex << new_start << " - " << new_end);
     allocated_ranges[new_start] = new_end - new_start;
@@ -323,13 +322,13 @@ uint32_t Memory::set_beat_address(uint32_t base, unsigned beat_idx,
     return aligned_base | (incr_address & (burst_size - 1));
   }
   default:
-    // treat unknown as INCR (safe fallback)
+    // Treat unknown as INCR (safe fallback)
     return base + static_cast<uint32_t>(beat_idx * beat_bytes);
   }
 }
 
 // -------------------------------------------------------
-// debug functions
+// Debug functions
 // -------------------------------------------------------
 void Memory::report_usage() {
   size_t written_bytes =

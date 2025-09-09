@@ -36,7 +36,7 @@ AXIBus::AXIBus(sc_module_name name, unsigned int chip_id,
 AXIBus::~AXIBus() { delete[] beat_data; }
 
 // -------------------------------------------------------
-// transport functions
+// Transport functions
 // -------------------------------------------------------
 tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
                                       ARM::AXI::Phase &phase) {
@@ -136,7 +136,7 @@ tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
 }
 
 // -------------------------------------------------------
-// helper functions
+// Helper functions
 // -------------------------------------------------------
 int AXIBus::route_payload(ARM::AXI::Payload &payload) {
   UserSignals user = UserSignals::decode(payload.user);
@@ -144,7 +144,7 @@ int AXIBus::route_payload(ARM::AXI::Payload &payload) {
 }
 
 // -------------------------------------------------------
-// debug functions
+// Debug functions
 // -------------------------------------------------------
 void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
                            tlm::tlm_sync_enum reply, ARM::AXI::Phase) {
@@ -156,7 +156,16 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
   bool first_beat = false;
   bool last_beat = false;
 
-  bool updated = reply == tlm::TLM_UPDATED;
+  bool updated = false;
+
+  auto it = payload_phase_map.find(&payload);
+  if (it != payload_phase_map.end()) {
+    updated = (reply == tlm::TLM_UPDATED) || (it->second != phase);
+    it->second = phase;
+  } else {
+    updated = (reply == tlm::TLM_UPDATED);
+    payload_phase_map[&payload] = phase;
+  }
 
   switch (phase) {
   case ARM::AXI::PHASE_UNINITIALIZED:
@@ -167,7 +176,7 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
     phase_name = (updated ? "AW VALID READY" : "AW VALID -----");
     break;
   case ARM::AXI::AW_READY:
-    phase_name = "AW ----- READY";
+    phase_name = (updated ? "AW VALID READY" : "AW ----- READY");
     break;
   case ARM::AXI::W_VALID:
   case ARM::AXI::W_VALID_LAST:
@@ -179,7 +188,7 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
     break;
   case ARM::AXI::W_READY:
     inc_beat = true;
-    phase_name = "W  ----- READY";
+    phase_name = (updated ? "W  VALID READY" : "W  ----- READY");
     show_data = true;
     last_beat = true;
     break;
@@ -189,7 +198,7 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
     last_beat = updated;
     break;
   case ARM::AXI::B_READY:
-    phase_name = "B  ----- READY";
+    phase_name = (updated ? "B  VALID READY" : "B  ----- READY");
     show_resp = true;
     last_beat = true;
     break;
@@ -197,7 +206,7 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
     phase_name = (updated ? "AR VALID READY" : "AR VALID -----");
     break;
   case ARM::AXI::AR_READY:
-    phase_name = "AR ----- READY";
+    phase_name = (updated ? "AR VALID READY" : "AR ----- READY");
     break;
   case ARM::AXI::R_VALID:
   case ARM::AXI::R_VALID_LAST:
@@ -210,58 +219,24 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
     break;
   case ARM::AXI::R_READY:
     inc_beat = true;
-    phase_name = "R  ----- READY";
+    phase_name = (updated ? "R  VALID READY" : "R  ----- READY");
     show_data = true;
     show_resp = true;
     last_beat = true;
-    break;
-  case ARM::AXI::AC_VALID:
-    phase_name = (updated ? "AC VALID READY" : "AC VALID -----");
-    break;
-  case ARM::AXI::AC_READY:
-    phase_name = "AC ----- READY";
-    break;
-  case ARM::AXI::CR_VALID:
-    phase_name = (updated ? "CR VALID READY" : "CR VALID -----");
-    break;
-  case ARM::AXI::CR_READY:
-    phase_name = "CR ----- READY";
-    break;
-  case ARM::AXI::CD_VALID:
-  case ARM::AXI::CD_VALID_LAST:
-    phase_name = (updated ? "CD VALID READY" : "CD VALID -----");
-    inc_beat = updated;
-    show_data = true;
-    first_beat = true;
-    last_beat = updated;
-    break;
-  case ARM::AXI::CD_READY:
-    inc_beat = true;
-    phase_name = "CD ----- READY";
-    show_data = true;
-    last_beat = true;
-    break;
-  case ARM::AXI::WACK:
-    phase_name = "WACK";
-    show_addr = false;
-    break;
-  case ARM::AXI::RACK:
-    phase_name = "RACK";
-    show_addr = false;
     break;
   default:
     show_addr = false;
     break;
   }
 
-  // track beats
+  // Track beats
   if (first_beat &&
       payload_burst_index.find(&payload) == payload_burst_index.end())
     payload_burst_index[&payload] = 0;
 
   std::ostringstream message;
 
-  // channel source/destination info
+  // Channel source/destination info
   auto mgr_it = payloads2mgr.find(&payload);
   auto sub_it = payloads2sub.find(&payload);
   if (mgr_it != payloads2mgr.end() && sub_it != payloads2sub.end()) {
@@ -269,7 +244,7 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
             << "] | ";
   }
 
-  // phase
+  // Phase
   message << phase_name << " ";
 
   if (show_addr) {
@@ -333,6 +308,9 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
     if (inc_beat)
       payload_burst_index[&payload] = burst_index + 1;
   }
+
+  if (last_beat)
+    payload_phase_map.erase(&payload);
 
   if (last_beat && payload_burst_index[&payload] == payload.get_beat_count())
     payload_burst_index.erase(&payload);

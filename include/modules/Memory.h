@@ -13,15 +13,15 @@ using namespace tlm;
 
 SC_MODULE(Memory) {
 public:
-  sc_core::sc_in<bool> clock;
+  sc_core::sc_in<bool> clk;
 
   // -------------------------------------------------------
-  // trackers
+  // Trackers
   // -------------------------------------------------------
   UtilizationTracker utilization_tracker;
 
   // -------------------------------------------------------
-  // sockets
+  // Sockets
   // -------------------------------------------------------
   ARM::AXI::SimpleTargetSocket<Memory> tsocket;
 
@@ -30,19 +30,19 @@ public:
 private:
   enum ChannelState { CLEAR, REQ, ACK };
 
-  ChannelState r_state = CLEAR;
   ChannelState b_state = CLEAR;
+  ChannelState r_state = CLEAR;
 
-  std::deque<ARM::AXI::Payload *> ar_queue;
   std::deque<ARM::AXI::Payload *> aw_queue;
   std::deque<ARM::AXI::Payload *> w_queue;
+  std::deque<ARM::AXI::Payload *> ar_queue;
 
-  ARM::AXI::Payload *r_outgoing = nullptr;
   ARM::AXI::Payload *b_outgoing = nullptr;
+  ARM::AXI::Payload *r_outgoing = nullptr;
 
   unsigned r_beat_count;
 
-  // memory
+  // Memory
   std::vector<uint8_t> mem;
   std::vector<bool> write_flags;
   std::map<uint32_t, unsigned> allocated_ranges;
@@ -72,28 +72,27 @@ private:
   unsigned flit_data_size = 0;
   unsigned flit_id = 0;
 
-  void clock_posedge();
-  void clock_negedge();
+  void clk_posedge();
+  void clk_negedge();
 
   // -------------------------------------------------------
-  // state variables
+  // State variables
   // -------------------------------------------------------
-  bool active_txn = false;
   uint32_t active_addr = UINT32_MAX;
 
   // -------------------------------------------------------
-  // parameters
+  // Parameters
   // -------------------------------------------------------
   const unsigned int size;
 
   // -------------------------------------------------------
-  // transport functions
+  // Transport functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);
 
   // -------------------------------------------------------
-  // helper functions
+  // Helper functions
   // -------------------------------------------------------
   void set_active_address(ARM::AXI::Payload & payload);
   uint32_t set_flit_address(ARM::AXI::Payload & payload);
@@ -105,7 +104,7 @@ private:
   void deallocate_dynamic_address(uint32_t address, unsigned size);
 
   // -------------------------------------------------------
-  // debug functions
+  // Debug functions
   // -------------------------------------------------------
 public:
   void report_usage();

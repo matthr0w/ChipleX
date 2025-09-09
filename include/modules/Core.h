@@ -16,21 +16,21 @@ using namespace tlm_utils;
 
 SC_MODULE(Core) {
 public:
-  sc_core::sc_in<bool> clock;
+  sc_core::sc_in<bool> clk;
 
   // -------------------------------------------------------
-  // trackers
+  // Trackers
   // -------------------------------------------------------
   UtilizationTracker utilization_tracker;
 
   // -------------------------------------------------------
-  // sockets
+  // Sockets
   // -------------------------------------------------------
   ARM::AXI::SimpleInitiatorSocket<Core> isocket;
   simple_target_socket<Core> irq_socket;
 
-  Core(sc_module_name name, unsigned int chip_id, unsigned int core_id,
-       unsigned int axi_width, sc_time irq_delay);
+  Core(sc_module_name name, unsigned chip_id, unsigned core_id,
+       unsigned axi_width, sc_time irq_delay);
 
   std::function<void(Core &, UtilizationTracker *)> thread_fn;
   std::function<void(Core &, UtilizationTracker *, tlm_generic_payload *)>
@@ -69,13 +69,13 @@ public:
 private:
   enum ChannelState { CLEAR, REQ, ACK };
 
-  ChannelState ar_state = CLEAR;
   ChannelState aw_state = CLEAR;
   ChannelState w_state = CLEAR;
+  ChannelState ar_state = CLEAR;
 
-  std::deque<ARM::AXI::Payload *> ar_queue;
   std::deque<ARM::AXI::Payload *> aw_queue;
   std::deque<ARM::AXI::Payload *> w_queue;
+  std::deque<ARM::AXI::Payload *> ar_queue;
 
   unsigned w_beat_count = 0;
 
@@ -83,35 +83,19 @@ private:
 
   std::deque<tlm_generic_payload *> irq_queue;
 
-  void clock_posedge();
-  void clock_negedge();
+  void clk_posedge();
+  void clk_negedge();
 
   // -------------------------------------------------------
-  // parameters
+  // Parameters
   // -------------------------------------------------------
-  const unsigned int chip_id;
-  const unsigned int core_id;
-  const unsigned int axi_width;
+  const unsigned chip_id;
+  const unsigned core_id;
+  const unsigned axi_width;
   const sc_time irq_delay;
 
   // -------------------------------------------------------
-  // events
-  // -------------------------------------------------------
-  sc_event read_done;
-  sc_event write_done;
-  sc_event interrupt_request;
-
-  // -------------------------------------------------------
-  // transport functions
-  // -------------------------------------------------------
-  tlm_sync_enum nb_transport_fw_irq(tlm_generic_payload & payload,
-                                    tlm_phase & phase, sc_time & delay);
-
-  tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload,
-                                ARM::AXI::Phase & phase);
-
-  // -------------------------------------------------------
-  // delay model
+  // Delay model
   // -------------------------------------------------------
   struct DelayModel {
   private:
@@ -129,50 +113,66 @@ private:
   DelayModel delays{*this};
 
   // -------------------------------------------------------
+  // Events
+  // -------------------------------------------------------
+  sc_event read_done;
+  sc_event write_done;
+  sc_event interrupt_request;
+
+  // -------------------------------------------------------
+  // Transport functions
+  // -------------------------------------------------------
+  tlm_sync_enum nb_transport_fw_irq(tlm_generic_payload & payload,
+                                    tlm_phase & phase, sc_time & delay);
+
+  tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload,
+                                ARM::AXI::Phase & phase);
+
+  // -------------------------------------------------------
   // AXI methods
   // -------------------------------------------------------
 private:
   RequestHandle *read_internal(uint32_t request_id, int destination_id,
                                uint32_t address, bool fixed_address,
-                               unsigned char *data, unsigned int data_length,
+                               unsigned char *data, unsigned data_length,
                                ARM::AXI::Burst burst, bool is_volatile);
 
   RequestHandle *write_internal(uint32_t request_id, int destination_id,
                                 uint32_t address, bool fixed_address,
-                                unsigned char *data, unsigned int data_length,
+                                unsigned char *data, unsigned data_length,
                                 ARM::AXI::Burst burst, bool is_volatile);
 
 public:
   RequestHandle *read(uint32_t request_id, int destination_id, uint32_t address,
-                      unsigned char *data, unsigned int data_length,
+                      unsigned char *data, unsigned data_length,
                       bool is_volatile);
 
   RequestHandle *read_fixed(uint32_t request_id, int destination_id,
                             uint32_t address, unsigned char *data,
-                            unsigned int data_length, bool is_volatile);
+                            unsigned data_length, bool is_volatile);
 
   RequestHandle *read_wrap(uint32_t request_id, int destination_id,
                            uint32_t address, unsigned char *data,
-                           unsigned int data_length, bool is_volatile);
+                           unsigned data_length, bool is_volatile);
 
   RequestHandle *write(uint32_t request_id, int destination_id,
                        uint32_t address, unsigned char *data,
-                       unsigned int data_length, bool is_volatile);
+                       unsigned data_length, bool is_volatile);
 
   RequestHandle *write(uint32_t request_id, int destination_id,
-                       unsigned char *data, unsigned int data_length);
+                       unsigned char *data, unsigned data_length);
 
   RequestHandle *write_fixed(uint32_t request_id, int destination_id,
                              uint32_t address, unsigned char *data,
-                             unsigned int data_length, bool is_volatile);
+                             unsigned data_length, bool is_volatile);
 
   RequestHandle *write_fixed(uint32_t request_id, int destination_id,
-                             unsigned char *data, unsigned int data_length);
+                             unsigned char *data, unsigned data_length);
 
   RequestHandle *write_wrap(uint32_t request_id, int destination_id,
                             uint32_t address, unsigned char *data,
-                            unsigned int data_length, bool is_volatile);
+                            unsigned data_length, bool is_volatile);
 
   RequestHandle *write_wrap(uint32_t request_id, int destination_id,
-                            unsigned char *data, unsigned int data_length);
+                            unsigned char *data, unsigned data_length);
 };

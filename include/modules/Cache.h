@@ -13,15 +13,15 @@ using namespace tlm;
 
 SC_MODULE(Cache) {
 public:
-  sc_in<bool> clock;
+  sc_in<bool> clk;
 
   // -------------------------------------------------------
-  // trackers
+  // Trackers
   // -------------------------------------------------------
   UtilizationTracker utilization_tracker;
 
   // -------------------------------------------------------
-  // sockets
+  // Sockets
   // -------------------------------------------------------
   ARM::AXI::SimpleTargetSocket<Cache> tsocket;
   ARM::AXI::SimpleInitiatorSocket<Cache> isocket;
@@ -33,23 +33,23 @@ public:
 private:
   enum ChannelState { CLEAR, REQ, ACK };
 
-  ChannelState ar_state = CLEAR;
   ChannelState aw_state = CLEAR;
   ChannelState w_state = CLEAR;
+  ChannelState ar_state = CLEAR;
 
-  std::deque<ARM::AXI::Payload *> ar_queue_in;
   std::deque<ARM::AXI::Payload *> aw_queue_in;
   std::deque<ARM::AXI::Payload *> w_queue_in;
-  std::deque<ARM::AXI::Payload *> ar_queue_out;
+  std::deque<ARM::AXI::Payload *> ar_queue_in;
   std::deque<ARM::AXI::Payload *> aw_queue_out;
   std::deque<ARM::AXI::Payload *> w_queue_out;
+  std::deque<ARM::AXI::Payload *> ar_queue_out;
 
-  ARM::AXI::Payload *r_outgoing = nullptr;
   ARM::AXI::Payload *b_outgoing = nullptr;
+  ARM::AXI::Payload *r_outgoing = nullptr;
 
-  unsigned r_beat_count = 0;
   unsigned w_beat_count_in = 0;
   unsigned w_beat_count_out = 0;
+  unsigned r_beat_count = 0;
 
   struct CacheLine {
     bool valid = false;
@@ -84,24 +84,23 @@ private:
 
   uint8_t *beat_data;
 
-  void clock_posedge();
-  void clock_negedge();
+  void clk_posedge();
+  void clk_negedge();
 
-  // debug output
+  // Accumulators
   unsigned num_lines;
   unsigned num_accesses;
   unsigned num_hits;
   unsigned num_misses;
 
   // -------------------------------------------------------
-  // state variables
+  // State variables
   // -------------------------------------------------------
-  bool active_txn = false;
   bool r_beat_ready = false;
   bool b_beat_ready = false;
 
   // -------------------------------------------------------
-  // parameters
+  // Parameters
   // -------------------------------------------------------
   const unsigned chip_id;
   const unsigned axi_width;
@@ -110,7 +109,7 @@ private:
   const unsigned cache_store_buffer_size;
 
   // -------------------------------------------------------
-  // transport functions
+  // Transport functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);
@@ -119,7 +118,7 @@ private:
                                 ARM::AXI::Phase & phase);
 
   // -------------------------------------------------------
-  // helper functions
+  // Helper functions
   // -------------------------------------------------------
   uint32_t set_beat_address(uint32_t base, unsigned beat_idx,
                             unsigned beat_bytes, unsigned beats,
@@ -132,7 +131,7 @@ private:
   void complete_storebuffer_write(ARM::AXI::Payload * payload);
 
   // -------------------------------------------------------
-  // debug functions
+  // Debug functions
   // -------------------------------------------------------
 public:
   void dump();

@@ -26,20 +26,20 @@ FPGA::FPGA(sc_module_name name)
   }
 
   for (unsigned i = 0; i < num_cores; ++i) {
-    cores[i]->clock.bind(axi_clk);
+    cores[i]->clk.bind(axi_clk);
     cores[i]->isocket.bind(caches[i]->tsocket);
-    caches[i]->clock.bind(axi_clk);
+    caches[i]->clk.bind(axi_clk);
     caches[i]->isocket.bind(*axi_bus.mgr_tsockets[i]);
   }
 
   // Memory
-  memory.clock.bind(axi_clk);
+  memory.clk.bind(axi_clk);
 
   // AXI Bus
   axi_bus.sub_isockets[0]->bind(memory.tsocket);
 
   // DMA Engine
-  dma_engine.clock.bind(axi_clk);
+  dma_engine.clk.bind(axi_clk);
   dma_engine.isocket.bind(*axi_bus.mgr_tsockets[num_axi_managers - 1]);
 
   // Interconnect

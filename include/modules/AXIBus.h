@@ -1,6 +1,5 @@
 #pragma once
 
-#include <map>
 #include <memory>
 #include <systemc>
 #include <tlm>
@@ -13,7 +12,7 @@ using namespace tlm;
 SC_MODULE(AXIBus) {
 public:
   // -------------------------------------------------------
-  // sockets
+  // Sockets
   // -------------------------------------------------------
   std::vector<std::unique_ptr<ARM::AXI4::SimpleTargetSocketTagged<AXIBus>>>
       mgr_tsockets;
@@ -28,13 +27,13 @@ private:
   struct ChannelState {
     bool locked = false;
     ARM::AXI::Payload *cur =
-        nullptr;  // transaction currently using this channel
-    int mgr = -1; // manager id
+        nullptr;  // Transaction currently using this channel
+    int mgr = -1; // Manager ID
   };
 
   struct SubState {
-    ChannelState R; // AR/R channel state
     ChannelState W; // AW/W/B channel state
+    ChannelState R; // AR/R channel state
   };
 
   std::vector<SubState> sub_state;
@@ -45,18 +44,19 @@ private:
   sc_mutex fw_mutex;
   sc_mutex bw_mutex;
 
-  // debug output
+  // Monitor
   uint8_t *beat_data;
-  std::map<ARM::AXI::Payload *, unsigned> payload_burst_index;
+  std::unordered_map<ARM::AXI::Payload *, ARM::AXI::Phase> payload_phase_map;
+  std::unordered_map<ARM::AXI::Payload *, unsigned> payload_burst_index;
 
   // -------------------------------------------------------
-  // parameters
+  // Parameters
   // -------------------------------------------------------
   const unsigned int chip_id;
   const unsigned int axi_width;
 
   // -------------------------------------------------------
-  // transport functions
+  // Transport functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
                                 ARM::AXI::Phase &phase);
@@ -65,12 +65,12 @@ private:
                                 ARM::AXI::Phase &phase);
 
   // -------------------------------------------------------
-  // helper functions
+  // Helper functions
   // -------------------------------------------------------
   int route_payload(ARM::AXI::Payload & payload);
 
   // -------------------------------------------------------
-  // debug functions
+  // Debug functions
   // -------------------------------------------------------
   void print_payload(ARM::AXI::Payload & payload, ARM::AXI::Phase sent_phase,
                      tlm_sync_enum reply, ARM::AXI::Phase reply_phase);
