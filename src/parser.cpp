@@ -72,6 +72,8 @@ ConnectionType Parser::parse_connection_type(const std::string &value) {
     return ConnectionType::PCIe;
   if (type == "UCIE")
     return ConnectionType::UCIe;
+  if (type == "SERIALLINK")
+    return ConnectionType::SerialLink;
   if (type == "SPI")
     return ConnectionType::SPI;
   return ConnectionType::Unknown;

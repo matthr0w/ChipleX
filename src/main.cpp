@@ -105,30 +105,31 @@ int sc_main(int argc, char *argv[]) {
     }
   }
 
+  // TODO: Let interconnect module handle the connection
   // connect chiplets in a ring topology
-  for (unsigned i = 0; i < num_chiplets; ++i) {
-    int next = (i + 1) % num_chiplets;
-    int prev = (i - 1 + num_chiplets) % num_chiplets;
+  // for (unsigned i = 0; i < num_chiplets; ++i) {
+  //   int next = (i + 1) % num_chiplets;
+  //   int prev = (i - 1 + num_chiplets) % num_chiplets;
 
-    // connect interconnect2 to next chiplet interconnect1
-    chiplets[i]->interconnect->out_ports[2]->bind(
-        *chiplets[next]->interconnect->in_ports[1]);
+  //   // connect interconnect2 to next chiplet interconnect1
+  //   chiplets[i]->interconnect->out_ports[2]->bind(
+  //       *chiplets[next]->interconnect->in_ports[1]);
 
-    // connect interconnect1 to previous chiplet interconnect2
-    chiplets[i]->interconnect->out_ports[1]->bind(
-        *chiplets[prev]->interconnect->in_ports[2]);
-  }
+  //   // connect interconnect1 to previous chiplet interconnect2
+  //   chiplets[i]->interconnect->out_ports[1]->bind(
+  //       *chiplets[prev]->interconnect->in_ports[2]);
+  // }
 
-  // connect chiplets to FPGA
-  for (unsigned i = 0; i < num_chiplets; ++i) {
-    // connect interconnect0 to FPGA interconnect
-    chiplets[i]->interconnect->out_ports[0]->bind(
-        *fpga.interconnect->in_ports[i]);
+  // // connect chiplets to FPGA
+  // for (unsigned i = 0; i < num_chiplets; ++i) {
+  //   // connect interconnect0 to FPGA interconnect
+  //   chiplets[i]->interconnect->out_ports[0]->bind(
+  //       *fpga.interconnect->in_ports[i]);
 
-    // connect FPGA interconnect to interconnect0
-    fpga.interconnect->out_ports[i]->bind(
-        *chiplets[i]->interconnect->in_ports[0]);
-  }
+  //   // connect FPGA interconnect to interconnect0
+  //   fpga.interconnect->out_ports[i]->bind(
+  //       *chiplets[i]->interconnect->in_ports[0]);
+  // }
 
   if (sim_duration == SC_ZERO_TIME) {
     sc_start();
@@ -145,7 +146,7 @@ int sc_main(int argc, char *argv[]) {
   // -------------------------------------------------------
   std::cout << "=== Statistics ===" << std::endl;
   std::cout << "--- General ---" << std::endl;
-  // times
+  // Times
   std::cout << "Simulation Time: " << sc_time_stamp() << std::endl;
   std::cout << "Execution Time: " << std::dec << duration.count() << " ms\n";
   // // latencies

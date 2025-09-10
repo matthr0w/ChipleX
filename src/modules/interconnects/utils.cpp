@@ -1,5 +1,6 @@
 #include "modules/interconnects/utils.h"
 #include "modules/interconnects/Generic.h"
+#include "modules/interconnects/serial_link/SerialLink.h"
 
 std::unique_ptr<InterconnectBase>
 create_interconnect(const std::string &type, unsigned chiplet_id,
@@ -8,13 +9,18 @@ create_interconnect(const std::string &type, unsigned chiplet_id,
   const Config &config = ConfigRegistry::instance().get("Interconnect");
   if (type == "Custom" || type == "PCIe" || type == "UCIe") {
     return std::make_unique<GenericInterconnect>(
-        "Interconnect", chiplet_id, axi_width, num_cores, num_interconnects,
+        sc_module_name(type.c_str()), chiplet_id, axi_width, num_cores,
+        num_interconnects,
         config.get<unsigned>("interconnect_protocol.flit_size"),
         config.get<unsigned>("interconnect_protocol.overhead_size"),
         config.get<unsigned>("interconnect.staging_buffer_size"),
         config.get<unsigned>("interconnect.link_buffer_size"),
         config.get<double>("interconnect.bandwidth_chiplets"),
         chiplet_distance_um, &dma_engine);
+  } else if (type == "SerialLink") {
+    return std::make_unique<SerialLink>(
+        sc_module_name(type.c_str()), chiplet_id, axi_width, num_cores,
+        config.get<unsigned>("network_layer.num_credits"));
   }
   throw std::runtime_error(type + " not implemented");
 }

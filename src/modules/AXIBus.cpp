@@ -93,7 +93,7 @@ tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
   tlm_sync_enum reply = sub_isockets[sub_id]->nb_transport_fw(payload, phase);
 
   if (log_level <= LogLevel::DEBUG)
-    print_payload(payload, prev_phase, reply, phase);
+    print_payload(payload, prev_phase, reply, phase, false);
 
   return reply;
 }
@@ -112,7 +112,7 @@ tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
   tlm_sync_enum reply = mgr_tsockets[mgr_id]->nb_transport_bw(payload, phase);
 
   if (log_level <= LogLevel::DEBUG)
-    print_payload(payload, prev_phase, reply, phase);
+    print_payload(payload, prev_phase, reply, phase, true);
 
   // unlock channel if response sent
   if (is_r_valid_last(prev_phase) && is_r_ready(phase)) {
@@ -147,7 +147,7 @@ int AXIBus::route_payload(ARM::AXI::Payload &payload) {
 // Debug functions
 // -------------------------------------------------------
 void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
-                           tlm::tlm_sync_enum reply, ARM::AXI::Phase) {
+                           tlm::tlm_sync_enum reply, ARM::AXI::Phase, bool bw_path) {
   const char *phase_name = "?";
   bool show_addr = true;
   bool show_data = false;
@@ -160,7 +160,7 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
 
   auto it = payload_phase_map.find(&payload);
   if (it != payload_phase_map.end()) {
-    updated = (reply == tlm::TLM_UPDATED) || (it->second != phase);
+    updated = (reply == tlm::TLM_UPDATED) || (it->second != phase) && bw_path;
     it->second = phase;
   } else {
     updated = (reply == tlm::TLM_UPDATED);

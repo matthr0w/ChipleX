@@ -42,6 +42,7 @@ const std::map<std::string, std::set<std::string>>
           "interconnect_protocol.retries", "interconnect.staging_buffer_size",
           "interconnect.link_buffer_size", "interconnect.bandwidth_chiplets",
           "interconnect.bandwidth_fpga", "interconnect.efficiency"}},
+        {"SerialLink", {"network_layer.num_credits"}},
         {"SPI",
          {"interconnect_protocol.flit_size",
           "interconnect_protocol.overhead_size",

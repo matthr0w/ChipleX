@@ -11,10 +11,12 @@ const char *to_string(ConnectionType type) {
   switch (type) {
   case ConnectionType::Custom:
     return "Custom";
-  case ConnectionType::UCIe:
-    return "UCIe";
   case ConnectionType::PCIe:
     return "PCIe";
+  case ConnectionType::UCIe:
+    return "UCIe";
+  case ConnectionType::SerialLink:
+    return "SerialLink";
   case ConnectionType::SPI:
     return "SPI";
   default:
