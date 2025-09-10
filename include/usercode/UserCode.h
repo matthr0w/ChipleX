@@ -28,20 +28,12 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         uint8_t *data = new uint8_t[num_bytes];
 
         for (size_t i = 0; i < num_bytes; ++i) {
-          data[i] = static_cast<uint8_t>(10);
+          data[i] = static_cast<uint8_t>(i);
         }
 
         auto h =
             core.write(1, 2, 0x1000, reinterpret_cast<unsigned char *>(data),
-                       num_bytes, false);
-        h->wait();
-
-        h = core.read(2, 2, 0x1000, reinterpret_cast<unsigned char *>(data),
-                      num_bytes, false);
-        h->wait();
-
-        h = core.write(1, 2, 0x1000, reinterpret_cast<unsigned char *>(data),
-                       num_bytes, false);
+                       num_bytes, true);
         h->wait();
       },
       [](Core &core, UtilizationTracker *tracker,
