@@ -31,9 +31,13 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
           data[i] = static_cast<uint8_t>(i);
         }
 
-        auto h =
-            core.write(1, 2, 0x1000, reinterpret_cast<unsigned char *>(data),
-                       num_bytes, true);
+        auto req = Core::WriteRequest(
+                       1, reinterpret_cast<unsigned char *>(data), num_bytes)
+                       .set_dest(2)
+                       .set_addr(0x1000)
+                       .skip_cache();
+
+        auto h = core.write(req);
         h->wait();
       },
       [](Core &core, UtilizationTracker *tracker,

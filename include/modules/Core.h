@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <systemc>
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
@@ -16,7 +17,7 @@ using namespace tlm_utils;
 
 SC_MODULE(Core) {
 public:
-  sc_core::sc_in<bool> clk;
+  sc_in<bool> clk;
 
   // -------------------------------------------------------
   // Trackers
@@ -35,6 +36,66 @@ public:
   std::function<void(Core &, UtilizationTracker *)> thread_fn;
   std::function<void(Core &, UtilizationTracker *, tlm_generic_payload *)>
       interrupt_fn;
+
+  struct ReadRequest {
+    uint32_t request_id;
+    uint32_t address;
+    unsigned char *data;
+    unsigned data_length;
+
+    std::optional<uint8_t> destination_id;
+    bool is_volatile = false;
+
+    ARM::AXI::Burst burst = ARM::AXI::BURST_INCR;
+
+    ReadRequest(uint32_t id, uint32_t addr, unsigned char *buf, unsigned len)
+        : request_id(id), address(addr), data(buf), data_length(len) {}
+
+    ReadRequest &set_dest(uint8_t dest) {
+      destination_id = dest;
+      return *this;
+    }
+    ReadRequest &set_burst(ARM::AXI::Burst type) {
+      burst = type;
+      return *this;
+    }
+    ReadRequest &skip_cache(bool val = true) {
+      is_volatile = val;
+      return *this;
+    }
+  };
+
+  struct WriteRequest {
+    uint32_t request_id;
+    unsigned char *data;
+    unsigned data_length;
+
+    std::optional<uint8_t> destination_id;
+    std::optional<uint32_t> address;
+    bool is_volatile = false;
+
+    ARM::AXI::Burst burst = ARM::AXI::BURST_INCR;
+
+    WriteRequest(uint32_t id, unsigned char *buf, unsigned len)
+        : request_id(id), data(buf), data_length(len) {}
+
+    WriteRequest &set_dest(uint8_t dest) {
+      destination_id = dest;
+      return *this;
+    }
+    WriteRequest &set_addr(uint32_t addr) {
+      address = addr;
+      return *this;
+    }
+    WriteRequest &set_burst(ARM::AXI::Burst type) {
+      burst = type;
+      return *this;
+    }
+    WriteRequest &skip_cache(bool val = true) {
+      is_volatile = val;
+      return *this;
+    }
+  };
 
   struct RequestHandle {
     ARM::AXI::Payload *payload;
@@ -129,50 +190,21 @@ private:
                                 ARM::AXI::Phase & phase);
 
   // -------------------------------------------------------
-  // AXI methods
+  // AXI API
   // -------------------------------------------------------
 private:
-  RequestHandle *read_internal(uint32_t request_id, int destination_id,
+  RequestHandle *read_internal(uint32_t request_id, uint8_t destination_id,
                                uint32_t address, bool fixed_address,
                                unsigned char *data, unsigned data_length,
                                ARM::AXI::Burst burst, bool is_volatile);
 
-  RequestHandle *write_internal(uint32_t request_id, int destination_id,
+  RequestHandle *write_internal(uint32_t request_id, uint8_t destination_id,
                                 uint32_t address, bool fixed_address,
                                 unsigned char *data, unsigned data_length,
                                 ARM::AXI::Burst burst, bool is_volatile);
 
 public:
-  RequestHandle *read(uint32_t request_id, int destination_id, uint32_t address,
-                      unsigned char *data, unsigned data_length,
-                      bool is_volatile);
+  RequestHandle *read(const ReadRequest &req);
 
-  RequestHandle *read_fixed(uint32_t request_id, int destination_id,
-                            uint32_t address, unsigned char *data,
-                            unsigned data_length, bool is_volatile);
-
-  RequestHandle *read_wrap(uint32_t request_id, int destination_id,
-                           uint32_t address, unsigned char *data,
-                           unsigned data_length, bool is_volatile);
-
-  RequestHandle *write(uint32_t request_id, int destination_id,
-                       uint32_t address, unsigned char *data,
-                       unsigned data_length, bool is_volatile);
-
-  RequestHandle *write(uint32_t request_id, int destination_id,
-                       unsigned char *data, unsigned data_length);
-
-  RequestHandle *write_fixed(uint32_t request_id, int destination_id,
-                             uint32_t address, unsigned char *data,
-                             unsigned data_length, bool is_volatile);
-
-  RequestHandle *write_fixed(uint32_t request_id, int destination_id,
-                             unsigned char *data, unsigned data_length);
-
-  RequestHandle *write_wrap(uint32_t request_id, int destination_id,
-                            uint32_t address, unsigned char *data,
-                            unsigned data_length, bool is_volatile);
-
-  RequestHandle *write_wrap(uint32_t request_id, int destination_id,
-                            unsigned char *data, unsigned data_length);
+  RequestHandle *write(const WriteRequest &req);
 };
