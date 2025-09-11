@@ -39,6 +39,6 @@
 #include "arm_axi4_payload.h"
 #include "arm_axi4_phase.h"
 #include "arm_axi4_socket.h"
-#include "arm_axi4_utilities.h"
+#include "arm_axi4_utils.h"
 
 #endif /* ARM_AXI4_H */

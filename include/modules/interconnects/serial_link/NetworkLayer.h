@@ -50,10 +50,13 @@ private:
   // Internal signals
   // -------------------------------------------------------
   sc_signal<AxiTrans_t> axi_in_sig;
+  AxiTrans_t axi_in_trans;
   sc_signal<AxiTrans_t> axi_out_sig;
+  AxiTrans_t axi_out_trans;
 
-  enum CommitterState { Idle = 0, ArPend = 1, AwPend = 2, ArAwPend = 3 };
-  sc_signal<CommitterState> committer_state_q, committer_state_d;
+  Payload_t *payload_out, *payload_in;
+
+  sc_signal<Committer::State> committer_state_q, committer_state_d;
 
   sc_signal<bool> entropy_q, entropy_d;
 
@@ -66,17 +69,12 @@ private:
   sc_signal<int> credits_to_send_q, credits_to_send_d;
   sc_signal<bool> credit_to_send_force;
 
-  bool updated = false;
+  bool comb_logic_updated = false; // Track logic updates to not respond twice
 
   // -------------------------------------------------------
   // Events
   // -------------------------------------------------------
-  sc_event fw_event;
-
-  AxiTrans_t axi_in_trans;
-  AxiTrans_t axi_out_trans;
-
-  Payload_t *payload_out, *payload_in;
+  sc_event axi_in_event;
 
   // -------------------------------------------------------
   // Transport functions

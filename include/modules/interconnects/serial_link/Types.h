@@ -2,6 +2,25 @@
 
 #include "ARM/TLM/arm_axi4.h"
 
+struct Committer {
+  enum State { Idle = 0, ArPend = 1, AwPend = 2, ArAwPend = 3 };
+
+  static const std::string to_string(State state) {
+    switch (state) {
+    case Idle:
+      return "Idle";
+    case ArPend:
+      return "ArPend";
+    case AwPend:
+      return "AwPend";
+    case ArAwPend:
+      return "ArAwPend";
+    default:
+      return "Unknown";
+    }
+  }
+};
+
 struct AxiBeat {
   std::vector<uint8_t> data;
   uint32_t addr = 0; // Store AW/AR addresses in uint32_t instead of byte vector
@@ -25,6 +44,14 @@ struct AxiTrans_t {
   }
 };
 
+inline std::ostream &operator<<(std::ostream &os, const AxiTrans_t &t) {
+  os << "AxiTrans_t{"
+     << "w_payload=" << t.w_payload << ", r_payload=" << t.r_payload
+     << ", w_beat_count=" << t.w_beat_count
+     << ", r_beat_count=" << t.r_beat_count << "}";
+  return os;
+}
+
 enum Tag_e : uint8_t { TagIdle = 0, TagAW = 1, TagW = 2, TagAR = 3, TagR = 4 };
 
 struct Payload_t {
@@ -36,10 +63,3 @@ struct Payload_t {
 
   Payload_t(size_t axi_width) : axi_ch((axi_width + 7) / 8) {}
 };
-
-inline std::ostream &operator<<(std::ostream &os, const AxiTrans_t &t) {
-  os << "AxiTrans_t{"
-     << "w_beat_count=" << t.w_beat_count << ", r_beat_count=" << t.r_beat_count
-     << ", w_payload=" << t.w_payload << ", r_payload=" << t.r_payload << "}";
-  return os;
-}

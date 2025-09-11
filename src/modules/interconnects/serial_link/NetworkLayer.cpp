@@ -10,7 +10,7 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned axi_width,
       axi_in("axi_in", *this, &SLNetworkLayer::nb_transport_fw,
              ARM::TLM::PROTOCOL_AXI4, axi_width) {
   // Initial values
-  committer_state_q.write(Idle);
+  committer_state_q.write(Committer::Idle);
   entropy_q.write(false);
   axis_reg_valid_in.write(false);
   axis_reg_ready_in.write(false);
@@ -25,17 +25,64 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned axi_width,
   sensitive << clk.pos();
 
   SC_THREAD(committer_thread);
-  sensitive << fw_event << aw_gnt << ar_gnt << axi_in_sig << axi_out_sig
+  // Sensitive only to read signals
+  sensitive << axi_in_event << aw_gnt << ar_gnt << axi_in_sig << axi_out_sig
             << committer_state_q;
   async_reset_signal_is(rst_n, false);
 
   SC_THREAD(sender_thread);
-  sensitive << fw_event << aw_gnt << w_gnt << b_gnt << ar_gnt << r_gnt
+  // Sensitive only to read signals
+  sensitive << axi_in_event << aw_gnt << w_gnt << b_gnt << ar_gnt << r_gnt
             << axis_reg_valid_in << axis_reg_ready_in;
   async_reset_signal_is(rst_n, false);
 
   SC_THREAD(flow_control_thread);
   async_reset_signal_is(rst_n, false);
+}
+
+void SLNetworkLayer::clk_posedge() {
+  // Log signals
+  if (comb_logic_updated) {
+    SC_LOG_DEBUG(this, "# Internal signals:");
+    SC_LOG_DEBUG(this, "  committer_state_d = " +
+                           Committer::to_string(committer_state_d.read()));
+    SC_LOG_DEBUG(this,
+                 "  entropy_d         = " + std::to_string(entropy_d.read()));
+    SC_LOG_DEBUG(this,
+                 "  aw_gnt            = " + std::to_string(aw_gnt.read()));
+    SC_LOG_DEBUG(this, "  w_gnt             = " + std::to_string(w_gnt.read()));
+    SC_LOG_DEBUG(this, "  b_gnt             = " + std::to_string(b_gnt.read()));
+    SC_LOG_DEBUG(this,
+                 "  ar_gnt            = " + std::to_string(ar_gnt.read()));
+    SC_LOG_DEBUG(this, "  r_gnt             = " + std::to_string(r_gnt.read()));
+    SC_LOG_DEBUG(this, "  rsp_phase         = " +
+                           get_axi_phase_string(axi_in_trans.rsp_phase));
+  }
+
+  // Update registers
+  committer_state_q.write(committer_state_d);
+  // TODO: Introduce some randomness
+  entropy_q.write(entropy_d);
+  // credits_out_q.write(credits_out_d);
+  credits_to_send_q.write(credits_to_send_d);
+
+  // Respond on AXI slave port and write to FIFO
+  if (comb_logic_updated && axis_reg_valid_in.read() &&
+      axis_reg_ready_in.read()) {
+    ARM::AXI::Phase phase = axi_in_trans.rsp_phase;
+    ARM::AXI::Payload *axi_payload = nullptr;
+    if (is_aw_ready(phase)) {
+      axi_payload = axi_in_trans.w_payload;
+    } else if (is_w_ready(phase)) {
+      axi_payload = axi_in_trans.w_payload;
+      axi_in_trans.w_beat_count += 1;
+    }
+    axi_in.nb_transport_bw(*axi_payload, phase);
+    stream_fifo_out.write(payload_out);
+    SC_LOG_DEBUG(this, "Payload written to FIFO");
+  }
+
+  comb_logic_updated = false;
 }
 
 // -------------------------------------------------------
@@ -45,6 +92,8 @@ void SLNetworkLayer::committer_thread() {
   while (true) {
     wait();
 
+    comb_logic_updated = true;
+
     aw_gnt.write(false);
     w_gnt.write(false);
     b_gnt.write(false);
@@ -53,106 +102,108 @@ void SLNetworkLayer::committer_thread() {
     committer_state_d.write(committer_state_q);
 
     switch (committer_state_q.read()) {
-    case Idle:
+    case Committer::Idle:
       if (is_aw_valid(axi_in_trans.req_phase)) {
         aw_gnt.write(true);
-        SC_LOG_DEBUG(this, "COMMITTER | Granting AW");
+        // SC_LOG_DEBUG(this, "Committer: Granting AW");
       }
       if (is_ar_valid(axi_in_trans.req_phase)) {
         ar_gnt.write(true);
-        SC_LOG_DEBUG(this, "COMMITTER | Granting AR");
+        // SC_LOG_DEBUG(this, "Committer: Granting AR");
       }
 
       if (!ar_gnt.read() && !aw_gnt.read() &&
           is_r_valid(axi_out_trans.rsp_phase)) {
         r_gnt.write(true);
-        SC_LOG_DEBUG(this, "COMMITTER | Granting R");
+        // SC_LOG_DEBUG(this, "Committer: Granting R");
       }
 
       if (aw_gnt.read() && is_aw_ready(axi_in_trans.rsp_phase)) {
-        committer_state_d.write(AwPend);
-        SC_LOG_DEBUG(this, "COMMITTER | Transition: Idle -> AwPend");
+        committer_state_d.write(Committer::AwPend);
+        // SC_LOG_DEBUG(this, "Committer: Transition: Idle -> AwPend");
       }
       if (ar_gnt.read() && is_ar_ready(axi_in_trans.rsp_phase)) {
-        committer_state_d.write(ArPend);
-        SC_LOG_DEBUG(this, "COMMITTER | Transition: Idle -> ArPend");
+        committer_state_d.write(Committer::ArPend);
+        // SC_LOG_DEBUG(this, "Committer: Transition: Idle -> ArPend");
       }
       break;
 
-    case AwPend:
+    case Committer::AwPend:
       if (is_ar_valid(axi_in_trans.req_phase)) {
         ar_gnt.write(true);
-        SC_LOG_DEBUG(this, "COMMITTER | Granting AR (while AW pending)");
+        // SC_LOG_DEBUG(this, "Committer: Granting AR (while AW pending)");
       } else {
         if (is_r_valid(axi_out_trans.rsp_phase)) {
           r_gnt.write(true);
-          SC_LOG_DEBUG(this, "COMMITTER | Granting R");
+          // SC_LOG_DEBUG(this, "Committer: Granting R");
         }
         if (is_w_valid(axi_in_trans.req_phase)) {
           w_gnt.write(true);
-          SC_LOG_DEBUG(this, "COMMITTER | Granting W");
+          // SC_LOG_DEBUG(this, "Committer: Granting W");
         }
         if (is_w_valid_last(axi_in_trans.req_phase)) {
           w_gnt.write(true);
-          SC_LOG_DEBUG(this, "COMMITTER | Granting W");
+          // SC_LOG_DEBUG(this, "Committer: Granting W");
         }
       }
 
       if (is_w_valid_last(axi_in_trans.req_phase) &&
           is_w_ready(axi_in_trans.rsp_phase)) {
-        committer_state_d.write(
-            (ar_gnt && is_ar_ready(axi_in_trans.req_phase)) ? ArPend : Idle);
-        SC_LOG_DEBUG(this,
-                     "COMMITTER | AW burst done, transitioning to "
-                         << ((ar_gnt && is_ar_ready(axi_in_trans.req_phase))
-                                 ? "ArPend"
-                                 : "Idle"));
+        committer_state_d.write((ar_gnt && is_ar_ready(axi_in_trans.req_phase))
+                                    ? Committer::ArPend
+                                    : Committer::Idle);
+        // SC_LOG_DEBUG(this,
+        //"Committer: AW burst done, transitioning to "
+        //<< ((ar_gnt && is_ar_ready(axi_in_trans.req_phase))
+        //? "ArPend"
+        //: "Idle"));
       } else {
         committer_state_d.write((ar_gnt && is_ar_ready(axi_in_trans.req_phase))
-                                    ? ArAwPend
-                                    : AwPend);
+                                    ? Committer::ArAwPend
+                                    : Committer::AwPend);
       }
       break;
 
-    case ArPend:
+    case Committer::ArPend:
       if (is_aw_valid(axi_in_trans.req_phase)) {
         aw_gnt.write(true);
-        SC_LOG_DEBUG(this, "COMMITTER | Granting AW (while AR pending)");
+        // SC_LOG_DEBUG(this, "Committer: Granting AW (while AR pending)");
       } else {
         if (is_r_valid(axi_out_trans.rsp_phase)) {
           r_gnt.write(true);
-          SC_LOG_DEBUG(this, "COMMITTER | Granting R");
+          // SC_LOG_DEBUG(this, "Committer: Granting R");
         }
         if (is_w_valid(axi_in_trans.req_phase)) {
           w_gnt.write(true);
-          SC_LOG_DEBUG(this, "COMMITTER | Granting W");
+          // SC_LOG_DEBUG(this, "Committer: Granting W");
         }
       }
 
       if (is_r_valid_last(axi_in_trans.req_phase) &&
           is_r_ready(axi_in_trans.rsp_phase)) {
-        committer_state_d.write(
-            (aw_gnt && is_aw_ready(axi_in_trans.req_phase)) ? AwPend : Idle);
-        SC_LOG_DEBUG(this,
-                     "COMMITTER | AR burst done, transitioning to "
-                         << ((aw_gnt && is_aw_ready(axi_in_trans.req_phase))
-                                 ? "AwPend"
-                                 : "Idle"));
+        committer_state_d.write((aw_gnt && is_aw_ready(axi_in_trans.req_phase))
+                                    ? Committer::AwPend
+                                    : Committer::Idle);
+        // SC_LOG_DEBUG(this,
+        //"Committer: AR burst done, transitioning to "
+        //<< ((aw_gnt && is_aw_ready(axi_in_trans.req_phase))
+        //? "AwPend"
+        //: "Idle"));
       } else {
         committer_state_d.write((aw_gnt && is_aw_ready(axi_in_trans.req_phase))
-                                    ? ArAwPend
-                                    : ArPend);
+                                    ? Committer::ArAwPend
+                                    : Committer::ArPend);
       }
       break;
 
-    case ArAwPend: {
+    case Committer::ArAwPend: {
       if (is_r_valid(axi_out_trans.req_phase)) {
         r_gnt.write(true);
-        SC_LOG_DEBUG(this, "COMMITTER | Granting R");
+        // SC_LOG_DEBUG(this, "Committer: Granting R");
       }
       if (is_w_valid(axi_in_trans.req_phase)) {
         w_gnt.write(true);
-        SC_LOG_DEBUG(this, "COMMITTER | Granting W");
+        // SC_LOG_DEBUG(this, "Committer: Granting W");
       }
 
       bool aw_pend_idle = is_r_valid_last(axi_in_trans.req_phase) &&
@@ -161,14 +212,15 @@ void SLNetworkLayer::committer_thread() {
                           is_w_ready(axi_in_trans.rsp_phase);
 
       if (aw_pend_idle & ar_pend_idle) {
-        committer_state_d.write(Idle);
-        SC_LOG_DEBUG(this, "COMMITTER | Both AR/AW pending done, back to Idle");
+        committer_state_d.write(Committer::Idle);
+        // SC_LOG_DEBUG(this, "Committer: Both AR/AW pending done, back to
+        // Idle");
       } else if (aw_pend_idle) {
-        committer_state_d.write(AwPend);
-        SC_LOG_DEBUG(this, "COMMITTER | AW pending done, stay in AwPend");
+        committer_state_d.write(Committer::AwPend);
+        // SC_LOG_DEBUG(this, "Committer: AW pending done, stay in AwPend");
       } else if (ar_pend_idle) {
-        committer_state_d.write(ArPend);
-        SC_LOG_DEBUG(this, "COMMITTER | AR pending done, stay in ArPend");
+        committer_state_d.write(Committer::ArPend);
+        // SC_LOG_DEBUG(this, "Committer: AR pending done, stay in ArPend");
       }
       break;
     }
@@ -179,7 +231,7 @@ void SLNetworkLayer::committer_thread() {
 
     b_gnt.write(is_b_valid(axi_out_trans.req_phase));
     if (is_b_valid(axi_out_trans.req_phase)) {
-      SC_LOG_DEBUG(this, "COMMITTER | Granting B");
+      // SC_LOG_DEBUG(this, "Committer: Granting B");
     }
   }
 }
@@ -191,7 +243,7 @@ void SLNetworkLayer::sender_thread() {
   while (true) {
     wait();
 
-    updated = true;
+    comb_logic_updated = true;
 
     payload_out = new Payload_t(axi_width);
     payload_out->credit = credits_to_send_q;
@@ -199,32 +251,36 @@ void SLNetworkLayer::sender_thread() {
     if (aw_gnt.read()) {
       payload_out->axi_ch.addr = axi_in_trans.w_payload->get_address();
       payload_out->hdr = TagAW;
-      SC_LOG_DEBUG(this,
-                   "SENDER | Sending AW, addr=" << payload_out->axi_ch.addr);
+      // SC_LOG_DEBUG(this, "Sender: Sending AW, addr=" << std::hex
+      //                                                <<
+      //                                                payload_out->axi_ch.addr
+      //                                                << std::dec);
     } else if (w_gnt.read()) {
       axi_in_trans.w_payload->write_out_beat(axi_in_trans.w_beat_count,
                                              payload_out->axi_ch.data.data());
       payload_out->hdr = TagW;
-      SC_LOG_DEBUG(this,
-                   "SENDER | Sending W beat #" << axi_in_trans.w_beat_count);
+      // SC_LOG_DEBUG(this,
+      //              "Sender: Sending W beat #" << axi_in_trans.w_beat_count);
     } else if (ar_gnt.read()) {
       payload_out->axi_ch.addr = axi_in_trans.r_payload->get_address();
       payload_out->hdr = TagAR;
-      SC_LOG_DEBUG(this,
-                   "SENDER | Sending AR, addr=" << payload_out->axi_ch.addr);
+      // SC_LOG_DEBUG(this, "Sender: Sending AR, addr=" << std::hex
+      //                                                <<
+      //                                                payload_out->axi_ch.addr
+      //                                                << std::dec);
     } else if (r_gnt.read()) {
       axi_out_trans.r_payload->read_out_beat(axi_out_trans.r_beat_count,
                                              payload_out->axi_ch.data.data());
       payload_out->hdr = TagR;
-      SC_LOG_DEBUG(this,
-                   "SENDER | Sending R beat #" << axi_out_trans.r_beat_count);
+      // SC_LOG_DEBUG(this,
+      //              "Sender: Sending R beat #" << axi_out_trans.r_beat_count);
     }
 
     if (b_gnt.read()) {
       payload_out->b_valid = true;
       payload_out->b = axi_out_trans.w_payload->get_resp();
-      SC_LOG_DEBUG(this,
-                   "SENDER | Sending B response, resp=" << payload_out->b);
+      // SC_LOG_DEBUG(this, "Sender: Sending B response, resp=" <<
+      // payload_out->b);
     }
 
     axis_reg_valid_in.write((payload_out->hdr != TagIdle) ||
@@ -233,40 +289,39 @@ void SLNetworkLayer::sender_thread() {
 
     if (credits_out_q.read() == 0) {
       axis_reg_valid_in.write(false);
-      SC_LOG_DEBUG(this, "SENDER | Blocked: credits_out_q==0");
+      // SC_LOG_DEBUG(this, "Sender: Blocked: credits_out_q==0");
     } else if (credits_out_q.read() == 1 && credits_to_send_q.read() == 0) {
       axis_reg_valid_in.write(false);
-      SC_LOG_DEBUG(this,
-                   "SENDER | Blocked: credits_out_q==1, no credits to return");
+      // SC_LOG_DEBUG(this,
+      //              "Sender: Blocked: credits_out_q==1, no credits to
+      //              return");
     }
 
     axis_reg_ready_in.write((stream_fifo_out.num_free() > 0));
-    SC_LOG_DEBUG(this, "SENDER | axis_reg_ready_in="
-                           << axis_reg_ready_in.read()
-                           << " free=" << stream_fifo_out.num_free());
+    // SC_LOG_DEBUG(this, "Sender: FIFO free=" << stream_fifo_out.num_free());
 
-    if (axis_reg_ready_in.read() && axis_reg_valid_in.read()) {
+    if (axis_reg_valid_in.read() && axis_reg_ready_in.read()) {
       if (aw_gnt.read()) {
         axi_in_trans.rsp_phase = ARM::AXI::AW_READY;
-        SC_LOG_DEBUG(this, "SENDER | AW_READY");
+        // SC_LOG_DEBUG(this, "Sender: AW_READY");
       }
       if (w_gnt.read()) {
         axi_in_trans.rsp_phase = ARM::AXI::W_READY;
-        SC_LOG_DEBUG(this, "SENDER | W_READY");
+        // SC_LOG_DEBUG(this, "Sender: W_READY");
       }
       if (b_gnt.read()) {
-        SC_LOG_DEBUG(this, "SENDER | B_READY (stubbed)");
+        // SC_LOG_DEBUG(this, "Sender: B_READY (stubbed)");
       }
       if (ar_gnt.read()) {
         axi_in_trans.rsp_phase = ARM::AXI::AR_READY;
-        SC_LOG_DEBUG(this, "SENDER | AR_READY");
+        // SC_LOG_DEBUG(this, "Sender: AR_READY");
       }
       if (r_gnt.read()) {
-        SC_LOG_DEBUG(this, "SENDER | R_READY (stubbed)");
+        // SC_LOG_DEBUG(this, "Sender: R_READY (stubbed)");
       }
     } else {
       axi_in_trans.rsp_phase = ARM::AXI::PHASE_UNINITIALIZED;
-      SC_LOG_DEBUG(this, "SENDER | PHASE_UNINITIALIZED");
+      // SC_LOG_DEBUG(this, "Sender: NONE");
     }
 
     axi_in_sig.write(axi_in_trans);
@@ -322,33 +377,6 @@ void SLNetworkLayer::flow_control_thread() {
   }
 }
 
-void SLNetworkLayer::clk_posedge() {
-  committer_state_q.write(committer_state_d);
-  // TODO: Introduce some randomness
-  entropy_q.write(entropy_d);
-
-  // credits_out_q.write(credits_out_d);
-  credits_to_send_q.write(credits_to_send_d);
-
-  ARM::AXI::Phase phase;
-
-  if (updated && axis_reg_ready_in.read() && axis_reg_valid_in.read()) {
-    phase = axi_in_trans.rsp_phase;
-    ARM::AXI::Payload *payload_ptr = nullptr;
-    if (is_aw_ready(phase)) {
-      payload_ptr = axi_in_trans.w_payload;
-    } else if (is_w_ready(phase)) {
-      payload_ptr = axi_in_trans.w_payload;
-      axi_in_trans.w_beat_count += 1;
-    }
-    axi_in.nb_transport_bw(*payload_ptr, phase);
-    stream_fifo_out.write(payload_out);
-    SC_LOG_DEBUG(this, "Payload written to FIFO");
-  }
-
-  updated = false;
-}
-
 // -------------------------------------------------------
 // Transport functions
 // -------------------------------------------------------
@@ -357,25 +385,18 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
   switch (phase) {
   case ARM::AXI::AW_VALID:
     axi_in_trans.w_payload = &payload;
-    axi_in_trans.req_phase = phase;
     payload.ref();
-    break;
-  case ARM::AXI::W_VALID:
-    axi_in_trans.req_phase = phase;
-    break;
-  case ARM::AXI::W_VALID_LAST:
-    axi_in_trans.req_phase = phase;
     break;
   case ARM::AXI::AR_VALID:
     axi_in_trans.r_payload = &payload;
-    axi_in_trans.req_phase = phase;
     payload.ref();
     break;
   default:
-    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
     break;
   }
 
-  fw_event.notify(SC_ZERO_TIME);
+  axi_in_trans.req_phase = phase;
+
+  axi_in_event.notify(SC_ZERO_TIME);
   return TLM_ACCEPTED;
 }
