@@ -37,7 +37,6 @@ private:
 
   void committer_thread();
   void sender_thread();
-  void flow_control_thread();
 
   // -------------------------------------------------------
   // Parameters
@@ -65,8 +64,8 @@ private:
   sc_signal<bool> axis_reg_valid_in, axis_reg_ready_in;
   sc_signal<bool> axis_reg_valid_out, axis_reg_ready_out;
 
-  sc_signal<int> credits_out_q, credits_out_d;
-  sc_signal<int> credits_to_send_q, credits_to_send_d;
+  sc_signal<int> credits_out;
+  sc_signal<int> credits_to_send;
   sc_signal<bool> credit_to_send_force;
 
   bool comb_logic_updated = false; // Track logic updates to not respond twice

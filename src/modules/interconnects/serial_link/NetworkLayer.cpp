@@ -11,13 +11,15 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned axi_width,
              ARM::TLM::PROTOCOL_AXI4, axi_width) {
   // Initial values
   committer_state_q.write(Committer::Idle);
+  committer_state_d.write(Committer::Idle);
   entropy_q.write(false);
+  entropy_d.write(false);
   axis_reg_valid_in.write(false);
   axis_reg_ready_in.write(false);
   axis_reg_valid_out.write(false);
   axis_reg_ready_out.write(false);
-  credits_out_q.write(num_credits);
-  credits_to_send_q.write(0);
+  credits_out.write(num_credits);
+  credits_to_send.write(0);
   credit_to_send_force.write(false);
 
   SC_METHOD(clk_posedge);
@@ -33,10 +35,8 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned axi_width,
   SC_THREAD(sender_thread);
   // Sensitive only to read signals
   sensitive << axi_in_event << aw_gnt << w_gnt << b_gnt << ar_gnt << r_gnt
-            << axis_reg_valid_in << axis_reg_ready_in;
-  async_reset_signal_is(rst_n, false);
-
-  SC_THREAD(flow_control_thread);
+            << axis_reg_valid_in << axis_reg_ready_in << credits_out
+            << credits_to_send;
   async_reset_signal_is(rst_n, false);
 }
 
@@ -60,15 +60,13 @@ void SLNetworkLayer::clk_posedge() {
   }
 
   // Update registers
-  committer_state_q.write(committer_state_d);
+  committer_state_q.write(committer_state_d.read());
   // TODO: Introduce some randomness
-  entropy_q.write(entropy_d);
-  // credits_out_q.write(credits_out_d);
-  credits_to_send_q.write(credits_to_send_d);
+  entropy_q.write(entropy_d.read());
 
-  // Respond on AXI slave port and write to FIFO
   if (comb_logic_updated && axis_reg_valid_in.read() &&
       axis_reg_ready_in.read()) {
+    // Respond on AXI slave port
     ARM::AXI::Phase phase = axi_in_trans.rsp_phase;
     ARM::AXI::Payload *axi_payload = nullptr;
     if (is_aw_ready(phase)) {
@@ -78,9 +76,28 @@ void SLNetworkLayer::clk_posedge() {
       axi_in_trans.w_beat_count += 1;
     }
     axi_in.nb_transport_bw(*axi_payload, phase);
+
+    // Write to FIFO
     stream_fifo_out.write(payload_out);
     SC_LOG_DEBUG(this, "Payload written to FIFO");
   }
+
+  // Flow control
+  if (credits_to_send.read() >= force_send_thresh) {
+    credit_to_send_force.write(true);
+    SC_LOG_DEBUG(this, "Force sending credits");
+  }
+
+  if (comb_logic_updated && axis_reg_valid_in.read() &&
+      axis_reg_ready_in.read()) {
+    credits_out.write(credits_out.read() - 1);
+    credits_to_send.write(0);
+    SC_LOG_DEBUG(this, "Credits decremented: " << credits_out.read() << " -> "
+                                               << credits_out.read() - 1);
+    SC_LOG_DEBUG(this, "Credits to send reset to 0");
+  }
+
+  // TODO: Increment credits with incoming payloads
 
   comb_logic_updated = false;
 }
@@ -246,7 +263,7 @@ void SLNetworkLayer::sender_thread() {
     comb_logic_updated = true;
 
     payload_out = new Payload_t(axi_width);
-    payload_out->credit = credits_to_send_q;
+    payload_out->credit = credits_to_send.read();
 
     if (aw_gnt.read()) {
       payload_out->axi_ch.addr = axi_in_trans.w_payload->get_address();
@@ -291,10 +308,10 @@ void SLNetworkLayer::sender_thread() {
                             payload_out->b_valid ||
                             credit_to_send_force.read());
 
-    if (credits_out_q.read() == 0) {
+    if (credits_out.read() == 0) {
       axis_reg_valid_in.write(false);
       // SC_LOG_DEBUG(this, "Sender: Blocked: credits_out_q==0");
-    } else if (credits_out_q.read() == 1 && credits_to_send_q.read() == 0) {
+    } else if (credits_out.read() == 1 && credits_to_send.read() == 0) {
       axis_reg_valid_in.write(false);
       // SC_LOG_DEBUG(this,
       //              "Sender: Blocked: credits_out_q==1, no credits to
@@ -330,54 +347,6 @@ void SLNetworkLayer::sender_thread() {
 
     axi_in_sig.write(axi_in_trans);
     axi_out_sig.write(axi_out_trans);
-  }
-}
-
-// -------------------------------------------------------
-// Flow control
-// -------------------------------------------------------
-void SLNetworkLayer::flow_control_thread() {
-  while (true) {
-    wait();
-
-    SC_LOG_DEBUG(this, "Flow control tick");
-
-    credits_out_d.write(credits_out_q);
-    credits_to_send_d.write(credits_to_send_q);
-    credit_to_send_force.write(false);
-
-    SC_LOG_DEBUG(this, "Initial state: credits_out_q="
-                           << credits_out_q.read()
-                           << " credits_to_send_q=" << credits_to_send_q.read()
-                           << " force_send_thresh=" << force_send_thresh);
-
-    // Send empty packets with credits if there are too many
-    // credits to send but no AXI request transaction
-    if (credits_to_send_q >= force_send_thresh) {
-      credit_to_send_force.write(true);
-      SC_LOG_DEBUG(this, "Force sending credits (credits_to_send_q="
-                             << credits_to_send_q.read() << ")");
-    }
-
-    if (axis_reg_valid_in && axis_reg_ready_in) {
-      unsigned old_credits = credits_out_d.read();
-      credits_out_d.write(old_credits - 1);
-      credits_to_send_d.write(0);
-
-      SC_LOG_DEBUG(
-          this,
-          "AXIS transaction accepted: axis_reg_valid_in=1 axis_reg_ready_in=1");
-      SC_LOG_DEBUG(this, "Credits decremented: " << old_credits << " -> "
-                                                 << credits_out_d.read());
-      SC_LOG_DEBUG(this, "Credits to send reset to 0");
-    }
-
-    // TODO: Increment credits with incoming payloads
-    SC_LOG_DEBUG(this, "End of cycle: credits_out_d="
-                           << credits_out_d.read()
-                           << " credits_to_send_d=" << credits_to_send_d.read()
-                           << " credit_to_send_force="
-                           << credit_to_send_force.read());
   }
 }
 
