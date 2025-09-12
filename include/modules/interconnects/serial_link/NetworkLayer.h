@@ -3,6 +3,7 @@
 #include <systemc>
 #include <tlm>
 
+#include "modules/interconnects/serial_link/FifoIf.h"
 #include "modules/interconnects/serial_link/Types.h"
 
 using namespace sc_core;
@@ -19,7 +20,7 @@ public:
   // -------------------------------------------------------
   // Ports
   // -------------------------------------------------------
-  sc_fifo_out<Payload_t *> stream_fifo_out;
+  sc_port<FifoIf> stream_fifo_out;
 
   // -------------------------------------------------------
   // Sockets

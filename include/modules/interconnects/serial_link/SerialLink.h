@@ -6,7 +6,7 @@
 #include "modules/interconnects/Base.h"
 #include "modules/interconnects/serial_link/DataLinkLayer.h"
 #include "modules/interconnects/serial_link/NetworkLayer.h"
-#include "modules/interconnects/serial_link/Types.h"
+#include "modules/interconnects/serial_link/StreamFifo.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -28,6 +28,6 @@ private:
 
   SLNetworkLayer network_layer;
   SLDataLinkLayer datalink_layer;
-  
-  sc_fifo<Payload_t *> stream_fifo_out;
+
+  StreamFifo stream_fifo_out;
 };

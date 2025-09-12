@@ -1,8 +1,12 @@
 #include "modules/interconnects/serial_link/DataLinkLayer.h"
 
+#include "ARM/TLM/arm_axi4.h"
+#include "common/RoutingTable.h"
+
 #include "logging.h"
 
-SLDataLinkLayer::SLDataLinkLayer(sc_module_name name) : sc_module(name) {
+SLDataLinkLayer::SLDataLinkLayer(sc_module_name name, unsigned chip_id)
+    : sc_module(name), chip_id(chip_id) {
   SC_METHOD(clk_posedge);
   dont_initialize();
   sensitive << clk.pos();
@@ -26,15 +30,18 @@ const char *tag_to_str(Tag_e tag) {
 }
 
 void SLDataLinkLayer::clk_posedge() {
-  int depth = stream_fifo_in.num_available();
+  int depth = stream_fifo_in->num_available();
   if (depth == 0)
     return;
 
   SC_LOG_DEBUG(this, "# Stream FIFO Contents");
 
   for (int i = 0; i < depth; ++i) {
-    Payload_t *payload = nullptr;
-    if (stream_fifo_in.nb_read(payload) && payload) {
+    Payload_t *payload = stream_fifo_in->peek(i);
+    if (payload) {
+      int route = RoutingTable::get_route(
+          chip_id, UserSignals::decode(payload->user).destination);
+      SC_LOG_DEBUG(this, "Route: " << route);
       std::ostringstream msg;
       msg << tag_to_str(payload->hdr) << ", addr=0x" << std::hex
           << payload->axi_ch.addr << ", data=[";
@@ -52,8 +59,6 @@ void SLDataLinkLayer::clk_posedge() {
           msg << " ";
       }
       std::cout << msg.str() << std::endl;
-      ;
     }
-    delete payload;
   }
 }

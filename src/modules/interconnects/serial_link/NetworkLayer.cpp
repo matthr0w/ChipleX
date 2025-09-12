@@ -77,7 +77,7 @@ void SLNetworkLayer::clk_posedge() {
     axi_in.nb_transport_bw(*axi_payload, phase);
 
     // Write to FIFO
-    stream_fifo_out.write(payload_out);
+    stream_fifo_out->write(payload_out);
     SC_LOG_DEBUG(this, "Payload written to FIFO");
   }
 
@@ -317,7 +317,7 @@ void SLNetworkLayer::sender_thread() {
       //              return");
     }
 
-    axis_reg_ready_in.write((stream_fifo_out.num_free() > 0));
+    axis_reg_ready_in.write((stream_fifo_out->num_free() > 0));
     // SC_LOG_DEBUG(this, "Sender: FIFO free=" << stream_fifo_out.num_free());
 
     if (axis_reg_valid_in.read() && axis_reg_ready_in.read()) {

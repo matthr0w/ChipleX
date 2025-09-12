@@ -4,7 +4,8 @@ SerialLink::SerialLink(sc_module_name name, unsigned chip_id,
                        unsigned axi_width, unsigned num_cores, int num_credits)
     : InterconnectBase(1), sc_module(name),
       network_layer("NetworkLayer", axi_width, num_credits),
-      datalink_layer("DataLinkLayer"), stream_fifo_out("stream_fifo_out", 2) {
+      datalink_layer("DataLinkLayer", chip_id),
+      stream_fifo_out("StreamFifoOut", 2) {
   irq_sockets = new simple_initiator_socket_tagged<SerialLink>[num_cores];
   rst.write(true);
   network_layer.stream_fifo_out(stream_fifo_out);
