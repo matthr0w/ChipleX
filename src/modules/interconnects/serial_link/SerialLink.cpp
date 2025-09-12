@@ -69,7 +69,12 @@ void SerialLink::fifo_monitor_thread() {
               << (int)payload->axi_ch.data[j];
         }
         msg << "], credit=" << std::dec << payload->credit
-            << ", b_valid=" << payload->b_valid;
+            << ", b_valid=" << payload->b_valid << ", user=";
+        for (int u = 63; u >= 0; --u) {
+          msg << ((payload->user >> u) & 1ULL);
+          if (u % 8 == 0)
+            msg << " ";
+        }
         std::cout << msg.str() << std::endl;
         ;
       }

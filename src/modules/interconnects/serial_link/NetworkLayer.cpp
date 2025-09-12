@@ -250,6 +250,7 @@ void SLNetworkLayer::sender_thread() {
 
     if (aw_gnt.read()) {
       payload_out->axi_ch.addr = axi_in_trans.w_payload->get_address();
+      payload_out->user = axi_in_trans.w_payload->user;
       payload_out->hdr = TagAW;
       // SC_LOG_DEBUG(this, "Sender: Sending AW, addr=" << std::hex
       //                                                <<
@@ -258,11 +259,13 @@ void SLNetworkLayer::sender_thread() {
     } else if (w_gnt.read()) {
       axi_in_trans.w_payload->write_out_beat(axi_in_trans.w_beat_count,
                                              payload_out->axi_ch.data.data());
+      payload_out->user = axi_in_trans.w_payload->user;
       payload_out->hdr = TagW;
       // SC_LOG_DEBUG(this,
       //              "Sender: Sending W beat #" << axi_in_trans.w_beat_count);
     } else if (ar_gnt.read()) {
       payload_out->axi_ch.addr = axi_in_trans.r_payload->get_address();
+      payload_out->user = axi_in_trans.r_payload->user;
       payload_out->hdr = TagAR;
       // SC_LOG_DEBUG(this, "Sender: Sending AR, addr=" << std::hex
       //                                                <<
@@ -271,6 +274,7 @@ void SLNetworkLayer::sender_thread() {
     } else if (r_gnt.read()) {
       axi_out_trans.r_payload->read_out_beat(axi_out_trans.r_beat_count,
                                              payload_out->axi_ch.data.data());
+      payload_out->user = axi_in_trans.r_payload->user;
       payload_out->hdr = TagR;
       // SC_LOG_DEBUG(this,
       //              "Sender: Sending R beat #" << axi_out_trans.r_beat_count);
@@ -384,10 +388,16 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
                                               ARM::AXI::Phase &phase) {
   switch (phase) {
   case ARM::AXI::AW_VALID:
+    if (committer_state_d.read() == Committer::AwPend ||
+        committer_state_d.read() == Committer::ArAwPend)
+      return TLM_ACCEPTED;
     axi_in_trans.w_payload = &payload;
     payload.ref();
     break;
   case ARM::AXI::AR_VALID:
+    if (committer_state_d.read() == Committer::ArPend ||
+        committer_state_d.read() == Committer::ArAwPend)
+      return TLM_ACCEPTED;
     axi_in_trans.r_payload = &payload;
     payload.ref();
     break;

@@ -60,6 +60,7 @@ struct Payload_t {
   ARM::AXI::Resp b = ARM::AXI::RESP_OKAY;
   Tag_e hdr = TagIdle;
   int credit = 0;
+  uint64_t user = 0;
 
   Payload_t(size_t axi_width) : axi_ch((axi_width + 7) / 8) {}
 };
