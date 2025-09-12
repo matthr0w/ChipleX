@@ -4,6 +4,7 @@
 #include <tlm>
 
 #include "modules/interconnects/Base.h"
+#include "modules/interconnects/serial_link/DataLinkLayer.h"
 #include "modules/interconnects/serial_link/NetworkLayer.h"
 #include "modules/interconnects/serial_link/Types.h"
 
@@ -23,11 +24,10 @@ public:
   void bind_core(unsigned index, Core &core) override;
 
 private:
-  sc_in<bool> clk_in;
   sc_signal<bool> rst;
 
   SLNetworkLayer network_layer;
+  SLDataLinkLayer datalink_layer;
+  
   sc_fifo<Payload_t *> stream_fifo_out;
-
-  void fifo_monitor_thread();
 };

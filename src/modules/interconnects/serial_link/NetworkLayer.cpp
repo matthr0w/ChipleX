@@ -1,6 +1,5 @@
 #include "modules/interconnects/serial_link/NetworkLayer.h"
 
-#include "ARM/TLM/arm_axi4.h"
 #include "logging.h"
 
 SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned axi_width,
