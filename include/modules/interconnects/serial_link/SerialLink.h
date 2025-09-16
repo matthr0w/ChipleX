@@ -4,6 +4,7 @@
 #include <tlm>
 
 #include "modules/interconnects/Base.h"
+#include "modules/interconnects/serial_link/ChannelAllocator.h"
 #include "modules/interconnects/serial_link/DataLinkLayer.h"
 #include "modules/interconnects/serial_link/NetworkLayer.h"
 #include "modules/interconnects/serial_link/StreamFifo.h"
@@ -15,7 +16,8 @@ using namespace tlm_utils;
 SC_MODULE(SerialLink), public InterconnectBase {
 public:
   SerialLink(sc_module_name name, unsigned chip_id, unsigned axi_width,
-             unsigned num_cores, int num_credits);
+             unsigned num_cores, unsigned num_interconnects, int num_credits);
+  ~SerialLink();
 
   simple_initiator_socket_tagged<SerialLink> *irq_sockets;
 
@@ -28,6 +30,14 @@ private:
 
   SLNetworkLayer network_layer;
   SLDataLinkLayer datalink_layer;
+  std::vector<SLChannelAllocater *> channel_allocaters;
 
   StreamFifo stream_fifo_out;
+  StreamFifo stream_fifo_in;
+
+  // -------------------------------------------------------
+  // Parameters
+  // -------------------------------------------------------
+  const unsigned num_cores;
+  const unsigned num_interconnects;
 };

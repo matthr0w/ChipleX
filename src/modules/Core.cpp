@@ -139,7 +139,7 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
 
   switch (phase) {
   case ARM::AXI::AR_READY:
-    ar_state = ACK;
+    ar_state = ar_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   case ARM::AXI::R_VALID:
     phase = ARM::AXI::R_READY;
@@ -151,10 +151,10 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
     phase = ARM::AXI::R_READY;
     return TLM_UPDATED;
   case ARM::AXI::AW_READY:
-    aw_state = ACK;
+    aw_state = aw_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   case ARM::AXI::W_READY:
-    w_state = ACK;
+    w_state = w_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   case ARM::AXI::B_VALID:
     request_handles.erase(&payload);

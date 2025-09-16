@@ -17,9 +17,6 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned axi_width,
   axis_reg_ready_in.write(false);
   axis_reg_valid_out.write(false);
   axis_reg_ready_out.write(false);
-  credits_out.write(num_credits);
-  credits_to_send.write(0);
-  credit_to_send_force.write(false);
 
   SC_METHOD(clk_posedge);
   dont_initialize();
@@ -34,8 +31,7 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned axi_width,
   SC_THREAD(sender_thread);
   // Sensitive only to read signals
   sensitive << axi_in_event << aw_gnt << w_gnt << b_gnt << ar_gnt << r_gnt
-            << axis_reg_valid_in << axis_reg_ready_in << credits_out
-            << credits_to_send;
+            << axis_reg_valid_in << axis_reg_ready_in;
   async_reset_signal_is(rst_n, false);
 }
 
@@ -82,17 +78,17 @@ void SLNetworkLayer::clk_posedge() {
   }
 
   // Flow control
-  if (credits_to_send.read() >= force_send_thresh) {
-    credit_to_send_force.write(true);
+  if (credits_to_send >= force_send_thresh) {
+    credit_to_send_force = true;
     SC_LOG_DEBUG(this, "Force sending credits");
   }
 
   if (comb_logic_updated && axis_reg_valid_in.read() &&
       axis_reg_ready_in.read()) {
-    credits_out.write(credits_out.read() - 1);
-    credits_to_send.write(0);
-    SC_LOG_DEBUG(this, "Credits decremented: " << credits_out.read() << " -> "
-                                               << credits_out.read() - 1);
+    credits_out -= 1;
+    credits_to_send = 0;
+    SC_LOG_DEBUG(this, "Credits decremented: " << credits_out + 1 << " -> "
+                                               << credits_out);
     SC_LOG_DEBUG(this, "Credits to send reset to 0");
   }
 
@@ -257,12 +253,16 @@ void SLNetworkLayer::committer_thread() {
 // -------------------------------------------------------
 void SLNetworkLayer::sender_thread() {
   while (true) {
-    wait();
+    if (stream_fifo_out->num_free() == 0) {
+      wait(stream_fifo_out->read_event);
+    } else {
+      wait();
+    }
 
     comb_logic_updated = true;
 
     payload_out = new Payload_t(axi_width);
-    payload_out->credit = credits_to_send.read();
+    payload_out->credit = credits_to_send;
 
     if (aw_gnt.read()) {
       payload_out->axi_ch.addr = axi_in_trans.w_payload->get_address();
@@ -304,13 +304,12 @@ void SLNetworkLayer::sender_thread() {
     }
 
     axis_reg_valid_in.write((payload_out->hdr != TagIdle) ||
-                            payload_out->b_valid ||
-                            credit_to_send_force.read());
+                            payload_out->b_valid || credit_to_send_force);
 
-    if (credits_out.read() == 0) {
+    if (credits_out == 0) {
       axis_reg_valid_in.write(false);
       // SC_LOG_DEBUG(this, "Sender: Blocked: credits_out_q==0");
-    } else if (credits_out.read() == 1 && credits_to_send.read() == 0) {
+    } else if (credits_out == 1 && credits_to_send == 0) {
       axis_reg_valid_in.write(false);
       // SC_LOG_DEBUG(this,
       //              "Sender: Blocked: credits_out_q==1, no credits to

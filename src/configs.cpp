@@ -42,7 +42,8 @@ const std::map<std::string, std::set<std::string>>
           "interconnect_protocol.retries", "interconnect.staging_buffer_size",
           "interconnect.link_buffer_size", "interconnect.bandwidth_chiplets",
           "interconnect.bandwidth_fpga", "interconnect.efficiency"}},
-        {"SerialLink", {"network_layer.num_credits"}},
+        {"SerialLink",
+         {"clk_cycle", "ddr", "num_channels", "num_lanes", "num_credits"}},
         {"SPI",
          {"interconnect_protocol.flit_size",
           "interconnect_protocol.overhead_size",
@@ -94,6 +95,7 @@ template <typename T> T Config::get(const std::string &key) const {
   }
 }
 
+template bool Config::get<bool>(const std::string &) const;
 template unsigned int Config::get<unsigned int>(const std::string &) const;
 template int Config::get<int>(const std::string &) const;
 template double Config::get<double>(const std::string &) const;

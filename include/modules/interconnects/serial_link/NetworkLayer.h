@@ -65,9 +65,9 @@ private:
   sc_signal<bool> axis_reg_valid_in, axis_reg_ready_in;
   sc_signal<bool> axis_reg_valid_out, axis_reg_ready_out;
 
-  sc_signal<int> credits_out;
-  sc_signal<int> credits_to_send;
-  sc_signal<bool> credit_to_send_force;
+  unsigned credits_out = num_credits;
+  unsigned credits_to_send = 0;
+  bool credit_to_send_force = false;
 
   bool comb_logic_updated = false; // Track logic updates to not respond twice
 

@@ -20,7 +20,7 @@ create_interconnect(const std::string &type, unsigned chiplet_id,
   } else if (type == "SerialLink") {
     return std::make_unique<SerialLink>(
         sc_module_name(type.c_str()), chiplet_id, axi_width, num_cores,
-        config.get<unsigned>("network_layer.num_credits"));
+        num_interconnects, config.get<unsigned>("num_credits"));
   }
   throw std::runtime_error(type + " not implemented");
 }

@@ -10,20 +10,32 @@ Payload_t *StreamFifo::peek(unsigned index) {
 }
 
 Payload_t *StreamFifo::read() {
-  Payload_t *payload = nullptr;
-  if (data.size() > 0) {
-    payload = data.front();
-    data.pop_front();
-  }
+  if (data.empty())
+    return nullptr;
+  Payload_t *payload = data.front();
+  data.pop_front();
+  fill_level--;
+  read_event.notify(SC_ZERO_TIME);
   return payload;
 }
 
 bool StreamFifo::write(Payload_t *payload) {
-  if (data.size() >= size)
-    return false;
+  if (reserved > 0)
+    reserved--;
+  else
+    fill_level++;
   data.push_back(payload);
+  write_event.notify(SC_ZERO_TIME);
   return true;
 }
 
-unsigned StreamFifo::num_free() { return size - data.size(); }
+bool StreamFifo::reserve() {
+  if (fill_level >= size)
+    return false;
+  fill_level++;
+  reserved++;
+  return true;
+}
+
+unsigned StreamFifo::num_free() { return size - fill_level; }
 unsigned StreamFifo::num_available() { return data.size(); }
