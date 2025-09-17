@@ -62,5 +62,10 @@ struct Payload_t {
   int credit = 0;
   uint64_t user = 0;
 
+  // Only for AXI TLM payload construction
+  uint32_t id = 0;
+  uint8_t len = 0;
+  ARM::AXI::Burst burst = 0;
+
   Payload_t(size_t axi_width) : axi_ch((axi_width + 7) / 8) {}
 };

@@ -73,6 +73,7 @@ private:
       if (interconnect_config.get<bool>("ddr"))
         bandwidth = bandwidth * 2;
 
+      // TODO: Use real payload size
       unsigned num_cycles = (sizeof(Payload_t) * 8 + bandwidth - 1) / bandwidth;
 
       packet_transfer_delay =

@@ -9,7 +9,9 @@ SerialLink::SerialLink(sc_module_name name, unsigned chip_id,
       num_interconnects(num_interconnects),
       network_layer("NetworkLayer", axi_width, num_credits),
       datalink_layer("DataLinkLayer", chip_id, axi_width, num_interconnects),
-      stream_fifo_out("StreamFifoOut", 2), stream_fifo_in("StreamFifoIn", 2) {
+      stream_fifo_out("StreamFifoOut", 2),
+      stream_fifo_in("StreamFifoIn", 2) // TODO: Fix stream fifo depth
+{
   for (unsigned int i = 0; i < num_interconnects; ++i) {
     std::string name = "ChannelAllocater" + std::to_string(i);
     // TODO: Update distance
@@ -20,9 +22,10 @@ SerialLink::SerialLink(sc_module_name name, unsigned chip_id,
   irq_sockets = new simple_initiator_socket_tagged<SerialLink>[num_cores];
   rst.write(true);
 
+  network_layer.stream_fifo_in(stream_fifo_in);
   network_layer.stream_fifo_out(stream_fifo_out);
-  datalink_layer.stream_fifo_out(stream_fifo_out);
   datalink_layer.stream_fifo_in(stream_fifo_in);
+  datalink_layer.stream_fifo_out(stream_fifo_out);
 
   for (unsigned i = 0; i < num_interconnects; ++i) {
     datalink_layer.data_out_isockets[i].bind(
@@ -56,6 +59,7 @@ void SerialLink::bind_axi(AXIBus &bus, sc_clock &clk) {
   datalink_layer.rst_n.bind(rst);
 
   bus.sub_isockets[1]->bind(network_layer.axi_in);
+  network_layer.axi_out.bind(*bus.mgr_tsockets[num_cores]);
 }
 
 void SerialLink::bind_core(unsigned index, Core &core) {

@@ -44,7 +44,7 @@ public:
   // parameters
   // -------------------------------------------------------
   const unsigned num_cores = 2;
-  const unsigned num_axi_managers = 3;
+  const unsigned num_axi_managers = 4;
   const unsigned num_axi_subordinates = 2;
   const unsigned num_interconnects = 3;
 

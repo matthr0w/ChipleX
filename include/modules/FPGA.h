@@ -43,7 +43,7 @@ public:
   // parameters
   // -------------------------------------------------------
   const unsigned num_cores = 1;
-  const unsigned num_axi_managers = 2;
+  const unsigned num_axi_managers = 3;
   const unsigned num_axi_subordinates = 2;
   const unsigned num_interconnects = num_chiplets;
 

@@ -105,7 +105,6 @@ int sc_main(int argc, char *argv[]) {
     }
   }
 
-  // TODO: Let interconnect module handle the connection
   // connect chiplets in a ring topology
   for (unsigned i = 0; i < num_chiplets; ++i) {
     int next = (i + 1) % num_chiplets;

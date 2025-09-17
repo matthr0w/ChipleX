@@ -39,6 +39,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         auto h = core.write(req);
         h->wait();
+
+        sc_stop();
       },
       [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {}}}};

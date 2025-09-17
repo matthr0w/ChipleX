@@ -99,7 +99,7 @@ void Memory::clk_posedge() {
 }
 
 void Memory::clk_negedge() {
-  if (b_outgoing) {
+  if (b_state == CLEAR && b_outgoing) {
     ARM::AXI::Phase phase = ARM::AXI::B_VALID;
 
     b_state = REQ;
@@ -110,7 +110,7 @@ void Memory::clk_negedge() {
     }
   }
 
-  if (r_outgoing) {
+  if (r_state == CLEAR && r_outgoing) {
     ARM::AXI::Phase phase =
         (r_beat_count == 1) ? ARM::AXI::R_VALID_LAST : ARM::AXI::R_VALID;
 
@@ -134,7 +134,7 @@ tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload,
     payload.ref();
     return TLM_ACCEPTED;
   case ARM::AXI::R_READY:
-    r_state = ACK;
+    r_state = r_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   case ARM::AXI::AW_VALID:
     aw_queue.push_back(&payload);
@@ -149,7 +149,7 @@ tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload,
     phase = ARM::AXI::W_READY;
     return TLM_UPDATED;
   case ARM::AXI::B_READY:
-    b_state = ACK;
+    b_state = b_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   default:
     SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
