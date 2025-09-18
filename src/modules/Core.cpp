@@ -66,6 +66,7 @@ void Core::clk_posedge() {
 
   if (ar_state == ACK) {
     ar_state = CLEAR;
+    read_done.notify(SC_ZERO_TIME);
     ar_queue.pop_front();
   }
 }
@@ -147,7 +148,6 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
   case ARM::AXI::R_VALID_LAST:
     request_handles.erase(&payload);
     h->notify(SC_ZERO_TIME);
-    read_done.notify(SC_ZERO_TIME);
     phase = ARM::AXI::R_READY;
     return TLM_UPDATED;
   case ARM::AXI::AW_READY:

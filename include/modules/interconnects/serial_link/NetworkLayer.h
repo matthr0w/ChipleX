@@ -31,7 +31,8 @@ public:
   // AXI master port
   ARM::AXI::SimpleInitiatorSocket<SLNetworkLayer> axi_out;
 
-  SLNetworkLayer(sc_module_name name, unsigned axi_width, int num_credits);
+  SLNetworkLayer(sc_module_name name, unsigned chip_id, unsigned axi_width,
+                 int num_credits);
 
 private:
   enum ChannelState { CLEAR, REQ, ACK };
@@ -40,13 +41,16 @@ private:
   ChannelState w_state = CLEAR;
   ChannelState b_state = CLEAR;
   ChannelState ar_state = CLEAR;
+  ChannelState r_state = CLEAR;
 
   std::deque<ARM::AXI::Payload *> aw_queue;
   std::deque<ARM::AXI::Payload *> w_queue;
   std::deque<ARM::AXI::Payload *> b_queue;
   std::deque<ARM::AXI::Payload *> ar_queue;
+  std::deque<ARM::AXI::Payload *> r_queue;
 
   unsigned w_beat_count = 0;
+  unsigned r_beat_count = 0;
 
   void clk_posedge();
 
@@ -56,6 +60,7 @@ private:
   // -------------------------------------------------------
   // Parameters
   // -------------------------------------------------------
+  const unsigned chip_id;
   const unsigned axi_width;
   const int num_credits;
   const int force_send_thresh;
@@ -71,6 +76,7 @@ private:
   Payload_t *payload_out;
   ARM::AXI::Payload *payload_in;
 
+  std::deque<ARM::AXI::Payload *> pending_read_responses;
   std::deque<ARM::AXI::Payload *> pending_write_responses;
 
   sc_signal<Committer::State> committer_state_q, committer_state_d;

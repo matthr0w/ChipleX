@@ -73,6 +73,5 @@ private:
   // Debug functions
   // -------------------------------------------------------
   void print_payload(ARM::AXI::Payload & payload, ARM::AXI::Phase sent_phase,
-                     tlm_sync_enum reply, ARM::AXI::Phase reply_phase,
-                     bool bw_path);
+                     tlm_sync_enum reply, ARM::AXI::Phase reply_phase);
 };

@@ -93,7 +93,7 @@ tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
   tlm_sync_enum reply = sub_isockets[sub_id]->nb_transport_fw(payload, phase);
 
   if (log_level <= LogLevel::DEBUG)
-    print_payload(payload, prev_phase, reply, phase, false);
+    print_payload(payload, prev_phase, reply, phase);
 
   return reply;
 }
@@ -112,7 +112,7 @@ tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
   tlm_sync_enum reply = mgr_tsockets[mgr_id]->nb_transport_bw(payload, phase);
 
   if (log_level <= LogLevel::DEBUG)
-    print_payload(payload, prev_phase, reply, phase, true);
+    print_payload(payload, prev_phase, reply, phase);
 
   // unlock channel if response sent
   if (is_r_valid_last(prev_phase) && is_r_ready(phase)) {
@@ -147,7 +147,7 @@ int AXIBus::route_payload(ARM::AXI::Payload &payload) {
 // Debug functions
 // -------------------------------------------------------
 void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
-                           tlm::tlm_sync_enum reply, ARM::AXI::Phase, bool bw_path) {
+                           tlm_sync_enum reply, ARM::AXI::Phase) {
   const char *phase_name = "?";
   bool show_addr = true;
   bool show_data = false;
@@ -156,14 +156,28 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
   bool first_beat = false;
   bool last_beat = false;
 
-  bool updated = false;
+  bool updated = (reply == TLM_UPDATED);
 
   auto it = payload_phase_map.find(&payload);
   if (it != payload_phase_map.end()) {
-    updated = (reply == tlm::TLM_UPDATED) || (it->second != phase) && bw_path;
+    ARM::AXI::Phase prev_phase = it->second;
+
+    auto check_transition = [&](auto valid_fn, auto ready_fn) {
+      return (valid_fn(prev_phase) && ready_fn(phase));
+    };
+
+    if (check_transition(is_aw_valid, is_aw_ready) ||
+        check_transition(is_w_valid, is_w_ready) ||
+        check_transition(is_w_valid_last, is_w_ready) ||
+        check_transition(is_b_valid, is_b_ready) ||
+        check_transition(is_ar_valid, is_ar_ready) ||
+        check_transition(is_r_valid, is_r_ready) ||
+        check_transition(is_r_valid_last, is_r_ready)) {
+      updated = true;
+    }
+
     it->second = phase;
   } else {
-    updated = (reply == tlm::TLM_UPDATED);
     payload_phase_map[&payload] = phase;
   }
 

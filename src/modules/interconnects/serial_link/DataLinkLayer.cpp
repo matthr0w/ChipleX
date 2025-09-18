@@ -33,6 +33,7 @@ void SLDataLinkLayer::clk_posedge() {
   if (!data_out_ongoing) {
     Payload_t *payload = stream_fifo_out->peek();
     if (payload) {
+      // TODO: Fix memory management
       tlm_generic_payload *transaction = new tlm_generic_payload;
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
@@ -61,7 +62,7 @@ tlm_sync_enum SLDataLinkLayer::nb_transport_fw(int id,
                                                sc_time &delay) {
   switch (phase) {
   case BEGIN_REQ: {
-    // TODO: Fix intermediate routing
+    // TODO: Fix inter-chiplet routing
     if (!stream_fifo_in->reserve())
       return TLM_ACCEPTED;
     tlm_generic_payload *tptr = &transaction;

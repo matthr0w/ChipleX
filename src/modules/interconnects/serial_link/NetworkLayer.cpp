@@ -2,10 +2,10 @@
 
 #include "logging.h"
 
-SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned axi_width,
-                               int num_credits)
-    : sc_module(name), axi_width(axi_width), num_credits(num_credits),
-      force_send_thresh(num_credits - 4),
+SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chip_id,
+                               unsigned axi_width, int num_credits)
+    : sc_module(name), chip_id(chip_id), axi_width(axi_width),
+      num_credits(num_credits), force_send_thresh(num_credits - 4),
       axi_in("axi_in", *this, &SLNetworkLayer::nb_transport_fw,
              ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &SLNetworkLayer::nb_transport_bw,
@@ -84,9 +84,18 @@ void SLNetworkLayer::clk_posedge() {
       ar_queue.pop_front();
     }
 
+    if (r_state == ACK) {
+      r_state = CLEAR;
+      r_beat_count++;
+      if (r_beat_count == r_queue.front()->get_beat_count()) {
+        r_beat_count = 0;
+      }
+      r_queue.pop_front();
+    }
+
     // Update registers
     committer_state_q.write(committer_state_d.read());
-    // TODO: Introduce some randomness
+    // TODO: Introduce some randomness and add to committer
     entropy_q.write(entropy_d.read());
 
     if (axis_reg_valid_in.read() && axis_reg_ready_in.read()) {
@@ -102,6 +111,8 @@ void SLNetworkLayer::clk_posedge() {
           axi_in_trans.w_beat_count = 0;
         else
           axi_in_trans.w_beat_count += 1;
+      } else if (is_ar_ready(phase)) {
+        axi_payload = axi_in_trans.r_payload;
       }
 
       if (axi_payload) {
@@ -114,6 +125,13 @@ void SLNetworkLayer::clk_posedge() {
       axi_payload = nullptr;
       if (is_b_ready(phase)) {
         axi_payload = axi_out_trans.w_payload;
+      } else if (is_r_ready(phase)) {
+        axi_payload = axi_out_trans.r_payload;
+        if (axi_out_trans.r_beat_count + 1 ==
+            axi_out_trans.r_payload->get_beat_count())
+          axi_out_trans.r_beat_count = 0;
+        else
+          axi_out_trans.r_beat_count += 1;
       }
 
       if (axi_payload) {
@@ -130,7 +148,7 @@ void SLNetworkLayer::clk_posedge() {
     // Pop the payload from fifo
     Payload_t *payload = stream_fifo_in->peek();
     if (payload) {
-      // TODO: Sync write response
+      // TODO: Split write response
       switch (payload->hdr) {
       case TagIdle:
         stream_fifo_in->read();
@@ -159,14 +177,37 @@ void SLNetworkLayer::clk_posedge() {
           credit_received = true;
         }
         break;
-      // TODO: Add read operations
       case TagAR:
+        if (ar_state == CLEAR) {
+          payload_in = ARM::AXI::Payload::new_payload(
+              ARM::AXI::COMMAND_READ, payload->axi_ch.addr,
+              get_axi_size(axi_width), payload->len, payload->burst);
+          payload_in->id = payload->id;
+          payload_in->user = payload->user;
+          stream_fifo_in->read();
+          ar_queue.push_back(payload_in);
+          axi_out_trans.r_payload = payload_in;
+          latest_user = payload->user;
+          credit_received = true;
+        }
+        break;
       case TagR:
+        if (r_state == CLEAR) {
+          ARM::AXI::Payload *r_payload = pending_read_responses.front();
+          r_payload->read_in_beat(payload->axi_ch.data.data());
+          stream_fifo_in->read();
+          r_queue.push_back(r_payload);
+          latest_user = payload->user;
+          credit_received = true;
+          if (r_beat_count + 1 == r_payload->get_beat_count())
+            pending_read_responses.pop_front();
+        }
+        break;
       default:
         break;
       }
 
-      if (payload->b_valid) {
+      if (b_state == CLEAR && payload->b_valid) {
         b_queue.push_back(pending_write_responses.front());
         pending_write_responses.pop_front();
       }
@@ -207,7 +248,7 @@ void SLNetworkLayer::clk_posedge() {
 
       b_state = REQ;
       tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
-      if (reply == TLM_ACCEPTED) {
+      if (reply == TLM_UPDATED) {
         sc_assert(phase == ARM::AXI::B_READY);
         b_state = ACK;
       }
@@ -226,6 +267,22 @@ void SLNetworkLayer::clk_posedge() {
       }
     }
 
+    /* Send read beat RVALID */
+    if (r_state == CLEAR && !r_queue.empty()) {
+      ARM::AXI::Payload *payload = r_queue.front();
+      ARM::AXI::Phase phase = (r_beat_count + 1 == payload->get_beat_count())
+                                  ? ARM::AXI::R_VALID_LAST
+                                  : ARM::AXI::R_VALID;
+
+      r_state = REQ;
+      tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
+      if (reply == TLM_UPDATED) {
+        sc_assert(phase == ARM::AXI::R_READY);
+        r_state = ACK;
+      }
+    }
+
+    // TODO: Fix for inter-chiplet routing
     // Flow control
     if (axis_reg_valid_in.read() && axis_reg_ready_in.read()) {
       credits_out -= 1;
@@ -278,7 +335,8 @@ void SLNetworkLayer::committer_thread() {
       }
 
       if (!ar_gnt.read() && !aw_gnt.read() &&
-          is_r_valid(axi_out_trans.req_phase)) {
+          (is_r_valid(axi_out_trans.req_phase) ||
+           is_r_valid_last(axi_out_trans.req_phase))) {
         r_gnt.write(true);
       }
 
@@ -295,6 +353,9 @@ void SLNetworkLayer::committer_thread() {
         ar_gnt.write(true);
       } else {
         if (is_r_valid(axi_out_trans.req_phase)) {
+          r_gnt.write(true);
+        }
+        if (is_r_valid_last(axi_out_trans.req_phase)) {
           r_gnt.write(true);
         }
         if (is_w_valid(axi_in_trans.req_phase)) {
@@ -324,7 +385,13 @@ void SLNetworkLayer::committer_thread() {
         if (is_r_valid(axi_out_trans.req_phase)) {
           r_gnt.write(true);
         }
+        if (is_r_valid_last(axi_out_trans.req_phase)) {
+          r_gnt.write(true);
+        }
         if (is_w_valid(axi_in_trans.req_phase)) {
+          w_gnt.write(true);
+        }
+        if (is_w_valid_last(axi_in_trans.req_phase)) {
           w_gnt.write(true);
         }
       }
@@ -382,6 +449,7 @@ void SLNetworkLayer::sender_thread() {
     payload_out = new Payload_t(axi_width);
     UserSignals user = UserSignals::decode(latest_user);
     user.destination = user.source;
+    user.source = chip_id;
     payload_out->user = user.encode();
     payload_out->credit = credits_to_send;
 
@@ -410,13 +478,12 @@ void SLNetworkLayer::sender_thread() {
       payload_out->user = axi_in_trans.r_payload->user;
     } else if (r_gnt.read()) {
       payload_out->hdr = TagR;
-      payload_out->axi_ch.addr = axi_in_trans.r_payload->get_address();
+      payload_out->axi_ch.addr = axi_out_trans.r_payload->get_address();
       axi_out_trans.r_payload->read_out_beat(axi_out_trans.r_beat_count,
                                              payload_out->axi_ch.data.data());
-      payload_out->id = axi_in_trans.r_payload->id;
-      payload_out->len = axi_in_trans.r_payload->get_beat_count() - 1;
-      payload_out->burst = axi_in_trans.r_payload->get_burst();
-      payload_out->user = axi_in_trans.r_payload->user;
+      payload_out->id = axi_out_trans.r_payload->id;
+      payload_out->len = axi_out_trans.r_payload->get_beat_count() - 1;
+      payload_out->burst = axi_out_trans.r_payload->get_burst();
     }
 
     if (b_gnt.read()) {
@@ -449,6 +516,7 @@ void SLNetworkLayer::sender_thread() {
         axi_in_trans.rsp_phase = ARM::AXI::AR_READY;
       }
       if (r_gnt.read()) {
+        axi_out_trans.rsp_phase = ARM::AXI::R_READY;
       }
     } else {
       axi_in_trans.rsp_phase = ARM::AXI::PHASE_UNINITIALIZED;
@@ -483,6 +551,7 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
       return TLM_ACCEPTED;
     axi_in_trans.r_payload = &payload;
     axi_in_trans.r_beat_count = 0;
+    pending_read_responses.push_back(&payload);
     payload.ref();
     break;
   default:
