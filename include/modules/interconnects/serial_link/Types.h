@@ -52,12 +52,17 @@ inline std::ostream &operator<<(std::ostream &os, const AxiTrans_t &t) {
   return os;
 }
 
-enum Tag_e : uint8_t { TagIdle = 0, TagAW = 1, TagW = 2, TagAR = 3, TagR = 4 };
+enum Tag_e : uint8_t {
+  TagIdle = 0,
+  TagAW = 1,
+  TagW = 2,
+  TagAR = 3,
+  TagR = 4,
+  TagB = 5
+};
 
 struct Payload_t {
   AxiBeat axi_ch;
-  bool b_valid = false;
-  ARM::AXI::Resp b = ARM::AXI::RESP_OKAY;
   Tag_e hdr = TagIdle;
   int credit = 0;
   uint64_t user = 0;

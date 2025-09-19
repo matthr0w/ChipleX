@@ -95,7 +95,7 @@ void SLNetworkLayer::clk_posedge() {
 
     // Update registers
     committer_state_q.write(committer_state_d.read());
-    // TODO: Introduce some randomness and add to committer
+    // TODO: Introduce some randomness
     entropy_q.write(entropy_d.read());
 
     if (axis_reg_valid_in.read() && axis_reg_ready_in.read()) {
@@ -148,7 +148,6 @@ void SLNetworkLayer::clk_posedge() {
     // Pop the payload from fifo
     Payload_t *payload = stream_fifo_in->peek();
     if (payload) {
-      // TODO: Split write response
       switch (payload->hdr) {
       case TagIdle:
         stream_fifo_in->read();
@@ -203,13 +202,15 @@ void SLNetworkLayer::clk_posedge() {
             pending_read_responses.pop_front();
         }
         break;
+      case TagB:
+        if (b_state == CLEAR) {
+          stream_fifo_in->read();
+          b_queue.push_back(pending_write_responses.front());
+          pending_write_responses.pop_front();
+        }
+        break;
       default:
         break;
-      }
-
-      if (b_state == CLEAR && payload->b_valid) {
-        b_queue.push_back(pending_write_responses.front());
-        pending_write_responses.pop_front();
       }
     }
 
@@ -325,12 +326,12 @@ void SLNetworkLayer::committer_thread() {
     r_gnt.write(false);
     committer_state_d.write(committer_state_q);
 
+    // TODO: Add entropy
     switch (committer_state_q.read()) {
     case Committer::Idle:
       if (is_aw_valid(axi_in_trans.req_phase)) {
         aw_gnt.write(true);
-      }
-      if (is_ar_valid(axi_in_trans.req_phase)) {
+      } else if (is_ar_valid(axi_in_trans.req_phase)) {
         ar_gnt.write(true);
       }
 
@@ -338,6 +339,9 @@ void SLNetworkLayer::committer_thread() {
           (is_r_valid(axi_out_trans.req_phase) ||
            is_r_valid_last(axi_out_trans.req_phase))) {
         r_gnt.write(true);
+      } else if (!ar_gnt.read() && !aw_gnt.read() &&
+                 is_b_valid(axi_out_trans.req_phase)) {
+        b_gnt.write(true);
       }
 
       if (aw_gnt.read() && is_aw_ready(axi_in_trans.rsp_phase)) {
@@ -352,17 +356,14 @@ void SLNetworkLayer::committer_thread() {
       if (is_ar_valid(axi_in_trans.req_phase)) {
         ar_gnt.write(true);
       } else {
-        if (is_r_valid(axi_out_trans.req_phase)) {
-          r_gnt.write(true);
-        }
-        if (is_r_valid_last(axi_out_trans.req_phase)) {
-          r_gnt.write(true);
-        }
-        if (is_w_valid(axi_in_trans.req_phase)) {
+        if (is_w_valid(axi_in_trans.req_phase) ||
+            is_w_valid_last(axi_in_trans.req_phase)) {
           w_gnt.write(true);
-        }
-        if (is_w_valid_last(axi_in_trans.req_phase)) {
-          w_gnt.write(true);
+        } else if (is_r_valid(axi_out_trans.req_phase) ||
+                   is_r_valid_last(axi_out_trans.req_phase)) {
+          r_gnt.write(true);
+        } else if (is_b_valid(axi_out_trans.req_phase)) {
+          b_gnt.write(true);
         }
       }
 
@@ -382,17 +383,14 @@ void SLNetworkLayer::committer_thread() {
       if (is_aw_valid(axi_in_trans.req_phase)) {
         aw_gnt.write(true);
       } else {
-        if (is_r_valid(axi_out_trans.req_phase)) {
+        if (is_r_valid(axi_out_trans.req_phase) ||
+            is_r_valid_last(axi_out_trans.req_phase)) {
           r_gnt.write(true);
-        }
-        if (is_r_valid_last(axi_out_trans.req_phase)) {
-          r_gnt.write(true);
-        }
-        if (is_w_valid(axi_in_trans.req_phase)) {
+        } else if (is_w_valid(axi_in_trans.req_phase) ||
+                   is_w_valid_last(axi_in_trans.req_phase)) {
           w_gnt.write(true);
-        }
-        if (is_w_valid_last(axi_in_trans.req_phase)) {
-          w_gnt.write(true);
+        } else if (is_b_valid(axi_out_trans.req_phase)) {
+          b_gnt.write(true);
         }
       }
 
@@ -409,11 +407,14 @@ void SLNetworkLayer::committer_thread() {
       break;
 
     case Committer::ArAwPend: {
-      if (is_r_valid(axi_out_trans.req_phase)) {
-        r_gnt.write(true);
-      }
-      if (is_w_valid(axi_in_trans.req_phase)) {
+      if (is_w_valid(axi_in_trans.req_phase) ||
+          is_w_valid_last(axi_in_trans.req_phase)) {
         w_gnt.write(true);
+      } else if (is_r_valid(axi_out_trans.req_phase) ||
+                 is_r_valid_last(axi_out_trans.req_phase)) {
+        r_gnt.write(true);
+      } else if (is_b_valid(axi_out_trans.req_phase)) {
+        b_gnt.write(true);
       }
 
       bool aw_pend_idle = is_r_valid_last(axi_in_trans.req_phase) &&
@@ -434,8 +435,6 @@ void SLNetworkLayer::committer_thread() {
     default:
       break;
     }
-
-    b_gnt.write(is_b_valid(axi_out_trans.req_phase));
   }
 }
 
@@ -484,15 +483,15 @@ void SLNetworkLayer::sender_thread() {
       payload_out->id = axi_out_trans.r_payload->id;
       payload_out->len = axi_out_trans.r_payload->get_beat_count() - 1;
       payload_out->burst = axi_out_trans.r_payload->get_burst();
-    }
-
-    if (b_gnt.read()) {
-      payload_out->b_valid = true;
-      payload_out->b = axi_out_trans.w_payload->get_resp();
+    } else if (b_gnt.read()) {
+      payload_out->hdr = TagB;
+      payload_out->id = axi_out_trans.w_payload->id;
+      payload_out->len = axi_out_trans.w_payload->get_beat_count() - 1;
+      payload_out->burst = axi_out_trans.w_payload->get_burst();
     }
 
     axis_reg_valid_in.write((payload_out->hdr != TagIdle) ||
-                            payload_out->b_valid || credit_to_send_force);
+                            credit_to_send_force);
 
     if (credits_out == 0) {
       axis_reg_valid_in.write(false);
