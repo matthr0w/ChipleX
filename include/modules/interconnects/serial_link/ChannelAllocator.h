@@ -69,10 +69,8 @@ private:
       sc_time wire_propagation_delay = SC_ZERO_TIME;
 
       unsigned bandwidth = interconnect_config.get<unsigned>("num_channels") *
-                           interconnect_config.get<unsigned>("num_lanes");
-
-      if (interconnect_config.get<bool>("ddr"))
-        bandwidth = bandwidth * 2;
+                           interconnect_config.get<unsigned>("num_lanes") *
+                           (interconnect_config.get<bool>("ddr") ? 2 : 1);
 
       unsigned num_cycles =
           (Payload_t::simulation_size(module.axi_width) * 8 + bandwidth - 1) /

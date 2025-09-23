@@ -31,7 +31,7 @@ public:
   ARM::AXI::SimpleInitiatorSocket<SLNetworkLayer> axi_out;
 
   SLNetworkLayer(sc_module_name name, unsigned chip_id, unsigned axi_width,
-                 unsigned num_interconnects, int num_credits);
+                 unsigned num_interconnects, unsigned num_credits);
 
 private:
   enum ChannelState { CLEAR, REQ, ACK };
@@ -61,8 +61,8 @@ private:
   // -------------------------------------------------------
   const unsigned chip_id;
   const unsigned axi_width;
-  const int num_credits;
-  const int force_send_thresh;
+  const unsigned num_credits;
+  const unsigned force_send_thresh;
 
   // -------------------------------------------------------
   // Internal signals

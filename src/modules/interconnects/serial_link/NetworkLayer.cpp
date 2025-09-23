@@ -5,7 +5,7 @@
 
 SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chip_id,
                                unsigned axi_width, unsigned num_interconnects,
-                               int num_credits)
+                               unsigned num_credits)
     : sc_module(name), chip_id(chip_id), axi_width(axi_width),
       num_credits(num_credits), force_send_thresh(num_credits - 4),
       axi_in("axi_in", *this, &SLNetworkLayer::nb_transport_fw,

@@ -4,15 +4,15 @@
 
 SerialLink::SerialLink(sc_module_name name, unsigned chip_id,
                        unsigned axi_width, unsigned num_cores,
-                       unsigned num_interconnects, int num_credits)
+                       unsigned num_interconnects, unsigned num_credits)
     : InterconnectBase(1), sc_module(name), num_cores(num_cores),
       num_interconnects(num_interconnects),
       network_layer("NetworkLayer", chip_id, axi_width, num_interconnects,
                     num_credits),
       datalink_layer("DataLinkLayer", chip_id, axi_width, num_interconnects),
       stream_fifo_out("StreamFifoOut", 2),
-      stream_fifo_in("StreamFifoIn", 2) // TODO: Fix stream fifo depth
-{
+      stream_fifo_in("StreamFifoIn",
+                     compute_fifo_depth(axi_width, num_credits)) {
   for (unsigned int i = 0; i < num_interconnects; ++i) {
     std::string name = "ChannelAllocater" + std::to_string(i);
     // TODO: Update distance
@@ -49,6 +49,23 @@ SerialLink::~SerialLink() {
   channel_allocaters.clear();
 
   delete[] irq_sockets;
+}
+
+unsigned SerialLink::compute_fifo_depth(unsigned axi_width,
+                                        unsigned num_credits) {
+  const Config &interconnect_config =
+      ConfigRegistry::instance().get("Interconnect");
+
+  unsigned bandwidth = interconnect_config.get<unsigned>("num_channels") *
+                       interconnect_config.get<unsigned>("num_lanes") *
+                       (interconnect_config.get<bool>("ddr") ? 2 : 1);
+
+  unsigned payload_splits =
+      (Payload_t::simulation_size(axi_width) * 8 + bandwidth - 1) / bandwidth;
+
+  std::cout << num_credits * payload_splits << std::endl;
+
+  return num_credits * payload_splits;
 }
 
 void SerialLink::bind_axi(AXIBus &bus, sc_clock &clk) {

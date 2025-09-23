@@ -16,7 +16,8 @@ using namespace tlm_utils;
 SC_MODULE(SerialLink), public InterconnectBase {
 public:
   SerialLink(sc_module_name name, unsigned chip_id, unsigned axi_width,
-             unsigned num_cores, unsigned num_interconnects, int num_credits);
+             unsigned num_cores, unsigned num_interconnects,
+             unsigned num_credits);
   ~SerialLink();
 
   simple_initiator_socket_tagged<SerialLink> *irq_sockets;
@@ -32,6 +33,8 @@ private:
 
   StreamFifo stream_fifo_out;
   StreamFifo stream_fifo_in;
+
+  unsigned compute_fifo_depth(unsigned axi_width, unsigned num_credits);
 
   // -------------------------------------------------------
   // Parameters
