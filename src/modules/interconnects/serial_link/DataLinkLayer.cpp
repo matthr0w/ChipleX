@@ -1,6 +1,5 @@
 #include "modules/interconnects/serial_link/DataLinkLayer.h"
 
-#include "ARM/TLM/arm_axi4.h"
 #include "common/RoutingTable.h"
 
 SLDataLinkLayer::SLDataLinkLayer(sc_module_name name, unsigned chip_id,
@@ -62,13 +61,13 @@ tlm_sync_enum SLDataLinkLayer::nb_transport_fw(int id,
                                                sc_time &delay) {
   switch (phase) {
   case BEGIN_REQ: {
-    // TODO: Fix inter-chiplet routing
     if (!stream_fifo_in->reserve())
       return TLM_ACCEPTED;
     tlm_generic_payload *tptr = &transaction;
     sc_spawn([this, id, tptr, delay]() {
       wait(delay);
       Payload_t *payload = unpack_payload(*tptr);
+      payload->interconnect_id = id;
       stream_fifo_in->write(payload);
       tlm_phase resp_phase = BEGIN_RESP;
       sc_time resp_delay = SC_ZERO_TIME;

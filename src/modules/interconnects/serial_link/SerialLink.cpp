@@ -7,7 +7,8 @@ SerialLink::SerialLink(sc_module_name name, unsigned chip_id,
                        unsigned num_interconnects, int num_credits)
     : InterconnectBase(1), sc_module(name), num_cores(num_cores),
       num_interconnects(num_interconnects),
-      network_layer("NetworkLayer", chip_id, axi_width, num_credits),
+      network_layer("NetworkLayer", chip_id, axi_width, num_interconnects,
+                    num_credits),
       datalink_layer("DataLinkLayer", chip_id, axi_width, num_interconnects),
       stream_fifo_out("StreamFifoOut", 2),
       stream_fifo_in("StreamFifoIn", 2) // TODO: Fix stream fifo depth

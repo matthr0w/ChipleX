@@ -91,3 +91,34 @@ int RoutingTable::get_route(unsigned int from, unsigned int to) {
   // chiplet-to-chiplet routing
   return table[from][to];
 }
+
+int RoutingTable::get_destination(unsigned int from, unsigned int via) {
+  if (from > num_chiplets)
+    return -1;
+
+  // FPGA is source
+  if (from == 0) {
+    unsigned int chiplet = via + 1;
+    if (chiplet <= num_chiplets)
+      return chiplet;
+    return -1;
+  }
+
+  // FPGA is destination
+  if (via == 0) {
+    if (std::find(connections.begin(), connections.end(), from) !=
+        connections.end())
+      return 0;
+    return -1;
+  }
+
+  // chiplet-to-chiplet routing
+  for (unsigned int to = 1; to <= num_chiplets; ++to) {
+    if (to == from)
+      continue;
+    if (table[from][to] == via)
+      return to;
+  }
+
+  return -1;
+}

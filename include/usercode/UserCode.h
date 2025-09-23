@@ -33,7 +33,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         auto reqw = Core::WriteRequest(
                         1, reinterpret_cast<unsigned char *>(data), num_bytes)
-                        .set_dest(2)
+                        .set_dest(3)
                         .set_addr(0x1000)
                         .skip_cache();
 
@@ -42,7 +42,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         auto reqr = Core::ReadRequest(1, 0x1000,
                                       reinterpret_cast<unsigned char *>(data),
                                       num_bytes)
-                        .set_dest(2)
+                        .set_dest(3)
                         .skip_cache();
 
         h = core.read(reqr);

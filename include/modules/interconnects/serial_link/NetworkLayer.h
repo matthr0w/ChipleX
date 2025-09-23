@@ -32,7 +32,7 @@ public:
   ARM::AXI::SimpleInitiatorSocket<SLNetworkLayer> axi_out;
 
   SLNetworkLayer(sc_module_name name, unsigned chip_id, unsigned axi_width,
-                 int num_credits);
+                 unsigned num_interconnects, int num_credits);
 
 private:
   enum ChannelState { CLEAR, REQ, ACK };
@@ -84,12 +84,9 @@ private:
   sc_signal<bool> aw_gnt, w_gnt, b_gnt, ar_gnt, r_gnt;
   sc_signal<bool> axis_reg_valid_in, axis_reg_ready_in;
 
-  unsigned credits_out = num_credits;
-  unsigned credits_to_send = 0;
-  bool credit_to_send_force = false;
-  bool credit_received = false;
-
-  uint64_t latest_user = 0;
+  std::vector<unsigned> credits_out;
+  std::vector<unsigned> credits_to_send;
+  std::vector<bool> credit_to_send_force;
 
   // -------------------------------------------------------
   // Events
@@ -103,4 +100,14 @@ private:
                                 ARM::AXI::Phase & phase);
   tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);
+
+  // -------------------------------------------------------
+  // Helper functions
+  // -------------------------------------------------------
+  void clear_axi_state();
+  void send_axi_beats();
+  void send_axi_response(AxiTrans_t & trans, bool is_master);
+
+  void increment_credits(int link_id, unsigned credit);
+  void decrement_credits(int link_id);
 };
