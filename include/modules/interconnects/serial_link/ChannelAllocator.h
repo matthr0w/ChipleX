@@ -27,12 +27,13 @@ public:
   simple_initiator_socket_tagged<SLChannelAllocater>
       data_out_isocket; // tagged for InterconnectBase
 
-  SLChannelAllocater(sc_module_name name, double distance);
+  SLChannelAllocater(sc_module_name name, unsigned axi_width, double distance);
 
 private:
   // -------------------------------------------------------
   // Parameters
   // -------------------------------------------------------
+  const unsigned axi_width;
   const double distance;
 
   // -------------------------------------------------------
@@ -73,8 +74,9 @@ private:
       if (interconnect_config.get<bool>("ddr"))
         bandwidth = bandwidth * 2;
 
-      // TODO: Use real payload size
-      unsigned num_cycles = (sizeof(Payload_t) * 8 + bandwidth - 1) / bandwidth;
+      unsigned num_cycles =
+          (Payload_t::simulation_size(module.axi_width) * 8 + bandwidth - 1) /
+          bandwidth;
 
       packet_transfer_delay =
           num_cycles * interconnect_config.get<sc_time>("clk_cycle");

@@ -1,7 +1,8 @@
 #include "modules/interconnects/serial_link/ChannelAllocator.h"
 
-SLChannelAllocater::SLChannelAllocater(sc_module_name name, double distance)
-    : sc_module(name), distance(distance) {
+SLChannelAllocater::SLChannelAllocater(sc_module_name name, unsigned axi_width,
+                                       double distance)
+    : sc_module(name), axi_width(axi_width), distance(distance) {
   data_in_tsocket.register_nb_transport_fw(
       this, &SLChannelAllocater::nb_transport_fw_data_in, 0);
   data_in_isocket.register_nb_transport_bw(

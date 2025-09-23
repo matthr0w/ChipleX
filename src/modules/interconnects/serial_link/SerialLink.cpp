@@ -16,8 +16,8 @@ SerialLink::SerialLink(sc_module_name name, unsigned chip_id,
   for (unsigned int i = 0; i < num_interconnects; ++i) {
     std::string name = "ChannelAllocater" + std::to_string(i);
     // TODO: Update distance
-    channel_allocaters.push_back(
-        new SLChannelAllocater(name.c_str(), chiplet_distance_um / 1000));
+    channel_allocaters.push_back(new SLChannelAllocater(
+        name.c_str(), axi_width, chiplet_distance_um / 1000));
   }
 
   irq_sockets = new simple_initiator_socket_tagged<SerialLink>[num_cores];

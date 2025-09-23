@@ -65,15 +65,20 @@ struct Payload_t {
   AxiBeat axi_ch;
   Tag_e hdr = TagIdle;
   int credit = 0;
+  uint32_t id = 0;
   uint64_t user = 0;
 
   // Only for flow control
   int interconnect_id = 0;
 
   // Only for AXI TLM payload construction
-  uint32_t id = 0;
   uint8_t len = 0;
   ARM::AXI::Burst burst = 0;
+
+  static constexpr size_t simulation_size(size_t axi_width) {
+    return (axi_width + 7) / 8 + sizeof(Tag_e) + sizeof(int) +
+           sizeof(uint32_t) + sizeof(uint64_t);
+  }
 
   Payload_t(size_t axi_width) : axi_ch((axi_width + 7) / 8) {}
 };
