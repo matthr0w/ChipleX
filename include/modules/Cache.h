@@ -29,6 +29,7 @@ public:
   Cache(sc_module_name name, unsigned chip_id, unsigned axi_width,
         unsigned cache_size, unsigned cache_block_size,
         unsigned cache_store_buffer_size);
+  ~Cache();
 
 private:
   enum ChannelState { CLEAR, REQ, ACK };

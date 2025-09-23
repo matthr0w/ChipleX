@@ -32,7 +32,6 @@ void SLDataLinkLayer::clk_posedge() {
   if (!data_out_ongoing) {
     Payload_t *payload = stream_fifo_out->peek();
     if (payload) {
-      // TODO: Fix memory management
       tlm_generic_payload *transaction = new tlm_generic_payload;
       tlm_phase phase = BEGIN_REQ;
       sc_time delay = SC_ZERO_TIME;
@@ -89,6 +88,7 @@ tlm_sync_enum SLDataLinkLayer::nb_transport_bw(int id,
   case BEGIN_RESP:
     data_out_ongoing = false;
     phase = END_RESP;
+    delete[] transaction.get_data_ptr();
     delete &transaction;
     return TLM_UPDATED;
   }

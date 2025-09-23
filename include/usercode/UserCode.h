@@ -60,7 +60,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         delete[] data;
 
-        sc_stop();
+        std::exit(0);
       },
       [](Core &core, UtilizationTracker *tracker,
          tlm_generic_payload *transaction) {}}}};

@@ -39,6 +39,8 @@ Cache::Cache(sc_module_name name, unsigned chip_id, unsigned axi_width,
   dont_initialize();
 }
 
+Cache::~Cache() { delete[] beat_data; }
+
 void Cache::clk_posedge() {
   if (aw_state == ACK) {
     aw_state = CLEAR;

@@ -63,8 +63,6 @@ unsigned SerialLink::compute_fifo_depth(unsigned axi_width,
   unsigned payload_splits =
       (Payload_t::simulation_size(axi_width) * 8 + bandwidth - 1) / bandwidth;
 
-  std::cout << num_credits * payload_splits << std::endl;
-
   return num_credits * payload_splits;
 }
 
