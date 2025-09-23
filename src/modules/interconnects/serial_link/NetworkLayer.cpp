@@ -15,8 +15,6 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chip_id,
   // Initial values
   committer_state_q.write(Committer::Idle);
   committer_state_d.write(Committer::Idle);
-  entropy_q.write(false);
-  entropy_d.write(false);
   axis_reg_valid_in.write(false);
   axis_reg_ready_in.write(false);
 
@@ -43,8 +41,7 @@ void SLNetworkLayer::clk_posedge() {
 
     // Update registers
     committer_state_q.write(committer_state_d.read());
-    // TODO: Introduce some randomness
-    entropy_q.write(entropy_d.read());
+    entropy = rand();
 
     clear_axi_state();
 
@@ -195,13 +192,19 @@ void SLNetworkLayer::committer_thread() {
     r_gnt.write(false);
     committer_state_d.write(committer_state_q);
 
-    // TODO: Add entropy
     switch (committer_state_q.read()) {
-    case Committer::Idle:
+    case Committer::Idle: {
+      std::vector<std::function<void()>> grants;
       if (is_aw_valid(axi_in_trans.req_phase)) {
-        aw_gnt.write(true);
-      } else if (is_ar_valid(axi_in_trans.req_phase)) {
-        ar_gnt.write(true);
+        grants.push_back([&]() { aw_gnt.write(true); });
+      }
+      if (is_ar_valid(axi_in_trans.req_phase)) {
+        grants.push_back([&]() { ar_gnt.write(true); });
+      }
+
+      if (!grants.empty()) {
+        size_t idx = entropy % grants.size(); // Entropy prevents starvation
+        grants[idx]();
       }
 
       if (!ar_gnt.read() && !aw_gnt.read() &&
@@ -220,19 +223,28 @@ void SLNetworkLayer::committer_thread() {
         committer_state_d.write(Committer::ArPend);
       }
       break;
+    }
 
-    case Committer::AwPend:
+    case Committer::AwPend: {
       if (is_ar_valid(axi_in_trans.req_phase)) {
         ar_gnt.write(true);
       } else {
+        std::vector<std::function<void()>> grants;
         if (is_w_valid(axi_in_trans.req_phase) ||
             is_w_valid_last(axi_in_trans.req_phase)) {
-          w_gnt.write(true);
-        } else if (is_r_valid(axi_out_trans.req_phase) ||
-                   is_r_valid_last(axi_out_trans.req_phase)) {
-          r_gnt.write(true);
-        } else if (is_b_valid(axi_out_trans.req_phase)) {
-          b_gnt.write(true);
+          grants.push_back([&]() { w_gnt.write(true); });
+        }
+        if (is_r_valid(axi_out_trans.req_phase) ||
+            is_r_valid_last(axi_out_trans.req_phase)) {
+          grants.push_back([&]() { r_gnt.write(true); });
+        }
+        if (is_b_valid(axi_out_trans.req_phase)) {
+          grants.push_back([&]() { b_gnt.write(true); });
+        }
+
+        if (!grants.empty()) {
+          size_t idx = entropy % grants.size(); // Entropy prevents starvation
+          grants[idx]();
         }
       }
 
@@ -247,19 +259,28 @@ void SLNetworkLayer::committer_thread() {
                                     : Committer::AwPend);
       }
       break;
+    }
 
-    case Committer::ArPend:
+    case Committer::ArPend: {
       if (is_aw_valid(axi_in_trans.req_phase)) {
         aw_gnt.write(true);
       } else {
+        std::vector<std::function<void()>> grants;
         if (is_r_valid(axi_out_trans.req_phase) ||
             is_r_valid_last(axi_out_trans.req_phase)) {
-          r_gnt.write(true);
-        } else if (is_w_valid(axi_in_trans.req_phase) ||
-                   is_w_valid_last(axi_in_trans.req_phase)) {
-          w_gnt.write(true);
-        } else if (is_b_valid(axi_out_trans.req_phase)) {
-          b_gnt.write(true);
+          grants.push_back([&]() { r_gnt.write(true); });
+        }
+        if (is_w_valid(axi_in_trans.req_phase) ||
+            is_w_valid_last(axi_in_trans.req_phase)) {
+          grants.push_back([&]() { w_gnt.write(true); });
+        }
+        if (is_b_valid(axi_out_trans.req_phase)) {
+          grants.push_back([&]() { b_gnt.write(true); });
+        }
+
+        if (!grants.empty()) {
+          size_t idx = entropy % grants.size(); // Entropy prevents starvation
+          grants[idx]();
         }
       }
 
@@ -274,16 +295,25 @@ void SLNetworkLayer::committer_thread() {
                                     : Committer::ArPend);
       }
       break;
+    }
 
     case Committer::ArAwPend: {
+      std::vector<std::function<void()>> grants;
       if (is_w_valid(axi_in_trans.req_phase) ||
           is_w_valid_last(axi_in_trans.req_phase)) {
-        w_gnt.write(true);
-      } else if (is_r_valid(axi_out_trans.req_phase) ||
-                 is_r_valid_last(axi_out_trans.req_phase)) {
-        r_gnt.write(true);
-      } else if (is_b_valid(axi_out_trans.req_phase)) {
-        b_gnt.write(true);
+        grants.push_back([&]() { w_gnt.write(true); });
+      }
+      if (is_r_valid(axi_out_trans.req_phase) ||
+          is_r_valid_last(axi_out_trans.req_phase)) {
+        grants.push_back([&]() { r_gnt.write(true); });
+      }
+      if (is_b_valid(axi_out_trans.req_phase)) {
+        grants.push_back([&]() { b_gnt.write(true); });
+      }
+
+      if (!grants.empty()) {
+        size_t idx = entropy % grants.size(); // Entropy prevents starvation
+        grants[idx]();
       }
 
       bool aw_pend_idle = is_r_valid_last(axi_in_trans.req_phase) &&

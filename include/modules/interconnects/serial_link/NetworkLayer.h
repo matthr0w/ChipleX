@@ -79,13 +79,14 @@ private:
   std::deque<ARM::AXI::Payload *> pending_write_responses;
 
   sc_signal<Committer::State> committer_state_q, committer_state_d;
-  sc_signal<bool> entropy_q, entropy_d;
   sc_signal<bool> aw_gnt, w_gnt, b_gnt, ar_gnt, r_gnt;
   sc_signal<bool> axis_reg_valid_in, axis_reg_ready_in;
 
   std::vector<unsigned> credits_out;
   std::vector<unsigned> credits_to_send;
   std::vector<bool> credit_to_send_force;
+
+  unsigned entropy = 0;
 
   // -------------------------------------------------------
   // Events
