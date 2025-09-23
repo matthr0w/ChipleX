@@ -31,12 +31,10 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chip_id,
   SC_THREAD(committer_thread);
   sensitive << update_event << aw_gnt << ar_gnt << axi_in_sig << axi_out_sig
             << committer_state_q;
-  async_reset_signal_is(rst_n, false);
 
   SC_THREAD(sender_thread);
   sensitive << update_event << aw_gnt << w_gnt << b_gnt << ar_gnt << r_gnt
             << axis_reg_valid_in << axis_reg_ready_in;
-  async_reset_signal_is(rst_n, false);
 }
 
 void SLNetworkLayer::clk_posedge() {

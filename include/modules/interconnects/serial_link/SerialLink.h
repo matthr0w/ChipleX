@@ -26,8 +26,6 @@ public:
   void bind_core(unsigned index, Core &core) override;
 
 private:
-  sc_signal<bool> rst;
-
   SLNetworkLayer network_layer;
   SLDataLinkLayer datalink_layer;
   std::vector<SLChannelAllocater *> channel_allocaters;

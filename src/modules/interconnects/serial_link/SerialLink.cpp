@@ -21,7 +21,6 @@ SerialLink::SerialLink(sc_module_name name, unsigned chip_id,
   }
 
   irq_sockets = new simple_initiator_socket_tagged<SerialLink>[num_cores];
-  rst.write(true);
 
   network_layer.stream_fifo_in(stream_fifo_in);
   network_layer.stream_fifo_out(stream_fifo_out);
@@ -53,11 +52,8 @@ SerialLink::~SerialLink() {
 }
 
 void SerialLink::bind_axi(AXIBus &bus, sc_clock &clk) {
-  // TODO: Bind reset signals
   network_layer.clk.bind(clk);
-  network_layer.rst_n.bind(rst);
   datalink_layer.clk.bind(clk);
-  datalink_layer.rst_n.bind(rst);
 
   bus.sub_isockets[1]->bind(network_layer.axi_in);
   network_layer.axi_out.bind(*bus.mgr_tsockets[num_cores]);
