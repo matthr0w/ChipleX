@@ -9,8 +9,6 @@
 #include "ARM/TLM/arm_axi4.h"
 #include "logging.h"
 
-#include "common/Tracker.h"
-
 #include "modules/DMAEngine.h"
 #include "modules/interconnects/Base.h"
 
@@ -24,11 +22,6 @@ public:
   sc_in<bool> axi_clock;
   sc_in<bool> protocol_clock;
   sc_in<bool> phy_clock;
-
-  // -------------------------------------------------------
-  // trackers
-  // -------------------------------------------------------
-  UtilizationTracker utilization_tracker;
 
   // -------------------------------------------------------
   // sockets
@@ -227,9 +220,6 @@ private:
       bool transfer_successful = false;
 
       for (int attempt = 0; attempt < max_attempts; ++attempt) {
-        TransmissionTracker::instance().record_transmission(
-            base_transfer_delay);
-
         if (bit_error_dist(bit_error_gen) >= prob_bad_transfer) {
           // no bit error
           transfer_successful = true;
@@ -244,14 +234,12 @@ private:
           // forward error correction penalty
           delay += interconnect_config.get<sc_time>(
               "interconnect_protocol.fec_delay");
-          TransmissionTracker::instance().record_attempt();
           // assuming FEC handles it
           transfer_successful = true;
           break;
         case ConnectionType::UCIe:
           // retry penalty
           delay += base_transfer_delay;
-          TransmissionTracker::instance().record_attempt();
         default:;
         }
       }

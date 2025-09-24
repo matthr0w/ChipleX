@@ -9,8 +9,6 @@
 #include "modules/Memory.h"
 #include "modules/interconnects/Base.h"
 
-#include "common/Tracker.h"
-
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -48,11 +46,6 @@ public:
   const unsigned num_axi_subordinates = 2;
   const unsigned num_interconnects = 3;
 
-  // -------------------------------------------------------
-  // trackers
-  // -------------------------------------------------------
-  std::vector<BufferUsageTracker *> buffer_trackers;
-  std::vector<UtilizationTracker *> utilization_trackers;
 
   Memory memory;
   DMAEngine dma_engine;

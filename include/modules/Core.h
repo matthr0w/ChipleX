@@ -9,8 +9,6 @@
 #include "ARM/TLM/arm_axi4.h"
 #include "logging.h"
 
-#include "common/Tracker.h"
-
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
@@ -18,11 +16,6 @@ using namespace tlm_utils;
 SC_MODULE(Core) {
 public:
   sc_in<bool> clk;
-
-  // -------------------------------------------------------
-  // Trackers
-  // -------------------------------------------------------
-  UtilizationTracker utilization_tracker;
 
   // -------------------------------------------------------
   // Sockets
@@ -33,9 +26,8 @@ public:
   Core(sc_module_name name, unsigned chip_id, unsigned core_id,
        unsigned axi_width, sc_time irq_delay);
 
-  std::function<void(Core &, UtilizationTracker *)> thread_fn;
-  std::function<void(Core &, UtilizationTracker *, tlm_generic_payload *)>
-      interrupt_fn;
+  std::function<void(Core &)> thread_fn;
+  std::function<void(Core &, tlm_generic_payload *)> interrupt_fn;
 
   struct ReadRequest {
     uint32_t request_id;

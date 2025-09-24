@@ -22,10 +22,10 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(yaml-cpp)
 
-file(GLOB_RECURSE PROJECT_SOURCES ${PROJECT_SOURCE_DIR}/src/*.cpp)
+file(GLOB_RECURSE PROJECT_SOURCES ${PROJECT_SOURCE_DIR}/src/test/*.cpp)
 add_executable(sim ${PROJECT_SOURCES})
 
-target_include_directories(sim PRIVATE ${PROJECT_SOURCE_DIR}/include)
+target_include_directories(sim PRIVATE ${PROJECT_SOURCE_DIR}/include/test)
 target_include_directories(sim PRIVATE $ENV{SYSTEMC_PATH}/include)
 
 target_link_libraries(sim PRIVATE ${SYSTEMC_LIB})

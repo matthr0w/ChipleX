@@ -1,12 +1,11 @@
 #pragma once
 
+#include <map>
 #include <systemc>
 #include <tlm>
 #include <vector>
 
 #include "ARM/TLM/arm_axi4.h"
-
-#include "common/Tracker.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -14,11 +13,6 @@ using namespace tlm;
 SC_MODULE(Memory) {
 public:
   sc_core::sc_in<bool> clk;
-
-  // -------------------------------------------------------
-  // Trackers
-  // -------------------------------------------------------
-  UtilizationTracker utilization_tracker;
 
   // -------------------------------------------------------
   // Sockets

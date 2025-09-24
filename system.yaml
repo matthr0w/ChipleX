@@ -1,0 +1,14 @@
+chiplets:
+  - name: chiplet0
+    type: single-core
+    config:
+      cores:
+        clk_cycle: 10
+
+  - name: chiplet1
+    type: single-core
+
+interconnect:
+  type: ucie
+  connections:
+    - { from: chiplet0, to: chiplet1, distance_um: 500 }
