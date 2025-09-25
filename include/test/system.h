@@ -1,19 +1,18 @@
 #pragma once
 
 #include <string>
-#include <unordered_map>
 #include <vector>
 #include <yaml-cpp/yaml.h>
 
 struct ChipletType {
-  enum class Type { SingleCore, DualCore, QuadCore, Memory, Unknown };
+  enum class Type { SingleCore, DualCore, QuadCore, Memory, Undefined };
 
   Type type;
 
   ChipletType() = default;
   ChipletType(Type t) : type(t) {}
 
-  std::string str() const {
+  std::string to_string() const {
     switch (type) {
     case Type::SingleCore:
       return "single-core";
@@ -24,7 +23,7 @@ struct ChipletType {
     case Type::Memory:
       return "memory";
     default:
-      return "unknown";
+      return "undefined";
     }
   }
 
@@ -37,31 +36,19 @@ struct ChipletType {
       return Type::QuadCore;
     if (str == "memory")
       return Type::Memory;
-    return Type::Unknown;
+    return Type::Undefined;
   }
 };
 
-struct ChipletConfig {
-  ChipletType type;
-  YAML::Node config;
-  YAML::Node interconnect_overrides;
-};
-
-struct InterconnectConnection {
-  std::string from;
-  std::string to;
-  int distance_um;
-};
-
 struct InterconnectType {
-  enum class Type { PCIe, UCIe, SerialLink, SPI, Unknown };
+  enum class Type { PCIe, UCIe, SerialLink, SPI, Undefined };
 
   Type type;
 
   InterconnectType() = default;
   InterconnectType(Type t) : type(t) {}
 
-  std::string str() const {
+  std::string to_string() const {
     switch (type) {
     case Type::PCIe:
       return "pcie";
@@ -72,7 +59,7 @@ struct InterconnectType {
     case Type::SPI:
       return "spi";
     default:
-      return "unknown";
+      return "undefined";
     }
   }
 
@@ -85,18 +72,73 @@ struct InterconnectType {
       return Type::SerialLink;
     if (str == "spi")
       return Type::SPI;
-    return Type::Unknown;
+    return Type::Undefined;
   }
+};
+
+struct ConnectionPreset {
+  enum class Type { Mesh, Ring, Star, Undefined };
+
+  Type type;
+
+  ConnectionPreset() = default;
+  ConnectionPreset(Type t) : type(t) {}
+
+  std::string to_string() const {
+    switch (type) {
+    case Type::Mesh:
+      return "mesh";
+    case Type::Ring:
+      return "ring";
+    case Type::Star:
+      return "star";
+    default:
+      return "undefined";
+    }
+  }
+
+  static Type parse(const std::string &str) {
+    if (str == "mesh")
+      return Type::Mesh;
+    if (str == "ring")
+      return Type::Ring;
+    if (str == "star")
+      return Type::Star;
+    return Type::Undefined;
+  }
+};
+
+struct ConnectionEndpoint {
+  std::string chiplet;
+  unsigned index;
+};
+
+struct ConnectionMapping {
+  ConnectionEndpoint endpoint0;
+  ConnectionEndpoint endpoint1;
+};
+
+struct ChipletConnectionConfig {
+  InterconnectType type;
+  YAML::Node config;
+  double wire_length;
+};
+
+struct ChipletConfig {
+  ChipletType type;
+  YAML::Node config;
+  std::vector<ChipletConnectionConfig> connections;
 };
 
 struct InterconnectConfig {
   InterconnectType type;
-  YAML::Node config;
-  std::vector<InterconnectConnection> connections;
+  YAML::Node defaults;
+  std::vector<ConnectionMapping> connections;
 };
 
 struct SystemConfig {
-  std::unordered_map<std::string, ChipletConfig> chiplets;
+  std::map<std::string, ChipletConfig> chiplets;
+  std::vector<std::string> chiplet_order;
   InterconnectConfig interconnect;
 };
 
@@ -110,7 +152,8 @@ public:
     load(system_yaml);
   }
 
-  const SystemConfig &get_system() const { return system_; }
+  const SystemConfig &get_system_config() const { return system_; }
+  void print_system_config();
 
 private:
   std::string interconnects_path_;
@@ -119,6 +162,11 @@ private:
   SystemConfig system_;
 
   void load(const std::string &system_yaml);
+
+  YAML::Node generate_preset_connections(
+      const ConnectionPreset &preset,
+      const std::map<std::string, ChipletConfig> &chiplets,
+      const YAML::Node &overrides);
 
   void merge_nodes(YAML::Node target, const YAML::Node &override,
                    const std::string &path = "");

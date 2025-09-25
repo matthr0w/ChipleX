@@ -1,4 +1,7 @@
 chiplets:
+  - name: fpga
+    type: quad-core
+
   - name: chiplet0
     type: single-core
     config:
@@ -8,7 +11,17 @@ chiplets:
   - name: chiplet1
     type: single-core
 
+  - name: chiplet2
+    type: single-core
+
 interconnect:
   type: ucie
+  preset: star
   connections:
-    - { from: chiplet0, to: chiplet1, distance_um: 500 }
+    - endpoints: [fpga, chiplet0]
+      wire_length_mm: 1000
+      config:
+        interconnect:
+          bandwidth: 64.0
+    # Test: invalid connection for star preset
+    - endpoints: [chiplet0, chiplet1]
