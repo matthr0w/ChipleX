@@ -109,8 +109,9 @@ struct ConnectionPreset {
 };
 
 struct ConnectionEndpoint {
-  std::string chiplet;
-  unsigned index;
+  std::string chiplet_name;
+  int chiplet_id;
+  int link_id;
 };
 
 struct ConnectionMapping {
@@ -152,8 +153,8 @@ public:
     load(system_yaml);
   }
 
-  const SystemConfig &get_system_config() const { return system_; }
-  void print_system_config();
+  const SystemConfig &get_config() const { return system_; }
+  void print_config() const;
 
 private:
   std::string interconnects_path_;

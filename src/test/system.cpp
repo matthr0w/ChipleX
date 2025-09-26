@@ -122,20 +122,29 @@ void SystemLoader::load(const std::string &system_yaml) {
     }
 
     // Assign to both chiplets (bidirectional symmetry)
-    unsigned idx0 = system_.chiplets[endpoint0].connections.size();
+    int idx0 = system_.chiplets[endpoint0].connections.size();
     system_.chiplets[endpoint0].connections.push_back(
         {type, interconnect_config,
          conn["wire_length_mm"] ? conn["wire_length_mm"].as<double>()
                                 : wire_length_mm});
 
-    unsigned idx1 = system_.chiplets[endpoint1].connections.size();
+    int idx1 = system_.chiplets[endpoint1].connections.size();
     system_.chiplets[endpoint1].connections.push_back(
         {type, interconnect_config,
          conn["wire_length_mm"] ? conn["wire_length_mm"].as<double>()
                                 : wire_length_mm});
 
     // Mapping
-    interconnect.connections.push_back({{endpoint0, idx0}, {endpoint1, idx1}});
+    auto it0 = std::find(system_.chiplet_order.begin(),
+                         system_.chiplet_order.end(), endpoint0);
+    auto id0 = std::distance(system_.chiplet_order.begin(), it0);
+    auto it1 = std::find(system_.chiplet_order.begin(),
+                         system_.chiplet_order.end(), endpoint1);
+    auto id1 = std::distance(system_.chiplet_order.begin(), it1);
+
+    interconnect.connections.push_back(
+        {{endpoint0, static_cast<int>(id0), idx0},
+         {endpoint1, static_cast<int>(id1), idx1}});
   }
 
   system_.interconnect = interconnect;
@@ -299,7 +308,7 @@ static void print_yaml_node(const YAML::Node &node, int indent = 0) {
   }
 }
 
-void SystemLoader::print_system_config() {
+void SystemLoader::print_config() const {
   std::cout << "================ SYSTEM CONFIG ================\n";
 
   // -------------------------------------------------------
@@ -333,10 +342,12 @@ void SystemLoader::print_system_config() {
 
   std::cout << "  Mappings:\n";
   for (size_t i = 0; i < system_.interconnect.connections.size(); ++i) {
-    const auto &m = system_.interconnect.connections[i];
-    std::cout << "    [" << i << "] " << m.endpoint0.chiplet << ".conn["
-              << m.endpoint0.index << "] <-> " << m.endpoint1.chiplet
-              << ".conn[" << m.endpoint1.index << "]\n";
+    const auto &conn = system_.interconnect.connections[i];
+    std::cout << "    [" << i << "] " << conn.endpoint0.chiplet_name << ".conn["
+              << conn.endpoint0.chiplet_id << "," << conn.endpoint0.link_id
+              << "] <-> " << conn.endpoint1.chiplet_name << ".conn["
+              << conn.endpoint1.chiplet_id << "," << conn.endpoint1.link_id
+              << "]\n";
   }
 
   std::cout << "===============================================\n";
