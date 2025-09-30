@@ -1,55 +1,78 @@
 #include "modules/interconnects/Generic.h"
 
-#include "common/RoutingTable.h"
-#include "modules/AXIBus.h"
+#include "common/Router.h"
 
-GenericInterconnect::GenericInterconnect(
-    sc_module_name name, unsigned chip_id, unsigned axi_width,
-    unsigned num_cores, unsigned num_interconnects, unsigned flit_size,
-    unsigned overhead_size, unsigned link_buffer_size,
-    unsigned staging_buffer_size, double bandwidth, double distance,
-    DMAEngine *dma_engine)
-    : InterconnectBase(num_interconnects), sc_module(name), chip_id(chip_id),
-      axi_width(axi_width), flit_size(flit_size), overhead_size(overhead_size),
-      staging_buffer_size(staging_buffer_size),
-      link_buffer_size(link_buffer_size), bandwidth(bandwidth),
-      distance(distance), dma_engine(dma_engine),
-      utilization_tracker(this->name()),
+GenericInterconnect::GenericInterconnect(sc_module_name name,
+                                         unsigned chiplet_id,
+                                         ChipletConfig chiplet_config,
+                                         InterconnectConfig interconnect_config,
+                                         DMAEngine *dma_engine)
+    : InterconnectBase(chiplet_config.connections.size(),
+                       chiplet_config.config["cores"]["num"].as<unsigned>()),
+      sc_module(name), chiplet_id(chiplet_id),
+      num_cores(chiplet_config.config["cores"]["num"].as<unsigned>()),
+      num_links(chiplet_config.connections.size()),
+      axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
+      flit_size(
+          interconnect_config.defaults["interconnect_protocol"]["flit_size"]
+              .as<unsigned>()),
+      overhead_size(
+          interconnect_config.defaults["interconnect_protocol"]["overhead_size"]
+              .as<unsigned>()),
+      staging_buffer_size(
+          interconnect_config.defaults["interconnect"]["staging_buffer_size"]
+              .as<unsigned>()),
+      link_buffer_size(
+          interconnect_config.defaults["interconnect"]["link_buffer_size"]
+              .as<unsigned>()),
+      connections(chiplet_config.connections), dma_engine(dma_engine),
       axi_tsocket("axi_tsocket", *this,
                   &GenericInterconnect::nb_transport_fw_axi,
+                  ARM::TLM::PROTOCOL_AXI4, axi_width),
+      axi_isocket("axi_isocket", *this,
+                  &GenericInterconnect::nb_transport_bw_axi,
                   ARM::TLM::PROTOCOL_AXI4, axi_width) {
   dma_vm_id = dma_engine->register_virtual_initiator(this);
 
   phy_tsockets =
-      new simple_target_socket_tagged<GenericInterconnect>[num_interconnects];
-  phy_isockets = new simple_initiator_socket_tagged<
-      GenericInterconnect>[num_interconnects];
+      new simple_target_socket_tagged<GenericInterconnect>[num_links];
+  phy_isockets =
+      new simple_initiator_socket_tagged<GenericInterconnect>[num_links];
 
-  for (unsigned int i = 0; i < num_interconnects; ++i) {
+  for (int i = 0; i < num_links; ++i) {
     phy_tsockets[i].register_nb_transport_fw(
         this, &GenericInterconnect::nb_transport_fw_phy, i);
     phy_isockets[i].register_nb_transport_bw(
         this, &GenericInterconnect::nb_transport_bw_phy, i);
   }
 
-  for (unsigned i = 0; i < num_interconnects; ++i) {
-    in_ports[i] =
-        reinterpret_cast<simple_target_socket_tagged<InterconnectBase> *>(
-            &phy_tsockets[i]);
-    out_ports[i] =
-        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
-            &phy_isockets[i]);
-  }
-
   irq_sockets =
       new simple_initiator_socket_tagged<GenericInterconnect>[num_cores];
 
+  // Register ports in InterconnectBase
+  axi_in_port =
+      reinterpret_cast<ARM::AXI::SimpleTargetSocket<InterconnectBase> *>(
+          &axi_tsocket);
+  axi_out_port =
+      reinterpret_cast<ARM::AXI::SimpleInitiatorSocket<InterconnectBase> *>(
+          &axi_isocket);
+  for (int i = 0; i < num_links; ++i) {
+    link_in_ports[i] =
+        reinterpret_cast<simple_target_socket_tagged<InterconnectBase> *>(
+            &phy_tsockets[i]);
+    link_out_ports[i] =
+        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
+            &phy_isockets[i]);
+  }
+  for (int i = 0; i < num_cores; ++i)
+    irq_ports[i] =
+        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
+            &irq_sockets[i]);
+
   staging_buffer.resize(staging_buffer_size, 0);
 
-  tx_buffers.resize(num_interconnects,
-                    std::vector<uint8_t>(link_buffer_size, 0));
-  rx_buffers.resize(num_interconnects,
-                    std::vector<uint8_t>(link_buffer_size, 0));
+  tx_buffers.resize(num_links, std::vector<uint8_t>(link_buffer_size, 0));
+  rx_buffers.resize(num_links, std::vector<uint8_t>(link_buffer_size, 0));
 
   tx_ptrs.resize(tx_buffers.size(), 0);
   rx_ptrs.resize(rx_buffers.size(), 0);
@@ -79,16 +102,10 @@ GenericInterconnect::~GenericInterconnect() {
   delete[] irq_sockets;
 }
 
-void GenericInterconnect::bind_axi(AXIBus &bus, sc_clock &clk) {
+void GenericInterconnect::bind_clock(sc_clock &clk) {
   axi_clock.bind(clk);
   protocol_clock.bind(clk);
   phy_clock.bind(clk);
-
-  bus.sub_isockets[1]->bind(axi_tsocket);
-}
-
-void GenericInterconnect::bind_core(unsigned index, Core &core) {
-  irq_sockets[index].bind(core.irq_socket);
 }
 
 // ============================================================================
@@ -194,7 +211,8 @@ void GenericInterconnect::protocol_clock_posedge() {
 
     write_flit_header(flit.data(), header);
 
-    const unsigned tx_idx = RoutingTable::get_route(chip_id, destination_id);
+    const unsigned tx_idx =
+        Router::instance().get_link_id(chiplet_id, destination_id);
     const size_t tail = tx_ptrs[tx_idx];
     const size_t room = tx_buffers[tx_idx].size() - tail;
 
@@ -264,7 +282,8 @@ void GenericInterconnect::protocol_clock_posedge() {
       std::memcpy(flit.data() + flit_header_bytes, staging_buffer.data(),
                   flit_payload);
 
-      const unsigned tx_idx = RoutingTable::get_route(chip_id, destination_id);
+      const unsigned tx_idx =
+          Router::instance().get_link_id(chiplet_id, destination_id);
       const size_t tail = tx_ptrs[tx_idx];
       const size_t room = tx_buffers[tx_idx].size() - tail;
 
@@ -313,8 +332,8 @@ void GenericInterconnect::protocol_clock_posedge() {
 
     size_t offset = read_flit_header(flit_base, flit_header);
 
-    bool at_source = flit_header.source_id == chip_id;
-    bool at_destination = flit_header.destination_id == chip_id;
+    bool at_source = flit_header.source_id == chiplet_id;
+    bool at_destination = flit_header.destination_id == chiplet_id;
     bool is_read = flit_header.command == READ_COMMAND;
     bool is_write = flit_header.command == WRITE_COMMAND;
 
@@ -396,8 +415,8 @@ void GenericInterconnect::protocol_clock_posedge() {
         axi_active_flit_id = flit_header.flit_id;
       }
     } else {
-      const unsigned tx_idx =
-          RoutingTable::get_route(chip_id, flit_header.destination_id);
+      const unsigned tx_idx = Router::instance().get_link_id(
+          chiplet_id, flit_header.destination_id);
       const size_t tail = tx_ptrs[tx_idx];
       const size_t room = tx_buffers[tx_idx].size() - tail;
 
@@ -516,7 +535,7 @@ GenericInterconnect::nb_transport_fw_axi(ARM::AXI::Payload &payload,
     b_state = ACK;
     return TLM_ACCEPTED;
   default:
-    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
     return TLM_ACCEPTED;
   }
 }
@@ -600,7 +619,7 @@ GenericInterconnect::nb_transport_bw_axi(ARM::AXI::Payload &payload,
     phase = ARM::AXI::B_READY;
     return TLM_UPDATED;
   default:
-    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
     return TLM_ACCEPTED;
   }
 }
@@ -617,7 +636,7 @@ GenericInterconnect::nb_transport_fw_phy(int id,
     if (rx_ptrs[id] + flit_size > rx_buffers[id].size())
       return TLM_ACCEPTED; // backpressure
 
-    Transfer transfer = delays.transfer_delay(transaction);
+    Transfer transfer = delays.transfer_delay(id, transaction);
     delay += transfer.delay;
 
     if (!transfer.success)

@@ -1,4 +1,4 @@
-#include "system.h"
+#include "common/System.h"
 
 #include <filesystem>
 
@@ -341,7 +341,7 @@ void SystemLoader::print_config() const {
   print_yaml_node(system_.interconnect.defaults, 4);
 
   std::cout << "  Mappings:\n";
-  for (size_t i = 0; i < system_.interconnect.connections.size(); ++i) {
+  for (int i = 0; i < system_.interconnect.connections.size(); ++i) {
     const auto &conn = system_.interconnect.connections[i];
     std::cout << "    [" << i << "] " << conn.endpoint0.chiplet_name << ".conn["
               << conn.endpoint0.chiplet_id << "," << conn.endpoint0.link_id

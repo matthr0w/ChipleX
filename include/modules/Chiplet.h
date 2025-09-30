@@ -2,6 +2,8 @@
 
 #include <systemc>
 
+#include "common/System.h"
+
 #include "modules/AXIBus.h"
 #include "modules/Cache.h"
 #include "modules/Core.h"
@@ -18,45 +20,26 @@ private:
   static unsigned instance;
   const unsigned chiplet_id;
 
-  // -------------------------------------------------------
-  // config
-  // -------------------------------------------------------
-  const Config &config = ConfigRegistry::instance().get("Chiplet");
+  const ChipletConfig chiplet_config;
+  const InterconnectConfig interconnect_config;
 
-  const unsigned cores_clk_cycle = config.get<unsigned>("cores.clk_cycle");
-  const sc_time cores_irq_delay = config.get<sc_time>("cores.irq_delay");
-
-  const unsigned cache_size = config.get<unsigned>("cache.size");
-  const unsigned cache_block_size = config.get<unsigned>("cache.block_size");
-  const unsigned cache_store_buffer_size =
-      config.get<unsigned>("cache.store_buffer_size");
-
-  const unsigned axi_width = config.get<unsigned>("axi.width");
-  const unsigned axi_clk_cycle = config.get<unsigned>("axi.clk_cycle");
-
-  const unsigned ram_size = config.get<unsigned>("ram.size");
-  const unsigned ram_clk_cycle = config.get<unsigned>("ram.clk_cycle");
+  unsigned init_num_managers();
+  unsigned init_num_subordinates();
 
 public:
-  // -------------------------------------------------------
-  // parameters
-  // -------------------------------------------------------
-  const unsigned num_cores = 2;
-  const unsigned num_axi_managers = 4;
-  const unsigned num_axi_subordinates = 2;
-  const unsigned num_interconnects = 3;
+  const unsigned num_cores;
+  const unsigned num_managers;
+  const unsigned num_subordinates;
 
-
-  Memory memory;
+  AXIBus axi_bus;
   DMAEngine dma_engine;
+  Memory memory;
   std::vector<std::unique_ptr<Core>> cores;
   std::vector<std::unique_ptr<Cache>> caches;
   std::unique_ptr<InterconnectBase> interconnect;
 
-  SC_CTOR(Chiplet);
+  Chiplet(sc_module_name name, SystemConfig sysconf);
 
 private:
-  // AXI
-  sc_clock axi_clk;
-  AXIBus axi_bus;
+  sc_clock system_clk;
 };

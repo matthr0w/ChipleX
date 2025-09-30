@@ -2,19 +2,20 @@
 
 #include "logging.h"
 
-Cache::Cache(sc_module_name name, unsigned chip_id, unsigned axi_width,
-             unsigned cache_size, unsigned cache_block_size,
-             unsigned cache_store_buffer_size)
-    : sc_module(name), chip_id(chip_id), axi_width(axi_width),
-      cache_size(cache_size), cache_block_size(cache_block_size),
-      cache_store_buffer_size(cache_store_buffer_size),
-      beat_data(new uint8_t[axi_width >> 3]), utilization_tracker(this->name()),
+Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
+    : sc_module(name), chiplet_id(chiplet_id),
+      axi_width(config["axi"]["width"].as<unsigned>()),
+      cache_size(config["cache"]["size"].as<unsigned>()),
+      cache_block_size(config["cache"]["block_size"].as<unsigned>()),
+      cache_store_buffer_size(
+          config["cache"]["store_buffer_size"].as<unsigned>()),
+      beat_data(new uint8_t[axi_width >> 3]),
       tsocket("tsocket", *this, &Cache::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       isocket("isocket", *this, &Cache::nb_transport_bw,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
   if (cache_size % cache_block_size != 0)
-    SC_REPORT_ERROR(this->name(), "Cache size must be multiple of block size.");
+    SC_LOG_ERROR(this, "Cache size must be multiple of block size.");
 
   num_lines = cache_size / cache_block_size;
   cache_lines.resize(num_lines);
@@ -294,7 +295,7 @@ void Cache::clk_negedge() {
 }
 
 // -------------------------------------------------------
-// Transport functions
+// Transport Functions
 // -------------------------------------------------------
 tlm_sync_enum Cache::nb_transport_fw(ARM::AXI::Payload &payload,
                                      ARM::AXI::Phase &phase) {
@@ -323,7 +324,7 @@ tlm_sync_enum Cache::nb_transport_fw(ARM::AXI::Payload &payload,
   case ARM::AXI::B_READY:
     return TLM_ACCEPTED;
   default:
-    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
     return TLM_ACCEPTED;
   }
 }
@@ -357,13 +358,13 @@ tlm_sync_enum Cache::nb_transport_bw(ARM::AXI::Payload &payload,
     phase = ARM::AXI::B_READY;
     return TLM_UPDATED;
   default:
-    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
     return TLM_ACCEPTED;
   }
 }
 
 // -------------------------------------------------------
-// Helper functions
+// Helper Functions
 // -------------------------------------------------------
 uint32_t Cache::set_beat_address(uint32_t base, unsigned beat_idx,
                                  unsigned beat_bytes, unsigned beats,
@@ -400,8 +401,8 @@ void Cache::enqueue_cacheline_read() {
       ARM::AXI::COMMAND_READ, clr.address, size, len, ARM::AXI::BURST_INCR);
 
   UserSignals user;
-  user.source = chip_id;
-  user.destination = chip_id;
+  user.source = chiplet_id;
+  user.destination = chiplet_id;
   user.fixed_address = true;
 
   payload->user = user.encode();
@@ -446,8 +447,8 @@ void Cache::enqueue_storebuffer_write() {
   payload->write_in(sbe.data.data());
 
   UserSignals user;
-  user.source = chip_id;
-  user.destination = chip_id;
+  user.source = chiplet_id;
+  user.destination = chiplet_id;
   user.fixed_address = true;
 
   payload->user = user.encode();
@@ -465,7 +466,7 @@ void Cache::complete_storebuffer_write(ARM::AXI::Payload *payload) {
 }
 
 // -------------------------------------------------------
-// Debug functions
+// Debug Functions
 // -------------------------------------------------------
 void Cache::dump() {
   std::cout << "=== Cache Dump ===\n";

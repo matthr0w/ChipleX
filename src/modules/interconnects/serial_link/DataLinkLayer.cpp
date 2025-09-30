@@ -1,16 +1,19 @@
 #include "modules/interconnects/serial_link/DataLinkLayer.h"
 
-#include "common/RoutingTable.h"
+#include "common/Router.h"
 
-SLDataLinkLayer::SLDataLinkLayer(sc_module_name name, unsigned chip_id,
-                                 unsigned axi_width, unsigned num_interconnects)
-    : sc_module(name), chip_id(chip_id), axi_width(axi_width) {
+SLDataLinkLayer::SLDataLinkLayer(sc_module_name name, unsigned chiplet_id,
+                                 ChipletConfig chiplet_config,
+                                 InterconnectConfig interconnect_config)
+    : sc_module(name), chiplet_id(chiplet_id),
+      num_links(chiplet_config.connections.size()),
+      axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()) {
   data_in_tsockets =
-      new simple_target_socket_tagged<SLDataLinkLayer>[num_interconnects];
+      new simple_target_socket_tagged<SLDataLinkLayer>[num_links];
   data_out_isockets =
-      new simple_initiator_socket_tagged<SLDataLinkLayer>[num_interconnects];
+      new simple_initiator_socket_tagged<SLDataLinkLayer>[num_links];
 
-  for (unsigned int i = 0; i < num_interconnects; ++i) {
+  for (unsigned int i = 0; i < num_links; ++i) {
     data_in_tsockets[i].register_nb_transport_fw(
         this, &SLDataLinkLayer::nb_transport_fw, i);
     data_out_isockets[i].register_nb_transport_bw(
@@ -28,7 +31,7 @@ SLDataLinkLayer::~SLDataLinkLayer() {
 }
 
 void SLDataLinkLayer::clk_posedge() {
-  /* DATA OUT */
+  // Data out
   if (!data_out_ongoing) {
     Payload_t *payload = stream_fifo_out->peek();
     if (payload) {
@@ -37,8 +40,8 @@ void SLDataLinkLayer::clk_posedge() {
       sc_time delay = SC_ZERO_TIME;
       pack_payload(*transaction, *payload);
 
-      int route = RoutingTable::get_route(
-          chip_id, UserSignals::decode(payload->user).destination);
+      int route = Router::instance().get_link_id(
+          chiplet_id, UserSignals::decode(payload->user).destination);
 
       tlm_sync_enum reply =
           data_out_isockets[route]->nb_transport_fw(*transaction, phase, delay);
@@ -52,7 +55,7 @@ void SLDataLinkLayer::clk_posedge() {
 }
 
 // -------------------------------------------------------
-// Transport functions
+// Transport Functions
 // -------------------------------------------------------
 tlm_sync_enum SLDataLinkLayer::nb_transport_fw(int id,
                                                tlm_generic_payload &transaction,
@@ -97,7 +100,7 @@ tlm_sync_enum SLDataLinkLayer::nb_transport_bw(int id,
 }
 
 // -------------------------------------------------------
-// Helper functions
+// Helper Functions
 // -------------------------------------------------------
 void SLDataLinkLayer::pack_payload(tlm_generic_payload &transaction,
                                    Payload_t &payload) {

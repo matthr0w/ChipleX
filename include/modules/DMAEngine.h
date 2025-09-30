@@ -3,6 +3,7 @@
 #include <deque>
 #include <systemc>
 #include <tlm>
+#include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
 
@@ -10,28 +11,43 @@ using namespace sc_core;
 using namespace tlm;
 
 struct VirtualAXIInitiatorIF {
-  virtual tlm::tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload &payload,
-                                                 ARM::AXI::Phase &phase) = 0;
+  virtual tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload &payload,
+                                            ARM::AXI::Phase &phase) = 0;
   virtual ~VirtualAXIInitiatorIF() = default;
 };
 
 SC_MODULE(DMAEngine) {
+private:
+  // -------------------------------------------------------
+  // Config
+  // -------------------------------------------------------
+  const unsigned axi_width;
+
 public:
+  // -------------------------------------------------------
+  // Signals
+  // -------------------------------------------------------
   sc_in<bool> clk;
 
   // -------------------------------------------------------
-  // sockets
+  // Sockets
   // -------------------------------------------------------
   ARM::AXI::SimpleInitiatorSocket<DMAEngine> isocket;
 
-  DMAEngine(sc_module_name name, unsigned axi_width);
+  DMAEngine(sc_module_name name, YAML::Node config);
 
+  // -------------------------------------------------------
+  // API
+  // -------------------------------------------------------
   int register_virtual_initiator(VirtualAXIInitiatorIF * owner);
   void unregister_virtual_initiator(int vm_id);
 
   bool forward_from_virtual(int vm_id, ARM::AXI::Payload &payload);
 
 private:
+  // -------------------------------------------------------
+  // Internal Declarations
+  // -------------------------------------------------------
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState aw_state = CLEAR;
@@ -51,12 +67,7 @@ private:
   void clk_negedge();
 
   // -------------------------------------------------------
-  // Parameters
-  // -------------------------------------------------------
-  const unsigned axi_width;
-
-  // -------------------------------------------------------
-  // Transport functions
+  // Transport Functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);

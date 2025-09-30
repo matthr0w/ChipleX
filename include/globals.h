@@ -12,7 +12,7 @@ enum class LogLevel { DEBUG, DELAY, INFO, WARN, ERROR, SILENT };
 inline LogLevel log_level = LogLevel::WARN;
 
 // ---------------------------
-// Simulation parameters
+// Simulation Parameters
 // ---------------------------
 inline sc_time sim_duration = sc_time(0, SC_NS);
 inline double wire_length_mm = 1.0;

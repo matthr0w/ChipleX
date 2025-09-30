@@ -4,9 +4,6 @@ chiplets:
 
   - name: chiplet0
     type: single-core
-    config:
-      cores:
-        clk_cycle: 10
 
   - name: chiplet1
     type: single-core
@@ -15,13 +12,5 @@ chiplets:
     type: single-core
 
 interconnect:
-  type: ucie
+  type: serial-link
   preset: star
-  connections:
-    - endpoints: [fpga, chiplet0]
-      wire_length_mm: 1000
-      config:
-        interconnect:
-          bandwidth: 64.0
-    # Test: invalid connection for star preset
-    - endpoints: [chiplet0, chiplet1]

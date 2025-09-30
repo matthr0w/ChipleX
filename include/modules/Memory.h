@@ -4,6 +4,7 @@
 #include <systemc>
 #include <tlm>
 #include <vector>
+#include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
 
@@ -11,7 +12,17 @@ using namespace sc_core;
 using namespace tlm;
 
 SC_MODULE(Memory) {
+private:
+  // -------------------------------------------------------
+  // Config
+  // -------------------------------------------------------
+  const unsigned axi_width;
+  const unsigned size;
+
 public:
+  // -------------------------------------------------------
+  // Signals
+  // -------------------------------------------------------
   sc_core::sc_in<bool> clk;
 
   // -------------------------------------------------------
@@ -19,9 +30,12 @@ public:
   // -------------------------------------------------------
   ARM::AXI::SimpleTargetSocket<Memory> tsocket;
 
-  Memory(sc_module_name name, unsigned int axi_width, unsigned int size);
+  Memory(sc_module_name name, YAML::Node config);
 
 private:
+  // -------------------------------------------------------
+  // Internal Declarations
+  // -------------------------------------------------------
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState b_state = CLEAR;
@@ -66,27 +80,20 @@ private:
   unsigned flit_data_size = 0;
   unsigned flit_id = 0;
 
+  // State variables
+  uint32_t active_addr = UINT32_MAX;
+
   void clk_posedge();
   void clk_negedge();
 
   // -------------------------------------------------------
-  // State variables
-  // -------------------------------------------------------
-  uint32_t active_addr = UINT32_MAX;
-
-  // -------------------------------------------------------
-  // Parameters
-  // -------------------------------------------------------
-  const unsigned int size;
-
-  // -------------------------------------------------------
-  // Transport functions
+  // Transport Functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);
 
   // -------------------------------------------------------
-  // Helper functions
+  // Helper Functions
   // -------------------------------------------------------
   void set_active_address(ARM::AXI::Payload & payload);
   uint32_t set_flit_address(ARM::AXI::Payload & payload);
@@ -98,7 +105,7 @@ private:
   void deallocate_dynamic_address(uint32_t address, unsigned size);
 
   // -------------------------------------------------------
-  // Debug functions
+  // Debug Functions
   // -------------------------------------------------------
 public:
   void report_usage();

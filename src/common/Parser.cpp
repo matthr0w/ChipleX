@@ -1,6 +1,7 @@
-#include "parser.h"
+#include "common/Parser.h"
 
 #include "globals.h"
+#include "logging.h"
 
 int Parser::parse(int argc, char *argv[]) {
   for (int i = 1; i < argc; ++i) {
@@ -14,14 +15,14 @@ int Parser::parse(int argc, char *argv[]) {
         double value = std::stod(arg.substr(7));
         sim_duration = sc_time(value, SC_NS);
       } catch (...) {
-        std::cerr << "Invalid value for --time\n";
+        LOG_ERROR("Invalid value for --time");
         return 1;
       }
     } else if (arg.rfind("--ber=", 0) == 0) {
       try {
         bit_error_rate = std::stod(arg.substr(6));
       } catch (...) {
-        std::cerr << "Invalid value for --ber\n";
+        LOG_ERROR("Invalid value for --ber");
         return 1;
       }
     } else if (arg.rfind("--logging=", 0) == 0) {
@@ -41,18 +42,18 @@ int Parser::parse(int argc, char *argv[]) {
       } else if (level == "silent") {
         log_level = LogLevel::SILENT;
       } else {
-        std::cerr << "Unknown logging level: " << level << "\n";
         print_help(argv[0]);
+        LOG_ERROR("Unknown logging level: " << level);
         return 1;
       }
     } else {
-      std::cerr << "Unknown argument: " << arg << "\n";
       print_help(argv[0]);
+      LOG_ERROR("Unknown argument: " << arg);
       return 1;
     }
   }
 
-  return -1;
+  return 0;
 }
 
 void Parser::print_help(const char *progname) {

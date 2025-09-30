@@ -1,9 +1,10 @@
 #include "modules/Core.h"
 
-Core::Core(sc_module_name name, unsigned chip_id, unsigned core_id,
-           unsigned axi_width, sc_time irq_delay)
-    : sc_module(name), chip_id(chip_id), core_id(core_id), axi_width(axi_width),
-      irq_delay(irq_delay), utilization_tracker(this->name()),
+Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
+           YAML::Node config)
+    : sc_module(name), chiplet_id(chiplet_id), core_id(core_id),
+      axi_width(config["axi"]["width"].as<unsigned>()),
+      irq_delay(config["cores"]["irq_delay"].as<unsigned>(), SC_NS),
       isocket("isocket", *this, &Core::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4,
               axi_width) {
   irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
@@ -25,9 +26,8 @@ Core::Core(sc_module_name name, unsigned chip_id, unsigned core_id,
 }
 
 void Core::core_thread() {
-  if (thread_fn) {
-    thread_fn(*this, &utilization_tracker);
-  }
+  if (thread_fn)
+    thread_fn(*this);
 }
 
 void Core::interrupt_thread() {
@@ -38,9 +38,8 @@ void Core::interrupt_thread() {
       tlm_generic_payload *transaction = irq_queue.front();
       irq_queue.pop_front();
 
-      if (interrupt_fn) {
-        interrupt_fn(*this, &utilization_tracker, transaction);
-      }
+      if (interrupt_fn)
+        interrupt_fn(*this, transaction);
 
       delete transaction;
     }
@@ -162,7 +161,7 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
     phase = ARM::AXI::B_READY;
     return TLM_UPDATED;
   default:
-    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
     return TLM_ACCEPTED;
   }
 }
@@ -187,7 +186,7 @@ Core::read_internal(uint32_t request_id, uint8_t destination_id,
 
   UserSignals user;
   user.core = core_id;
-  user.source = chip_id;
+  user.source = chiplet_id;
   user.destination = destination_id;
   user.fixed_address = fixed_address;
 
@@ -217,7 +216,7 @@ Core::RequestHandle *Core::read(const ReadRequest &req) {
       message << "AXI Burst Error: Requested data length (" << req.data_length
               << " bytes) exceeds maximum allowed fixed burst size ("
               << MAX_FIXED_BURST_SIZE << " bytes)";
-      SC_REPORT_ERROR(name(), message.str().c_str());
+      SC_LOG_ERROR(this, message.str().c_str());
     }
     break;
   case ARM::AXI::BURST_INCR:
@@ -226,7 +225,7 @@ Core::RequestHandle *Core::read(const ReadRequest &req) {
       message << "AXI Burst Error: Requested data length (" << req.data_length
               << " bytes) exceeds maximum allowed incremental burst size ("
               << MAX_INCR_BURST_SIZE << " bytes)";
-      SC_REPORT_ERROR(name(), message.str().c_str());
+      SC_LOG_ERROR(this, message.str().c_str());
     }
     break;
   case ARM::AXI::BURST_WRAP:
@@ -235,16 +234,16 @@ Core::RequestHandle *Core::read(const ReadRequest &req) {
       message << "AXI Burst Error: Requested data length (" << req.data_length
               << " bytes) exceeds maximum allowed wrap burst size ("
               << MAX_WRAP_BURST_SIZE << " bytes)";
-      SC_REPORT_ERROR(name(), message.str().c_str());
+      SC_LOG_ERROR(this, message.str().c_str());
     }
     break;
   default:
-    SC_REPORT_ERROR(name(), "AXI Burst Error: Unknown burst type");
+    SC_LOG_ERROR(this, "AXI Burst Error: Unknown burst type");
   }
 
-  uint8_t destination_id = req.destination_id.value_or(chip_id);
+  uint8_t destination_id = req.destination_id.value_or(chiplet_id);
   bool fixed_address = true;
-  bool is_volatile = req.is_volatile || (destination_id != chip_id);
+  bool is_volatile = req.is_volatile || (destination_id != chiplet_id);
 
   return read_internal(req.request_id, destination_id, req.address,
                        fixed_address, req.data, req.data_length, req.burst,
@@ -268,7 +267,7 @@ Core::write_internal(uint32_t request_id, uint8_t destination_id,
 
   UserSignals user;
   user.core = core_id;
-  user.source = chip_id;
+  user.source = chiplet_id;
   user.destination = destination_id;
   user.fixed_address = fixed_address;
 
@@ -300,7 +299,7 @@ Core::RequestHandle *Core::write(const WriteRequest &req) {
       message << "AXI Burst Error: Requested data length (" << req.data_length
               << " bytes) exceeds maximum allowed fixed burst size ("
               << MAX_FIXED_BURST_SIZE << " bytes)";
-      SC_REPORT_ERROR(name(), message.str().c_str());
+      SC_LOG_ERROR(this, message.str().c_str());
     }
     break;
   case ARM::AXI::BURST_INCR:
@@ -309,7 +308,7 @@ Core::RequestHandle *Core::write(const WriteRequest &req) {
       message << "AXI Burst Error: Requested data length (" << req.data_length
               << " bytes) exceeds maximum allowed incremental burst size ("
               << MAX_INCR_BURST_SIZE << " bytes)";
-      SC_REPORT_ERROR(name(), message.str().c_str());
+      SC_LOG_ERROR(this, message.str().c_str());
     }
     break;
   case ARM::AXI::BURST_WRAP:
@@ -318,18 +317,18 @@ Core::RequestHandle *Core::write(const WriteRequest &req) {
       message << "AXI Burst Error: Requested data length (" << req.data_length
               << " bytes) exceeds maximum allowed wrap burst size ("
               << MAX_WRAP_BURST_SIZE << " bytes)";
-      SC_REPORT_ERROR(name(), message.str().c_str());
+      SC_LOG_ERROR(this, message.str().c_str());
     }
     break;
   default:
-    SC_REPORT_ERROR(name(), "AXI Burst Error: Unknown burst type");
+    SC_LOG_ERROR(this, "AXI Burst Error: Unknown burst type");
   }
 
-  uint8_t destination_id = req.destination_id.value_or(chip_id);
+  uint8_t destination_id = req.destination_id.value_or(chiplet_id);
   uint32_t address = req.address.value_or(0x0);
   bool fixed_address = req.address.has_value();
   bool is_volatile =
-      req.is_volatile || (destination_id != chip_id) || !fixed_address;
+      req.is_volatile || (destination_id != chiplet_id) || !fixed_address;
 
   return write_internal(req.request_id, destination_id, address, fixed_address,
                         req.data, req.data_length, req.burst, is_volatile);

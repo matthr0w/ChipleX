@@ -6,8 +6,11 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
-#include "ARM/TLM/arm_axi4.h"
 #include "logging.h"
+
+#include "ARM/TLM/arm_axi4.h"
+
+#include "common/System.h"
 
 #include "modules/DMAEngine.h"
 #include "modules/interconnects/Base.h"
@@ -18,36 +21,54 @@ using namespace tlm_utils;
 
 SC_MODULE(GenericInterconnect), public InterconnectBase,
     public VirtualAXIInitiatorIF {
+private:
+  // -------------------------------------------------------
+  // Config
+  // -------------------------------------------------------
+  const unsigned chiplet_id;
+  const unsigned num_cores;
+  const unsigned num_links;
+  const unsigned axi_width;
+  const unsigned flit_size;
+  const unsigned overhead_size;
+  const unsigned staging_buffer_size;
+  const unsigned link_buffer_size;
+  const std::vector<ChipletConnectionConfig> connections;
+
 public:
+  // -------------------------------------------------------
+  // Signals
+  // -------------------------------------------------------
   sc_in<bool> axi_clock;
   sc_in<bool> protocol_clock;
   sc_in<bool> phy_clock;
 
   // -------------------------------------------------------
-  // sockets
+  // Sockets
   // -------------------------------------------------------
   ARM::AXI::SimpleTargetSocket<GenericInterconnect> axi_tsocket;
+  ARM::AXI::SimpleInitiatorSocket<GenericInterconnect> axi_isocket;
 
   simple_target_socket_tagged<GenericInterconnect> *phy_tsockets;
   simple_initiator_socket_tagged<GenericInterconnect> *phy_isockets;
 
   simple_initiator_socket_tagged<GenericInterconnect> *irq_sockets;
 
-  GenericInterconnect(sc_module_name name, unsigned chip_id, unsigned axi_width,
-                      unsigned num_cores, unsigned num_interconnects,
-                      unsigned flit_size, unsigned overhead_size,
-                      unsigned staging_buffer_size, unsigned link_buffer_size,
-                      double bandwidth, double distance, DMAEngine *dma_engine);
+  GenericInterconnect(
+      sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
+      InterconnectConfig interconnect_config, DMAEngine *dma_engine);
   ~GenericInterconnect();
 
   // InterconnectBase
-  void bind_axi(AXIBus & bus, sc_clock & clk) override;
-  void bind_core(unsigned index, Core &core) override;
+  void bind_clock(sc_clock & clk) override;
   // DMAEngine
   tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload & payload,
                                     ARM::AXI::Phase & phase) override;
 
 private:
+  // -------------------------------------------------------
+  // Internal Declarations
+  // -------------------------------------------------------
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState r_state = CLEAR;
@@ -79,7 +100,7 @@ private:
   size_t flit_header_bytes;
   size_t flit_data_bytes;
 
-  // flit metadata
+  // Flit metadata
   enum Command : uint8_t { READ_COMMAND = 0, WRITE_COMMAND = 1 };
   uint16_t flit_count = 0;
   uint16_t flit_id = 0;
@@ -92,19 +113,7 @@ private:
   uint16_t size = 0;
   bool fixed_address = true;
 
-  void axi_clock_posedge();
-  void protocol_clock_posedge();
-  void phy_clock_posedge();
-
-  // -------------------------------------------------------
-  // dma engine
-  // -------------------------------------------------------
-  DMAEngine *dma_engine = nullptr;
-  int dma_vm_id = -1;
-
-  // -------------------------------------------------------
-  // state variables
-  // -------------------------------------------------------
+  // State variables
   bool axi_active_tx = false;
   bool axi_active_rx = false;
   int axi_active_rx_idx = -1;
@@ -115,20 +124,105 @@ private:
   bool protocol_rreq_flit_sent = false;
   std::vector<bool> phy_active_tx;
 
-  // -------------------------------------------------------
-  // parameters
-  // -------------------------------------------------------
-  const unsigned chip_id;
-  const unsigned axi_width;
-  const unsigned flit_size;
-  const unsigned overhead_size;
-  const unsigned staging_buffer_size;
-  const unsigned link_buffer_size;
-  const double bandwidth;
-  const double distance;
+  // DMA engine
+  DMAEngine *dma_engine = nullptr;
+  int dma_vm_id = -1;
+
+  void axi_clock_posedge();
+  void protocol_clock_posedge();
+  void phy_clock_posedge();
 
   // -------------------------------------------------------
-  // transport functions
+  // Delay Model
+  // -------------------------------------------------------
+  struct Transfer {
+    sc_time delay;
+    bool success;
+  };
+
+  struct DelayModel {
+  private:
+    const GenericInterconnect &module;
+
+  public:
+    DelayModel(const GenericInterconnect &m) : module(m) {}
+
+    Transfer transfer_delay(int id, tlm_generic_payload &transaction) const {
+      ChipletConnectionConfig connection = module.connections[id];
+      InterconnectType interconnect = connection.type;
+      YAML::Node config = connection.config;
+
+      sc_time delay = SC_ZERO_TIME;
+      sc_time flit_transfer_delay = SC_ZERO_TIME;
+      sc_time wire_propagation_delay = SC_ZERO_TIME;
+
+      flit_transfer_delay =
+          sc_time(static_cast<double>(module.flit_size) /
+                      config["interconnect"]["bandwidth"].as<double>(),
+                  SC_NS);
+
+      // Wire propagation delay based on wire length
+      wire_propagation_delay =
+          sc_time(connection.wire_length * wire_ps_per_mm, SC_PS);
+
+      delay = flit_transfer_delay + wire_propagation_delay;
+      sc_time base_transfer_delay = delay;
+
+      double prob_bad_transfer =
+          1.0 - std::pow(1.0 - bit_error_rate, module.flit_size * 8);
+
+      int max_attempts = 1;
+      switch (interconnect.type) {
+      case InterconnectType::Type::UCIe:
+        max_attempts =
+            config["interconnect_protocol"]["retries"].as<unsigned>() +
+            1; // + 1 for first try
+        break;
+      default:
+        break;
+      }
+
+      bool transfer_successful = false;
+
+      for (int attempt = 0; attempt < max_attempts; ++attempt) {
+        if (bit_error_dist(bit_error_gen) >= prob_bad_transfer) {
+          // No bit error
+          transfer_successful = true;
+          break;
+        }
+
+        SC_LOG_ERROR(&module,
+                     "Bit error on attempt " + std::to_string(attempt + 1));
+
+        switch (interconnect.type) {
+        case InterconnectType::Type::PCIe:
+          // FEC penalty
+          delay += sc_time(
+              config["interconnect_protocol"]["fec_delay"].as<unsigned>(),
+              SC_NS);
+          // Assuming FEC handles it
+          transfer_successful = true;
+          break;
+        case InterconnectType::Type::UCIe:
+          // Retry penalty
+          delay += base_transfer_delay;
+        default:;
+        }
+      }
+
+      if (!transfer_successful) {
+        SC_LOG_ERROR(&module, "Transfer failed");
+      }
+
+      SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
+      return {delay, transfer_successful};
+    }
+  };
+
+  DelayModel delays{*this};
+
+  // -------------------------------------------------------
+  // Transport Functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw_axi(ARM::AXI::Payload & payload,
                                     ARM::AXI::Phase & phase);
@@ -140,7 +234,7 @@ private:
                                     tlm_phase &phase, sc_time &delay);
 
   // -------------------------------------------------------
-  // helper functions
+  // Helper Functions
   // -------------------------------------------------------
   struct FlitHeader {
     uint16_t flit_count;
@@ -165,93 +259,9 @@ private:
   void send_irq(ARM::AXI::Payload & payload);
 
   // -------------------------------------------------------
-  // debug functions
+  // Debug Functions
   // -------------------------------------------------------
   void dump_staging_buffer();
   void dump_tx_buffers();
   void dump_rx_buffers();
-
-  // -------------------------------------------------------
-  // delay model
-  // -------------------------------------------------------
-  struct Transfer {
-    sc_time delay;
-    bool success;
-  };
-
-  struct DelayModel {
-  private:
-    const GenericInterconnect &module;
-
-  public:
-    DelayModel(const GenericInterconnect &m) : module(m) {}
-
-    Transfer transfer_delay(tlm_generic_payload &transaction) const {
-      static const Config &interconnect_config =
-          ConfigRegistry::instance().get("Interconnect");
-
-      sc_time delay = SC_ZERO_TIME;
-      sc_time flit_transfer_delay = SC_ZERO_TIME;
-      sc_time wire_propagation_delay = SC_ZERO_TIME;
-
-      flit_transfer_delay = sc_time(
-          static_cast<double>(module.flit_size) / module.bandwidth, SC_NS);
-
-      // wire propagation delay based on distance
-      wire_propagation_delay = sc_time(module.distance * wire_ps_per_mm, SC_PS);
-
-      delay = flit_transfer_delay + wire_propagation_delay;
-      sc_time base_transfer_delay = delay;
-
-      double prob_bad_transfer =
-          1.0 - std::pow(1.0 - bit_error_rate, module.flit_size * 8);
-
-      int max_attempts = 1;
-      switch (connection_type) {
-      case ConnectionType::UCIe:
-        max_attempts = interconnect_config.get<unsigned int>(
-                           "interconnect_protocol.retries") +
-                       1; // + 1 for first try
-        break;
-      default:
-        break;
-      }
-
-      bool transfer_successful = false;
-
-      for (int attempt = 0; attempt < max_attempts; ++attempt) {
-        if (bit_error_dist(bit_error_gen) >= prob_bad_transfer) {
-          // no bit error
-          transfer_successful = true;
-          break;
-        }
-
-        SC_LOG_ERROR(&module,
-                     "Bit error on attempt " + std::to_string(attempt + 1));
-
-        switch (connection_type) {
-        case ConnectionType::PCIe:
-          // forward error correction penalty
-          delay += interconnect_config.get<sc_time>(
-              "interconnect_protocol.fec_delay");
-          // assuming FEC handles it
-          transfer_successful = true;
-          break;
-        case ConnectionType::UCIe:
-          // retry penalty
-          delay += base_transfer_delay;
-        default:;
-        }
-      }
-
-      if (!transfer_successful) {
-        SC_LOG_ERROR(&module, "Transfer failed");
-      }
-
-      SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
-      return {delay, transfer_successful};
-    }
-  };
-
-  DelayModel delays{*this};
 };

@@ -1,7 +1,9 @@
 #include "modules/DMAEngine.h"
 
-DMAEngine::DMAEngine(sc_module_name name, unsigned axi_width)
-    : sc_module(name), axi_width(axi_width),
+#include "logging.h"
+
+DMAEngine::DMAEngine(sc_module_name name, YAML::Node config)
+    : sc_module(name), axi_width(config["axi"]["width"].as<unsigned>()),
       isocket("isocket", *this, &DMAEngine::nb_transport_bw,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
   SC_METHOD(clk_posedge);
@@ -14,9 +16,9 @@ DMAEngine::DMAEngine(sc_module_name name, unsigned axi_width)
 }
 
 int DMAEngine::register_virtual_initiator(VirtualAXIInitiatorIF *owner) {
-  int id = static_cast<int>(owners.size());
+  int vm_id = static_cast<int>(owners.size());
   owners.push_back(owner);
-  return id;
+  return vm_id;
 }
 
 void DMAEngine::unregister_virtual_initiator(int vm_id) {
@@ -49,7 +51,7 @@ void DMAEngine::clk_posedge() {
 
 void DMAEngine::clk_negedge() {
   /* Send next payload AWVALID */
-  if ((aw_state == CLEAR || aw_state == REQ) && !aw_queue.empty()) {
+  if (aw_state == CLEAR && !aw_queue.empty()) {
     ARM::AXI::Payload *payload = aw_queue.front();
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
 
@@ -62,7 +64,7 @@ void DMAEngine::clk_negedge() {
   }
 
   /* Send write beat WVALID */
-  if ((w_state == CLEAR || w_state == REQ) && !w_queue.empty()) {
+  if (w_state == CLEAR && !w_queue.empty()) {
     ARM::AXI::Payload *payload = w_queue.front();
     ARM::AXI::Phase phase = (w_beat_count + 1 == payload->get_beat_count())
                                 ? ARM::AXI::W_VALID_LAST
@@ -77,7 +79,7 @@ void DMAEngine::clk_negedge() {
   }
 
   /* Send next payload ARVALID */
-  if ((ar_state == CLEAR || ar_state == REQ) && !ar_queue.empty()) {
+  if (ar_state == CLEAR && !ar_queue.empty()) {
     ARM::AXI::Payload *payload = ar_queue.front();
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
 
@@ -110,26 +112,26 @@ bool DMAEngine::forward_from_virtual(int vm_id, ARM::AXI::Payload &payload) {
 }
 
 // -------------------------------------------------------
-// transport functions
+// Transport Functions
 // -------------------------------------------------------
 tlm_sync_enum DMAEngine::nb_transport_bw(ARM::AXI::Payload &payload,
                                          ARM::AXI::Phase &phase) {
   // Find which virtual initiator issued this payload
   auto it = payload_owner_map.find(&payload);
   if (it == payload_owner_map.end()) {
-    SC_REPORT_ERROR(name(), "Unrecognized payload");
+    SC_LOG_ERROR(this, "Unrecognized payload");
     return TLM_ACCEPTED;
   }
 
   switch (phase) {
   case ARM::AXI::AR_READY:
-    ar_state = ACK;
+    ar_state = ar_state == REQ ? ACK : CLEAR;
     break;
   case ARM::AXI::AW_READY:
-    aw_state = ACK;
+    aw_state = aw_state == REQ ? ACK : CLEAR;
     break;
   case ARM::AXI::W_READY:
-    w_state = ACK;
+    w_state = w_state == REQ ? ACK : CLEAR;
     break;
   default:
     break;
@@ -141,12 +143,10 @@ tlm_sync_enum DMAEngine::nb_transport_bw(ARM::AXI::Payload &payload,
   tlm_sync_enum reply = owners[vm_id]->nb_transport_bw_axi(payload, phase);
 
   // Remove payload if response sent
-  if (is_r_valid_last(prev_phase) && is_r_ready(phase)) {
+  if (is_r_valid_last(prev_phase) && is_r_ready(phase))
     payload_owner_map.erase(it);
-  }
-  if (is_b_valid(prev_phase) && is_b_ready(phase)) {
+  if (is_b_valid(prev_phase) && is_b_ready(phase))
     payload_owner_map.erase(it);
-  }
 
   return reply;
 }

@@ -5,16 +5,30 @@
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
+#include <yaml-cpp/yaml.h>
+
+#include "logging.h"
 
 #include "ARM/TLM/arm_axi4.h"
-#include "logging.h"
 
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
 SC_MODULE(Core) {
+private:
+  // -------------------------------------------------------
+  // Config
+  // -------------------------------------------------------
+  const unsigned chiplet_id;
+  const unsigned core_id;
+  const unsigned axi_width;
+  const sc_time irq_delay;
+
 public:
+  // -------------------------------------------------------
+  // Signals
+  // -------------------------------------------------------
   sc_in<bool> clk;
 
   // -------------------------------------------------------
@@ -23,12 +37,18 @@ public:
   ARM::AXI::SimpleInitiatorSocket<Core> isocket;
   simple_target_socket<Core> irq_socket;
 
-  Core(sc_module_name name, unsigned chip_id, unsigned core_id,
-       unsigned axi_width, sc_time irq_delay);
+  Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
+       YAML::Node config);
+
+  void core_thread();
+  void interrupt_thread();
 
   std::function<void(Core &)> thread_fn;
   std::function<void(Core &, tlm_generic_payload *)> interrupt_fn;
 
+  // -------------------------------------------------------
+  // Usercode Types
+  // -------------------------------------------------------
   struct ReadRequest {
     uint32_t request_id;
     uint32_t address;
@@ -116,10 +136,10 @@ public:
   unsigned MAX_FIXED_BURST_SIZE = 0;
   unsigned MAX_WRAP_BURST_SIZE = 0;
 
-  void core_thread();
-  void interrupt_thread();
-
 private:
+  // -------------------------------------------------------
+  // Internal Declarations
+  // -------------------------------------------------------
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState aw_state = CLEAR;
@@ -140,15 +160,7 @@ private:
   void clk_negedge();
 
   // -------------------------------------------------------
-  // Parameters
-  // -------------------------------------------------------
-  const unsigned chip_id;
-  const unsigned core_id;
-  const unsigned axi_width;
-  const sc_time irq_delay;
-
-  // -------------------------------------------------------
-  // Delay model
+  // Delay Model
   // -------------------------------------------------------
   struct DelayModel {
   private:
@@ -173,7 +185,7 @@ private:
   sc_event interrupt_request;
 
   // -------------------------------------------------------
-  // Transport functions
+  // Transport Functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw_irq(tlm_generic_payload & payload,
                                     tlm_phase & phase, sc_time & delay);

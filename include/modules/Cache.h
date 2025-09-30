@@ -3,6 +3,7 @@
 #include <systemc>
 #include <tlm>
 #include <vector>
+#include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
 
@@ -10,7 +11,20 @@ using namespace sc_core;
 using namespace tlm;
 
 SC_MODULE(Cache) {
+private:
+  // -------------------------------------------------------
+  // Config
+  // -------------------------------------------------------
+  const unsigned chiplet_id;
+  const unsigned axi_width;
+  const unsigned cache_size;
+  const unsigned cache_block_size;
+  const unsigned cache_store_buffer_size;
+
 public:
+  // -------------------------------------------------------
+  // Signals
+  // -------------------------------------------------------
   sc_in<bool> clk;
 
   // -------------------------------------------------------
@@ -19,12 +33,13 @@ public:
   ARM::AXI::SimpleTargetSocket<Cache> tsocket;
   ARM::AXI::SimpleInitiatorSocket<Cache> isocket;
 
-  Cache(sc_module_name name, unsigned chip_id, unsigned axi_width,
-        unsigned cache_size, unsigned cache_block_size,
-        unsigned cache_store_buffer_size);
+  Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config);
   ~Cache();
 
 private:
+  // -------------------------------------------------------
+  // Internal Declarations
+  // -------------------------------------------------------
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState aw_state = CLEAR;
@@ -78,8 +93,9 @@ private:
 
   uint8_t *beat_data;
 
-  void clk_posedge();
-  void clk_negedge();
+  // State variables
+  bool r_beat_ready = false;
+  bool b_beat_ready = false;
 
   // Accumulators
   unsigned num_lines;
@@ -87,23 +103,11 @@ private:
   unsigned num_hits;
   unsigned num_misses;
 
-  // -------------------------------------------------------
-  // State variables
-  // -------------------------------------------------------
-  bool r_beat_ready = false;
-  bool b_beat_ready = false;
+  void clk_posedge();
+  void clk_negedge();
 
   // -------------------------------------------------------
-  // Parameters
-  // -------------------------------------------------------
-  const unsigned chip_id;
-  const unsigned axi_width;
-  const unsigned cache_size;
-  const unsigned cache_block_size;
-  const unsigned cache_store_buffer_size;
-
-  // -------------------------------------------------------
-  // Transport functions
+  // Transport Functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);
@@ -112,7 +116,7 @@ private:
                                 ARM::AXI::Phase & phase);
 
   // -------------------------------------------------------
-  // Helper functions
+  // Helper Functions
   // -------------------------------------------------------
   uint32_t set_beat_address(uint32_t base, unsigned beat_idx,
                             unsigned beat_bytes, unsigned beats,
@@ -125,7 +129,7 @@ private:
   void complete_storebuffer_write(ARM::AXI::Payload * payload);
 
   // -------------------------------------------------------
-  // Debug functions
+  // Debug Functions
   // -------------------------------------------------------
 public:
   void dump();

@@ -2,8 +2,9 @@
 
 #include "logging.h"
 
-Memory::Memory(sc_module_name name, unsigned int axi_width, unsigned int size)
-    : sc_module(name), size(size), utilization_tracker(this->name()),
+Memory::Memory(sc_module_name name, YAML::Node config)
+    : sc_module(name), axi_width(config["axi"]["width"].as<unsigned>()),
+      size(config["ram"]["size"].as<unsigned>()),
       tsocket("tsocket", *this, &Memory::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       mem(size * 1024, 0), write_flags(mem.size(), false),
@@ -35,7 +36,7 @@ void Memory::clk_posedge() {
     }
   }
 
-  /* WRITE REQUEST */
+  // Write request
   if (!b_outgoing && !aw_queue.empty()) {
     if (active_addr == UINT32_MAX) {
       set_active_address(*aw_queue.front());
@@ -67,7 +68,7 @@ void Memory::clk_posedge() {
     }
   }
 
-  /* READ REQUEST */
+  // Read request
   else if (!r_outgoing && !ar_queue.empty()) {
     if (active_addr == UINT32_MAX) {
       set_active_address(*ar_queue.front());
@@ -124,7 +125,7 @@ void Memory::clk_negedge() {
 }
 
 // -------------------------------------------------------
-// Transport functions
+// Transport Functions
 // -------------------------------------------------------
 tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload,
                                       ARM::AXI::Phase &phase) {
@@ -152,13 +153,13 @@ tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload,
     b_state = b_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   default:
-    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
     return TLM_ACCEPTED;
   }
 }
 
 // -------------------------------------------------------
-// Helper functions
+// Helper Functions
 // -------------------------------------------------------
 void Memory::set_active_address(ARM::AXI::Payload &payload) {
   uint32_t address = payload.get_address();
