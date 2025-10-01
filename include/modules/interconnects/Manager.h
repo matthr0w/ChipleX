@@ -3,7 +3,7 @@
 #include "common/System.h"
 
 #include "modules/DMAEngine.h"
-#include "modules/interconnects/Base.h"
+#include "modules/interconnects/InterconnectBase.h"
 
 class InterconnectManager {
 public:

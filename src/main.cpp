@@ -7,9 +7,9 @@
 #include "common/Router.h"
 #include "common/System.h"
 
-#include "modules/Chiplet.h"
-
-#include "usercode/UserCode.h"
+#include "modules/chiplets/ChipletBase.h"
+#include "modules/chiplets/CoreChiplet.h"
+#include "modules/chiplets/MemoryChiplet.h"
 
 int sc_main(int argc, char *argv[]) {
   Parser parser(argc, argv);
@@ -23,20 +23,25 @@ int sc_main(int argc, char *argv[]) {
   auto start_timestamp = std::chrono::high_resolution_clock::now();
 
   // Create chiplets
-  std::vector<Chiplet *> chiplets;
+  std::vector<ChipletBase *> chiplets;
   unsigned num_chiplets = sysconf.chiplets.size();
   chiplets.reserve(num_chiplets);
 
   for (int i = 0; i < num_chiplets; ++i) {
-    chiplets.push_back(new Chiplet(sysconf.chiplet_order[i].c_str(), sysconf));
-    // Assign user code
-    Chiplet *chiplet = chiplets[i];
-    for (int c = 0; c < chiplet->num_cores; ++c) {
-      auto it = core_code.find({i, c});
-      if (it != core_code.end()) {
-        chiplet->cores[c]->thread_fn = it->second.first;
-        chiplet->cores[c]->interrupt_fn = it->second.second;
-      }
+    std::string chiplet_name = sysconf.chiplet_order[i];
+    switch (sysconf.chiplets[chiplet_name].type.type) {
+    case ChipletType::Type::SingleCore:
+    case ChipletType::Type::DualCore:
+    case ChipletType::Type::QuadCore:
+      chiplets.push_back(
+          new CoreChiplet(sysconf.chiplet_order[i].c_str(), i, sysconf));
+      break;
+    case ChipletType::Type::Memory:
+      chiplets.push_back(
+          new MemoryChiplet(sysconf.chiplet_order[i].c_str(), i, sysconf));
+      break;
+    default:
+      break;
     }
   }
 

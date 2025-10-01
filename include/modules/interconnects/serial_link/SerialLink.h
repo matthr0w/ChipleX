@@ -5,7 +5,7 @@
 
 #include "common/System.h"
 
-#include "modules/interconnects/Base.h"
+#include "modules/interconnects/InterconnectBase.h"
 #include "modules/interconnects/serial_link/ChannelAllocator.h"
 #include "modules/interconnects/serial_link/DataLinkLayer.h"
 #include "modules/interconnects/serial_link/NetworkLayer.h"
