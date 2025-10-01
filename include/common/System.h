@@ -134,7 +134,7 @@ struct ChipletConfig {
 
 struct InterconnectConfig {
   InterconnectType type;
-  YAML::Node defaults;
+  YAML::Node config;
   std::vector<ConnectionMapping> connections;
 };
 

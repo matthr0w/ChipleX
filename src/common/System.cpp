@@ -70,7 +70,16 @@ void SystemLoader::load(const std::string &system_yaml) {
   InterconnectType type(InterconnectType::parse(type_str));
   InterconnectConfig interconnect;
   interconnect.type = type;
-  interconnect.defaults = YAML::Clone(interconnect_defaults);
+
+  // Merge overrides
+  if (root["interconnect"]["config"]) {
+    for (auto kv : root["interconnect"]["config"]) {
+      std::string key = kv.first.as<std::string>();
+      merge_nodes(interconnect_defaults[key], kv.second, key);
+    }
+  }
+
+  interconnect.config = YAML::Clone(interconnect_defaults);
 
   // Build connections array
   YAML::Node connections_node;
@@ -346,7 +355,7 @@ void SystemLoader::print_config() const {
   std::cout << "Interconnect:\n";
   std::cout << "  Type: " << system_.interconnect.type.to_string() << "\n";
   std::cout << "  Defaults:\n";
-  print_yaml_node(system_.interconnect.defaults, 4);
+  print_yaml_node(system_.interconnect.config, 4);
 
   std::cout << "  Mappings:\n";
   for (int i = 0; i < system_.interconnect.connections.size(); ++i) {

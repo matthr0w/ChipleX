@@ -68,12 +68,12 @@ SerialLink::~SerialLink() {
 }
 
 unsigned SerialLink::compute_fifo_depth() {
-  bool ddr = interconnect_config.defaults["ddr"].as<bool>();
+  bool ddr = interconnect_config.config["ddr"].as<bool>();
   unsigned num_channels =
-      interconnect_config.defaults["num_channels"].as<unsigned>();
-  unsigned num_lanes = interconnect_config.defaults["num_lanes"].as<unsigned>();
+      interconnect_config.config["num_channels"].as<unsigned>();
+  unsigned num_lanes = interconnect_config.config["num_lanes"].as<unsigned>();
   unsigned num_credits =
-      interconnect_config.defaults["num_credits"].as<unsigned>();
+      interconnect_config.config["num_credits"].as<unsigned>();
 
   unsigned bandwidth = num_channels * num_lanes * (ddr ? 2 : 1);
 

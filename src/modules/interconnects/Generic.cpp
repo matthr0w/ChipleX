@@ -14,16 +14,16 @@ GenericInterconnect::GenericInterconnect(sc_module_name name,
       num_links(chiplet_config.connections.size()),
       axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
       flit_size(
-          interconnect_config.defaults["interconnect_protocol"]["flit_size"]
+          interconnect_config.config["interconnect_protocol"]["flit_size"]
               .as<unsigned>()),
       overhead_size(
-          interconnect_config.defaults["interconnect_protocol"]["overhead_size"]
+          interconnect_config.config["interconnect_protocol"]["overhead_size"]
               .as<unsigned>()),
       staging_buffer_size(
-          interconnect_config.defaults["interconnect"]["staging_buffer_size"]
+          interconnect_config.config["interconnect"]["staging_buffer_size"]
               .as<unsigned>()),
       link_buffer_size(
-          interconnect_config.defaults["interconnect"]["link_buffer_size"]
+          interconnect_config.config["interconnect"]["link_buffer_size"]
               .as<unsigned>()),
       connections(chiplet_config.connections), dma_engine(dma_engine),
       axi_tsocket("axi_tsocket", *this,
