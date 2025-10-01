@@ -639,14 +639,14 @@ GenericInterconnect::nb_transport_fw_phy(int id,
     Transfer transfer = delays.transfer_delay(id, transaction);
     delay += transfer.delay;
 
-    if (!transfer.success)
-      return TLM_ACCEPTED;
-
-    tlm_generic_payload *tptr = &transaction;
-    sc_spawn([this, id, tptr, delay]() {
-      wait(delay);
-      phy_queue.push_back({id, tptr});
-    });
+    // Drop bad transfers
+    if (transfer.success) {
+      tlm_generic_payload *tptr = &transaction;
+      sc_spawn([this, id, tptr, delay]() {
+        wait(delay);
+        phy_queue.push_back({id, tptr});
+      });
+    }
 
     phase = END_REQ;
     return TLM_UPDATED;

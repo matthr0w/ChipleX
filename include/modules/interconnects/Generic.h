@@ -168,8 +168,11 @@ private:
       delay = flit_transfer_delay + wire_propagation_delay;
       sc_time base_transfer_delay = delay;
 
+      double scaled_ber =
+          std::clamp(bit_error_rate * connection.ber_scalar, 0.0, 1.0);
+
       double prob_bad_transfer =
-          1.0 - std::pow(1.0 - bit_error_rate, module.flit_size * 8);
+          1.0 - std::pow(1.0 - scaled_ber, module.flit_size * 8);
 
       int max_attempts = 1;
       switch (interconnect.type) {
@@ -182,8 +185,8 @@ private:
         break;
       }
 
+      // Bit error simulation
       bool transfer_successful = false;
-
       for (int attempt = 0; attempt < max_attempts; ++attempt) {
         if (bit_error_dist(bit_error_gen) >= prob_bad_transfer) {
           // No bit error
@@ -210,9 +213,8 @@ private:
         }
       }
 
-      if (!transfer_successful) {
+      if (!transfer_successful)
         SC_LOG_ERROR(&module, "Transfer failed");
-      }
 
       SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
       return {delay, transfer_successful};

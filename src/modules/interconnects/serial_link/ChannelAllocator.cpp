@@ -22,7 +22,8 @@ tlm_sync_enum
 SLChannelAllocater::nb_transport_fw_data_in(int id,
                                             tlm_generic_payload &transaction,
                                             tlm_phase &phase, sc_time &delay) {
-  delay += delays.transfer_delay(link_id, transaction);
+  Transfer transfer = delays.transfer_delay(link_id, transaction);
+  delay += transfer.delay;
   return data_in_isocket->nb_transport_fw(transaction, phase, delay);
 }
 

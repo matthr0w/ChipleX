@@ -123,6 +123,7 @@ struct ChipletConnectionConfig {
   InterconnectType type;
   YAML::Node config;
   double wire_length;
+  double ber_scalar;
 };
 
 struct ChipletConfig {

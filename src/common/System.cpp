@@ -126,13 +126,15 @@ void SystemLoader::load(const std::string &system_yaml) {
     system_.chiplets[endpoint0].connections.push_back(
         {type, interconnect_config,
          conn["wire_length_mm"] ? conn["wire_length_mm"].as<double>()
-                                : wire_length_mm});
+                                : wire_length_mm,
+         conn["ber_scalar"] ? conn["ber_scalar"].as<double>() : 1.0});
 
     int idx1 = system_.chiplets[endpoint1].connections.size();
     system_.chiplets[endpoint1].connections.push_back(
         {type, interconnect_config,
          conn["wire_length_mm"] ? conn["wire_length_mm"].as<double>()
-                                : wire_length_mm});
+                                : wire_length_mm,
+         conn["ber_scalar"] ? conn["ber_scalar"].as<double>() : 1.0});
 
     // Mapping
     auto it0 = std::find(system_.chiplet_order.begin(),
@@ -176,6 +178,7 @@ YAML::Node SystemLoader::generate_preset_connections(
           conn["endpoints"][0] = system_.chiplet_order[idx];
           conn["endpoints"][1] = system_.chiplet_order[idx + 1];
           conn["wire_length_mm"] = wire_length_mm;
+          conn["ber_scalar"] = 1.0;
           connections_node.push_back(conn);
         }
         // Down neighbor
@@ -186,6 +189,7 @@ YAML::Node SystemLoader::generate_preset_connections(
             conn["endpoints"][0] = system_.chiplet_order[idx];
             conn["endpoints"][1] = system_.chiplet_order[idx_down];
             conn["wire_length_mm"] = wire_length_mm;
+            conn["ber_scalar"] = 1.0;
             connections_node.push_back(conn);
           }
         }
@@ -201,6 +205,7 @@ YAML::Node SystemLoader::generate_preset_connections(
       conn["endpoints"][0] = system_.chiplet_order[i];
       conn["endpoints"][1] = system_.chiplet_order[(i + 1) % n];
       conn["wire_length_mm"] = wire_length_mm;
+      conn["ber_scalar"] = 1.0;
       connections_node.push_back(conn);
     }
     break;
@@ -215,6 +220,7 @@ YAML::Node SystemLoader::generate_preset_connections(
         conn["endpoints"][0] = center;
         conn["endpoints"][1] = system_.chiplet_order[i];
         conn["wire_length_mm"] = wire_length_mm;
+        conn["ber_scalar"] = 1.0;
         connections_node.push_back(conn);
       }
     }
@@ -241,6 +247,8 @@ YAML::Node SystemLoader::generate_preset_connections(
         if (norm == norm2) {
           if (override_conn["wire_length_mm"])
             preset_conn["wire_length_mm"] = override_conn["wire_length_mm"];
+          if (override_conn["ber_scalar"])
+            preset_conn["ber_scalar"] = override_conn["ber_scalar"];
           // Merge overrides
           if (override_conn["config"]) {
             for (auto kv : override_conn["config"]) {
@@ -253,10 +261,9 @@ YAML::Node SystemLoader::generate_preset_connections(
         }
       }
 
-      if (!matched) {
+      if (!matched)
         LOG_WARN("SystemLoader: Invalid connection override: " + endpoint0 +
                  " <-> " + endpoint1 + ". Ignoring.");
-      }
     }
   }
 
@@ -327,7 +334,8 @@ void SystemLoader::print_config() const {
     for (size_t i = 0; i < chip.connections.size(); ++i) {
       const auto &conn_cfg = chip.connections[i];
       std::cout << "      [" << i << "] type=" << conn_cfg.type.to_string()
-                << ", wire_length=" << conn_cfg.wire_length << "mm\n";
+                << ", wire_length=" << conn_cfg.wire_length
+                << "mm, ber_scalar=" << conn_cfg.ber_scalar << "\n";
       print_yaml_node(conn_cfg.config, 8);
     }
   }

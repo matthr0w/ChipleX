@@ -43,6 +43,11 @@ private:
   // -------------------------------------------------------
   // Delay Model
   // -------------------------------------------------------
+  struct Transfer {
+    sc_time delay;
+    bool success;
+  };
+
   struct DelayModel {
   private:
     const SLChannelAllocater &module;
@@ -50,7 +55,7 @@ private:
   public:
     DelayModel(const SLChannelAllocater &m) : module(m) {}
 
-    sc_time transfer_delay(int id, tlm_generic_payload &transaction) const {
+    Transfer transfer_delay(int id, tlm_generic_payload &transaction) const {
       ChipletConnectionConfig connection = module.connections[id];
       InterconnectType interconnect = connection.type;
       YAML::Node config = connection.config;
@@ -66,9 +71,8 @@ private:
 
       unsigned bandwidth = num_channels * num_lanes * (ddr ? 2 : 1);
 
-      unsigned num_cycles =
-          (Payload_t::simulation_size(module.axi_width) * 8 + bandwidth - 1) /
-          bandwidth;
+      unsigned payload_bits = Payload_t::simulation_size(module.axi_width) * 8;
+      unsigned num_cycles = (payload_bits + bandwidth - 1) / bandwidth;
 
       packet_transfer_delay = num_cycles * clk_cycle;
 
@@ -78,8 +82,18 @@ private:
 
       delay = packet_transfer_delay + wire_propagation_delay;
 
+      // Bit error simulation
+      double scaled_ber =
+          std::clamp(bit_error_rate * connection.ber_scalar, 0.0, 1.0);
+      double prob_bad_transfer = 1.0 - std::pow(1.0 - scaled_ber, payload_bits);
+      bool transfer_successful =
+          (bit_error_dist(bit_error_gen) >= prob_bad_transfer);
+
+      if (!transfer_successful)
+        SC_LOG_ERROR(&module, "Transfer failed");
+
       SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
-      return delay;
+      return {delay, transfer_successful};
     }
   };
 
