@@ -6,16 +6,14 @@ GenericInterconnect::GenericInterconnect(sc_module_name name,
                                          unsigned chiplet_id,
                                          ChipletConfig chiplet_config,
                                          InterconnectConfig interconnect_config,
+                                         unsigned num_cores,
                                          DMAEngine *dma_engine)
-    : InterconnectBase(chiplet_config.connections.size(),
-                       chiplet_config.config["cores"]["num"].as<unsigned>()),
-      sc_module(name), chiplet_id(chiplet_id),
-      num_cores(chiplet_config.config["cores"]["num"].as<unsigned>()),
+    : InterconnectBase(num_cores, chiplet_config.connections.size()),
+      sc_module(name), chiplet_id(chiplet_id), num_cores(num_cores),
       num_links(chiplet_config.connections.size()),
       axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
-      flit_size(
-          interconnect_config.config["interconnect_protocol"]["flit_size"]
-              .as<unsigned>()),
+      flit_size(interconnect_config.config["interconnect_protocol"]["flit_size"]
+                    .as<unsigned>()),
       overhead_size(
           interconnect_config.config["interconnect_protocol"]["overhead_size"]
               .as<unsigned>()),

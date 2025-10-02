@@ -45,7 +45,7 @@ public:
 
   SLNetworkLayer(sc_module_name name, unsigned chiplet_id,
                  ChipletConfig chiplet_config,
-                 InterconnectConfig interconnect_config);
+                 InterconnectConfig interconnect_config, unsigned num_cores);
 
 private:
   // -------------------------------------------------------

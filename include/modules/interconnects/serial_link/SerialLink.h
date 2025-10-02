@@ -28,7 +28,7 @@ private:
 public:
   SerialLink(sc_module_name name, unsigned chiplet_id,
              ChipletConfig chiplet_config,
-             InterconnectConfig interconnect_config);
+             InterconnectConfig interconnect_config, unsigned num_cores);
   ~SerialLink();
 
   simple_initiator_socket_tagged<SerialLink> *irq_sockets;

@@ -65,7 +65,8 @@ struct CoreChiplet : ChipletBase {
 
     // Interconnect
     InterconnectManager manager(chiplet_id, sysconf.chiplets[chiplet_name],
-                                sysconf.interconnect, dma_engine_ptr);
+                                sysconf.interconnect, num_cores,
+                                dma_engine_ptr);
     interconnect = manager.create_interconnect();
     interconnect->bind_clock(system_clk);
     interconnect->axi_in_port->bind(*axi_bus.sub_isockets[1]);

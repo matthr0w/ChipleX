@@ -5,7 +5,7 @@
 
 struct MemoryChiplet : ChipletBase {
   Memory memory;
-  
+
   // Dummy AXI initiator socket
   ARM::AXI::SimpleInitiatorSocket<MemoryChiplet> dummy_axi_isocket;
 
@@ -22,7 +22,7 @@ struct MemoryChiplet : ChipletBase {
 
     // Interconnect
     InterconnectManager manager(chiplet_id, sysconf.chiplets[chiplet_name],
-                                sysconf.interconnect, nullptr);
+                                sysconf.interconnect, 0, nullptr);
     interconnect = manager.create_interconnect();
     interconnect->bind_clock(system_clk);
     interconnect->axi_in_port->bind(dummy_axi_isocket);

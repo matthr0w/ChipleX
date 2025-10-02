@@ -12,11 +12,11 @@ std::unique_ptr<InterconnectBase> InterconnectManager::create_interconnect() {
   case InterconnectType::Type::UCIe:
     return std::make_unique<GenericInterconnect>(
         sc_module_name(interconnect_config.type.to_string().c_str()),
-        chiplet_id, chiplet_config, interconnect_config, dma_engine);
+        chiplet_id, chiplet_config, interconnect_config, num_cores, dma_engine);
   case InterconnectType::Type::SerialLink:
     return std::make_unique<SerialLink>(
         sc_module_name(interconnect_config.type.to_string().c_str()),
-        chiplet_id, chiplet_config, interconnect_config);
+        chiplet_id, chiplet_config, interconnect_config, num_cores);
   default:
     LOG_ERROR(interconnect_config.type.to_string() << " not implemented");
     return nullptr;

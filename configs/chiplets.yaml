@@ -52,8 +52,6 @@ quad-core:
 memory:
   system:
     clk_cycle: 5 # ns
-  cores:
-    num: 0
   ram:
     size: 512 # KB
     clk_cycle: 3 # ns

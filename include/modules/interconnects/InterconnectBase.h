@@ -20,7 +20,7 @@ struct InterconnectBase {
 
   simple_initiator_socket_tagged<InterconnectBase> **irq_ports;
 
-  InterconnectBase(unsigned num_links, unsigned num_cores) {
+  InterconnectBase(unsigned num_cores, unsigned num_links) {
     link_in_ports =
         new simple_target_socket_tagged<InterconnectBase> *[num_links];
     link_out_ports =

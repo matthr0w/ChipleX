@@ -7,9 +7,9 @@
 
 SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chiplet_id,
                                ChipletConfig chiplet_config,
-                               InterconnectConfig interconnect_config)
-    : sc_module(name), chiplet_id(chiplet_id),
-      num_cores(chiplet_config.config["cores"]["num"].as<unsigned>()),
+                               InterconnectConfig interconnect_config,
+                               unsigned num_cores)
+    : sc_module(name), chiplet_id(chiplet_id), num_cores(num_cores),
       num_links(chiplet_config.connections.size()),
       axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
       num_credits(interconnect_config.config["num_credits"].as<unsigned>()),
