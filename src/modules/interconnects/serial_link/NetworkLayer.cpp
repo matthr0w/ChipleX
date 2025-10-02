@@ -91,7 +91,7 @@ void SLNetworkLayer::clk_posedge() {
 
           // Flow control
           decrement_credits(link_id);
-          increment_credits(payload->interconnect_id, payload->credit);
+          increment_credits(payload->link_id, payload->credit);
         }
       } else {
         switch (payload->hdr) {
@@ -99,7 +99,7 @@ void SLNetworkLayer::clk_posedge() {
           stream_fifo_in->read();
 
           // Flow control
-          increment_credits(payload->interconnect_id, payload->credit);
+          increment_credits(payload->link_id, payload->credit);
         } break;
 
         case TagAW:
@@ -114,7 +114,7 @@ void SLNetworkLayer::clk_posedge() {
             axi_out_trans.w_payload = payload_in;
 
             // Flow control
-            increment_credits(payload->interconnect_id, payload->credit);
+            increment_credits(payload->link_id, payload->credit);
           }
           break;
 
@@ -125,7 +125,7 @@ void SLNetworkLayer::clk_posedge() {
             w_queue.push_back(payload_in);
 
             // Flow control
-            increment_credits(payload->interconnect_id, payload->credit);
+            increment_credits(payload->link_id, payload->credit);
           }
           break;
 
@@ -141,7 +141,7 @@ void SLNetworkLayer::clk_posedge() {
             axi_out_trans.r_payload = payload_in;
 
             // Flow control
-            increment_credits(payload->interconnect_id, payload->credit);
+            increment_credits(payload->link_id, payload->credit);
           }
           break;
 
@@ -155,7 +155,7 @@ void SLNetworkLayer::clk_posedge() {
               pending_read_responses.pop_front();
 
             // Flow control
-            increment_credits(payload->interconnect_id, payload->credit);
+            increment_credits(payload->link_id, payload->credit);
           }
           break;
 
@@ -166,7 +166,7 @@ void SLNetworkLayer::clk_posedge() {
             pending_write_responses.pop_front();
 
             // Flow control
-            increment_credits(payload->interconnect_id, payload->credit);
+            increment_credits(payload->link_id, payload->credit);
           }
           break;
 

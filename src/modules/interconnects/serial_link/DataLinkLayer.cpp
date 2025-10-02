@@ -69,7 +69,7 @@ tlm_sync_enum SLDataLinkLayer::nb_transport_fw(int id,
     sc_spawn([this, id, tptr, delay]() {
       wait(delay);
       Payload_t *payload = unpack_payload(*tptr);
-      payload->interconnect_id = id;
+      payload->link_id = id;
       stream_fifo_in->write(payload);
       tlm_phase resp_phase = BEGIN_RESP;
       sc_time resp_delay = SC_ZERO_TIME;
