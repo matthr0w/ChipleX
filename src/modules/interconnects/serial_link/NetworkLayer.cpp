@@ -674,6 +674,9 @@ void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
 }
 
 void SLNetworkLayer::send_irq(ARM::AXI::Payload &payload) {
+  if (num_cores == 0)
+    return;
+
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
 
