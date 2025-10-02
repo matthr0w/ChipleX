@@ -18,6 +18,8 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chiplet_id,
              ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &SLNetworkLayer::nb_transport_bw,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
+  irq_sockets = new simple_initiator_socket_tagged<SLNetworkLayer>[num_cores];
+
   // Initial values
   committer_state_q.write(Committer::Idle);
   committer_state_d.write(Committer::Idle);
@@ -40,6 +42,8 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chiplet_id,
   sensitive << update_event << aw_gnt << w_gnt << b_gnt << ar_gnt << r_gnt
             << axis_reg_valid_in << axis_reg_ready_in;
 }
+
+SLNetworkLayer::~SLNetworkLayer() { delete[] irq_sockets; }
 
 void SLNetworkLayer::clk_posedge() {
   while (true) {
@@ -175,9 +179,8 @@ void SLNetworkLayer::clk_posedge() {
     send_axi_beats();
 
     // Flow control
-    for (size_t i = 0; i < credit_to_send_force.size(); ++i) {
+    for (size_t i = 0; i < credit_to_send_force.size(); ++i)
       credit_to_send_force[i] = credits_to_send[i] >= force_send_thresh;
-    }
 
     // Update combinational logic
     update_event.notify(SC_ZERO_TIME);
@@ -540,8 +543,10 @@ void SLNetworkLayer::clear_axi_state() {
   if (w_state == ACK) {
     w_state = CLEAR;
     w_beat_count++;
-    if (w_beat_count == w_queue.front()->get_beat_count())
+    if (w_beat_count == w_queue.front()->get_beat_count()) {
       w_beat_count = 0;
+      send_irq(*w_queue.front());
+    }
     w_queue.pop_front();
   }
 
@@ -666,6 +671,20 @@ void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
       axi_in.nb_transport_bw(*payload, phase);
     trans.req_phase = ARM::AXI4::PHASE_UNINITIALIZED;
   }
+}
+
+void SLNetworkLayer::send_irq(ARM::AXI::Payload &payload) {
+  tlm_phase phase = BEGIN_REQ;
+  sc_time delay = SC_ZERO_TIME;
+
+  tlm_generic_payload *irq = new tlm_generic_payload;
+
+  irq->set_command(TLM_READ_COMMAND);
+  irq->set_address(payload.get_address());
+  irq->set_data_length(payload.get_data_length());
+
+  SC_LOG_DEBUG(this, "Sending IRQ to Core0");
+  irq_sockets[0]->nb_transport_fw(*irq, phase, delay);
 }
 
 void SLNetworkLayer::increment_credits(int link_id, unsigned credit) {

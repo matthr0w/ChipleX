@@ -2,6 +2,8 @@
 
 #include <systemc>
 #include <tlm>
+#include <tlm_utils/simple_initiator_socket.h>
+#include <tlm_utils/simple_target_socket.h>
 
 #include "common/System.h"
 
@@ -10,6 +12,7 @@
 
 using namespace sc_core;
 using namespace tlm;
+using namespace tlm_utils;
 
 SC_MODULE(SLNetworkLayer) {
 private:
@@ -42,10 +45,13 @@ public:
   ARM::AXI::SimpleTargetSocket<SLNetworkLayer> axi_in;
   // AXI master port
   ARM::AXI::SimpleInitiatorSocket<SLNetworkLayer> axi_out;
+  // IRQ sockets
+  simple_initiator_socket_tagged<SLNetworkLayer> *irq_sockets;
 
   SLNetworkLayer(sc_module_name name, unsigned chiplet_id,
                  ChipletConfig chiplet_config,
                  InterconnectConfig interconnect_config, unsigned num_cores);
+  ~SLNetworkLayer();
 
 private:
   // -------------------------------------------------------
@@ -116,6 +122,8 @@ private:
   void clear_axi_state();
   void send_axi_beats();
   void send_axi_response(AxiTrans_t & trans, bool is_master);
+
+  void send_irq(ARM::AXI::Payload & payload);
 
   void increment_credits(int link_id, unsigned credit);
   void decrement_credits(int link_id);

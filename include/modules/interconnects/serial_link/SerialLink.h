@@ -31,8 +31,6 @@ public:
              InterconnectConfig interconnect_config, unsigned num_cores);
   ~SerialLink();
 
-  simple_initiator_socket_tagged<SerialLink> *irq_sockets;
-
   // InterconnectBase
   void bind_clock(sc_clock & clk) override;
 

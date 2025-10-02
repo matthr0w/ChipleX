@@ -204,6 +204,8 @@ void Memory::set_active_address(ARM::AXI::Payload &payload) {
       active_addr = set_flit_address(payload);
     }
   }
+
+  payload.set_address(active_addr);
 }
 
 uint32_t Memory::set_flit_address(ARM::AXI::Payload &payload) {

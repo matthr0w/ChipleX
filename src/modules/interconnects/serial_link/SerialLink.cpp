@@ -22,8 +22,6 @@ SerialLink::SerialLink(sc_module_name name, unsigned chiplet_id,
         new SLChannelAllocater(name.c_str(), i, chiplet_config));
   }
 
-  irq_sockets = new simple_initiator_socket_tagged<SerialLink>[num_cores];
-
   network_layer.stream_fifo_in(stream_fifo_in);
   network_layer.stream_fifo_out(stream_fifo_out);
   datalink_layer.stream_fifo_in(stream_fifo_in);
@@ -54,16 +52,13 @@ SerialLink::SerialLink(sc_module_name name, unsigned chiplet_id,
   for (int i = 0; i < num_cores; ++i)
     irq_ports[i] =
         reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
-            &irq_sockets[i]);
+            &network_layer.irq_sockets[i]);
 }
 
 SerialLink::~SerialLink() {
-  for (auto *channel_allocater : channel_allocaters) {
+  for (auto *channel_allocater : channel_allocaters)
     delete channel_allocater;
-  }
   channel_allocaters.clear();
-
-  delete[] irq_sockets;
 }
 
 unsigned SerialLink::compute_fifo_depth() {
