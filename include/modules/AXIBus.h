@@ -35,20 +35,6 @@ private:
   // -------------------------------------------------------
   // Internal Declarations
   // -------------------------------------------------------
-  struct ChannelState {
-    bool locked = false;
-    ARM::AXI::Payload *cur =
-        nullptr;  // Transaction currently using this channel
-    int mgr = -1; // Manager ID
-  };
-
-  struct SubState {
-    ChannelState W; // AW/W/B channel state
-    ChannelState R; // AR/R channel state
-  };
-
-  std::vector<SubState> sub_state;
-
   std::unordered_map<ARM::AXI::Payload *, int> payloads2mgr;
   std::unordered_map<ARM::AXI::Payload *, int> payloads2sub;
 

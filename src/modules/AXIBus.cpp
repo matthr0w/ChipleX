@@ -9,8 +9,6 @@ AXIBus::AXIBus(sc_module_name name, unsigned int chiplet_id,
     : sc_module(name), chiplet_id(chiplet_id),
       axi_width(config["axi"]["width"].as<unsigned>()),
       beat_data(new uint8_t[axi_width >> 3]) {
-  sub_state.resize(num_subordinates);
-
   mgr_tsockets.reserve(num_managers);
   for (unsigned i = 0; i < num_managers; ++i) {
     std::ostringstream name;
@@ -50,43 +48,6 @@ tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
     payloads2mgr[&payload] = mgr_id;
   }
 
-  SubState &S = sub_state[sub_id];
-
-  // Read channel arbitration
-  if (is_ar_valid(phase)) {
-    if (!S.R.locked) {
-      // Lock read channel for this payload
-      S.R.locked = true;
-      S.R.cur = &payload;
-      S.R.mgr = mgr_id;
-    } else if (S.R.cur != &payload) {
-      // Serialize: another read in progress on this subordinate
-      // Keep phase unchanged -> manager will retry next cycle
-      return TLM_ACCEPTED;
-    }
-  }
-
-  // Write channel arbitration
-  if (is_aw_valid(phase)) {
-    if (!S.W.locked) {
-      // Lock write channel for this payload
-      S.W.locked = true;
-      S.W.cur = &payload;
-      S.W.mgr = mgr_id;
-    } else if (S.W.cur != &payload) {
-      // Serialize: another write in progress on this subordinate
-      // Keep phase unchanged -> manager will retry next cycle
-      return TLM_ACCEPTED;
-    }
-  }
-
-  // Write data beats can only flow for the locked write tx
-  if (is_w_valid(phase) || is_w_valid_last(phase)) {
-    if (!S.W.locked || S.W.cur != &payload) {
-      return TLM_ACCEPTED; // Stall W beats until AW locked this channel
-    }
-  }
-
   // Forward to subordinate
   ARM::AXI::Phase prev_phase = phase;
   tlm_sync_enum reply = sub_isockets[sub_id]->nb_transport_fw(payload, phase);
@@ -101,10 +62,13 @@ tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
                                       ARM::AXI::Phase &phase) {
   std::scoped_lock lock(bw_mutex);
 
-  // Find manager for this payload
   int mgr_id = 0;
   if (auto it = payloads2mgr.find(&payload); it != payloads2mgr.end())
     mgr_id = it->second;
+  else {
+    SC_LOG_WARN(this, "Unknown response from SUB[" << sub_id << "]");
+    return TLM_ACCEPTED;
+  }
 
   // Backward to manager
   ARM::AXI::Phase prev_phase = phase;
@@ -112,24 +76,6 @@ tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
 
   if (log_level <= LogLevel::DEBUG)
     print_payload(payload, prev_phase, reply, phase);
-
-  // Unlock channel if response sent
-  if (is_r_valid_last(prev_phase) && is_r_ready(phase)) {
-    auto &R = sub_state[sub_id].R;
-    if (R.cur == &payload) {
-      R = ChannelState{};
-      payloads2sub.erase(&payload);
-      payloads2mgr.erase(&payload);
-    }
-  }
-  if (is_b_valid(prev_phase) && is_b_ready(phase)) {
-    auto &W = sub_state[sub_id].W;
-    if (W.cur == &payload) {
-      W = ChannelState{};
-      payloads2sub.erase(&payload);
-      payloads2mgr.erase(&payload);
-    }
-  }
 
   return reply;
 }
@@ -252,10 +198,9 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
   // Channel source/destination info
   auto mgr_it = payloads2mgr.find(&payload);
   auto sub_it = payloads2sub.find(&payload);
-  if (mgr_it != payloads2mgr.end() && sub_it != payloads2sub.end()) {
-    message << "MGR[" << mgr_it->second << "] -> SUB[" << sub_it->second
+  if (mgr_it != payloads2mgr.end() && sub_it != payloads2sub.end())
+    message << "MGR[" << mgr_it->second << "] <-> SUB[" << sub_it->second
             << "] | ";
-  }
 
   // Phase
   message << phase_name << " ";
