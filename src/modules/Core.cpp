@@ -278,7 +278,7 @@ Core::write_internal(uint32_t request_id, uint8_t destination_id,
 
   payload->write_in(data);
 
-  SC_LOG_INFO(this, "Sending request: Write to 0x" << std::hex << address);
+  SC_LOG_INFO(this, "Sending request: WRITE to 0x" << std::hex << address);
 
   handle->payload = payload;
   handle->data = data;

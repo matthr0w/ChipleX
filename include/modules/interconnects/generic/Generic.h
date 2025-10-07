@@ -14,6 +14,7 @@
 
 #include "modules/DMAEngine.h"
 #include "modules/interconnects/InterconnectBase.h"
+#include "modules/interconnects/generic/Types.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -39,18 +40,18 @@ public:
   // -------------------------------------------------------
   // Signals
   // -------------------------------------------------------
-  sc_in<bool> axi_clock;
-  sc_in<bool> protocol_clock;
-  sc_in<bool> phy_clock;
+  sc_in<bool> axi_clk;
+  sc_in<bool> protocol_clk;
+  sc_in<bool> phy_clk;
 
   // -------------------------------------------------------
   // Sockets
   // -------------------------------------------------------
-  ARM::AXI::SimpleTargetSocket<GenericInterconnect> axi_tsocket;
-  ARM::AXI::SimpleInitiatorSocket<GenericInterconnect> axi_isocket;
+  ARM::AXI::SimpleTargetSocket<GenericInterconnect> axi_in;
+  ARM::AXI::SimpleInitiatorSocket<GenericInterconnect> axi_out;
 
-  simple_target_socket_tagged<GenericInterconnect> *phy_tsockets;
-  simple_initiator_socket_tagged<GenericInterconnect> *phy_isockets;
+  simple_target_socket_tagged<GenericInterconnect> *phy_in;
+  simple_initiator_socket_tagged<GenericInterconnect> *phy_out;
 
   simple_initiator_socket_tagged<GenericInterconnect> *irq_sockets;
 
@@ -72,22 +73,37 @@ private:
   // -------------------------------------------------------
   enum ChannelState { CLEAR, REQ, ACK };
 
-  ChannelState r_state = CLEAR;
+  ChannelState aw_state = CLEAR;
+  ChannelState w_state = CLEAR;
   ChannelState b_state = CLEAR;
+  ChannelState ar_state = CLEAR;
+  ChannelState r_state = CLEAR;
 
-  std::deque<ARM::AXI::Payload *> ar_queue;
-  std::deque<ARM::AXI::Payload *> aw_queue;
-  std::deque<ARM::AXI::Payload *> w_queue;
+  std::deque<ARM::AXI::Payload *> aw_queue_in;
+  std::deque<ARM::AXI::Payload *> aw_queue_out;
+  std::deque<ARM::AXI::Payload *> w_queue_in;
+  std::deque<ARM::AXI::Payload *> w_queue_out;
+  std::deque<ARM::AXI::Payload *> b_queue_in;
+  std::deque<ARM::AXI::Payload *> b_queue_out;
+  std::deque<ARM::AXI::Payload *> ar_queue_in;
+  std::deque<ARM::AXI::Payload *> ar_queue_out;
+  std::deque<ARM::AXI::Payload *> r_queue_in;
+  std::deque<ARM::AXI::Payload *> r_queue_out;
 
-  ARM::AXI::Payload *r_outgoing = nullptr;
-  ARM::AXI::Payload *b_outgoing = nullptr;
+  unsigned r_beat_count = 0;
+  unsigned flit_r_beat_count = 0;
+  unsigned w_beat_count = 0;
+  unsigned flit_w_beat_count = 0;
 
-  struct PHYRequest {
-    int interconnect_id;
-    tlm_generic_payload *transaction;
-  };
+  AxiTransaction axi_transaction;
 
-  std::deque<PHYRequest> phy_queue;
+  std::unordered_map<PayloadKey, ARM::AXI::Payload *, PayloadKeyHash>
+      subordinate_payloads;
+  std::unordered_map<PayloadKey, ARM::AXI::Payload *, PayloadKeyHash>
+      manager_payloads;
+
+  std::deque<PhyRequest> phy_queue;
+  std::vector<bool> phy_active_tx;
 
   std::vector<uint8_t> staging_buffer;
   size_t staging_buffer_ptr = 0;
@@ -97,41 +113,19 @@ private:
   std::vector<size_t> tx_ptrs;
   std::vector<size_t> rx_ptrs;
 
-  unsigned beat_idx = 0;
   size_t flit_header_bytes;
   size_t flit_data_bytes;
 
-  // Flit metadata
-  enum Command : uint8_t { READ_COMMAND = 0, WRITE_COMMAND = 1 };
-  uint16_t flit_count = 0;
-  uint16_t flit_id = 0;
-  uint8_t request_id = 0;
-  uint8_t core_id = 0;
-  uint8_t source_id = 0;
-  uint8_t destination_id = 0;
-  Command command = READ_COMMAND;
-  uint32_t address = UINT32_MAX;
-  uint16_t size = 0;
-  bool fixed_address = true;
-
-  // State variables
-  bool axi_active_tx = false;
-  bool axi_active_rx = false;
-  int axi_active_rx_idx = -1;
-  int axi_active_flit_id = -1;
-  bool axi_active_read = false;
-  bool axi_rlast_beat = false;
-  bool axi_wlast_beat = false;
-  bool protocol_rreq_flit_sent = false;
-  std::vector<bool> phy_active_tx;
+  bool flush_staging_buffer = false;
+  bool reset_axi_channel = false;
 
   // DMA engine
   DMAEngine *dma_engine = nullptr;
   int dma_vm_id = -1;
 
-  void axi_clock_posedge();
-  void protocol_clock_posedge();
-  void phy_clock_posedge();
+  void axi_clk_posedge();
+  void protocol_clk_posedge();
+  void phy_clk_posedge();
 
   // -------------------------------------------------------
   // Delay Model
@@ -157,10 +151,9 @@ private:
       sc_time flit_transfer_delay = SC_ZERO_TIME;
       sc_time wire_propagation_delay = SC_ZERO_TIME;
 
-      flit_transfer_delay =
-          sc_time(static_cast<double>(module.flit_size) /
-                      config["interconnect"]["bandwidth"].as<double>(),
-                  SC_NS);
+      flit_transfer_delay = sc_time(static_cast<double>(module.flit_size) /
+                                        config["phy"]["bandwidth"].as<double>(),
+                                    SC_NS);
 
       // Wire propagation delay based on wire length
       wire_propagation_delay =
@@ -178,9 +171,8 @@ private:
       int max_attempts = 1;
       switch (interconnect.type) {
       case InterconnectType::Type::UCIe:
-        max_attempts =
-            config["interconnect_protocol"]["retries"].as<unsigned>() +
-            1; // + 1 for first try
+        max_attempts = config["protocol"]["retries"].as<unsigned>() +
+                       1; // + 1 for first try
         break;
       default:
         break;
@@ -201,9 +193,8 @@ private:
         switch (interconnect.type) {
         case InterconnectType::Type::PCIe:
           // FEC penalty
-          delay += sc_time(
-              config["interconnect_protocol"]["fec_delay"].as<unsigned>(),
-              SC_NS);
+          delay +=
+              sc_time(config["protocol"]["fec_delay"].as<unsigned>(), SC_NS);
           // Assuming FEC handles it
           transfer_successful = true;
           break;
@@ -239,27 +230,28 @@ private:
   // -------------------------------------------------------
   // Helper Functions
   // -------------------------------------------------------
-  struct FlitHeader {
-    uint16_t flit_count;
-    uint16_t flit_id;
-    uint8_t request_id;
-    uint8_t core_id;
-    uint8_t source_id;
-    uint8_t destination_id;
-    Command command;
-    uint32_t address;
-    uint16_t size;
-    bool fixed_address;
-  };
+  void clear_axi_states();
+  void handle_axi_channels();
+  void send_axi_beats();
 
-  size_t read_flit_header(uint8_t *flit_base, FlitHeader &flit_header);
-  size_t write_flit_header(uint8_t *flit_base, FlitHeader &flit_header);
+  Flit read_flit_from_buffer(const uint8_t *src);
+  void write_flit_to_buffer(uint8_t *dest, const Flit &flit,
+                            size_t flit_payload_bytes,
+                            size_t flit_padding_bytes);
+
+  void forward_flit(unsigned rx_idx, uint8_t dest_id);
+  void process_flit(unsigned rx_idx, Flit &flit);
+
+  void send_irq(ARM::AXI::Payload & payload);
 
   bool send_dma_request(ARM::AXI::Payload & payload) {
     return dma_engine->forward_from_virtual(dma_vm_id, payload);
   }
 
-  void send_irq(ARM::AXI::Payload & payload);
+  void erase_payload(
+      std::unordered_map<PayloadKey, ARM::AXI::Payload *, PayloadKeyHash> &
+          payload_map,
+      ARM::AXI::Payload * payload);
 
   // -------------------------------------------------------
   // Debug Functions

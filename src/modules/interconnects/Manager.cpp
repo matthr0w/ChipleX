@@ -1,5 +1,5 @@
 #include "modules/interconnects/Manager.h"
-#include "modules/interconnects/Generic.h"
+#include "modules/interconnects/generic/Generic.h"
 #include "modules/interconnects/serial_link/SerialLink.h"
 
 #include "logging.h"
