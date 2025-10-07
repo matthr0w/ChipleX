@@ -1,7 +1,4 @@
 chiplets:
-  - name: fpga
-    type: quad-core
-
   - name: chiplet0
     type: single-core
 
@@ -12,5 +9,7 @@ chiplets:
     type: single-core
 
 interconnect:
-  type: serial-link
-  preset: star
+  type: ucie
+  connections:
+    - endpoints: [chiplet0, chiplet1]
+    - endpoints: [chiplet1, chiplet2]

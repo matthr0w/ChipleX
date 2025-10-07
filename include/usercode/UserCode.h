@@ -11,28 +11,26 @@ using CoreFunctions =
 using CoreKey = std::pair<int, int>;
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
-    // Chiplet1 Core0
-    {{1, 0},
+    {{0, 0},
      {[](Core &core) {
-        size_t num_bytes = 64;
+        size_t num_bytes = 128;
         uint8_t *data = new uint8_t[num_bytes];
 
-        for (size_t i = 0; i < num_bytes; ++i) {
+        for (size_t i = 0; i < num_bytes; ++i)
           data[i] = static_cast<uint8_t>(i);
-        }
 
         auto reqw = Core::WriteRequest(
                         1, reinterpret_cast<unsigned char *>(data), num_bytes)
-                        .set_dest(3)
+                        .set_dest(2)
                         .set_addr(0x1000)
                         .skip_cache();
 
         auto h = core.write(reqw);
 
-        auto reqr = Core::ReadRequest(1, 0x1000,
+        auto reqr = Core::ReadRequest(2, 0x1000,
                                       reinterpret_cast<unsigned char *>(data),
                                       num_bytes)
-                        .set_dest(3)
+                        .set_dest(2)
                         .skip_cache();
 
         h = core.read(reqr);
