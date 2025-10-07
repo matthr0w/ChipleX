@@ -28,8 +28,8 @@ GenericInterconnect::GenericInterconnect(sc_module_name name,
              ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &GenericInterconnect::nb_transport_bw_axi,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
-  // TODO: Assertions
-  // flit_size >= overhead_size + Flit::header_size() + axi_width
+  // Assertions
+  sc_assert(flit_size >= overhead_size + Flit::header_size() + axi_width / 8);
 
   dma_vm_id = dma_engine->register_virtual_initiator(this);
 

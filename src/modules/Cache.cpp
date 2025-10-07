@@ -14,8 +14,8 @@ Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       isocket("isocket", *this, &Cache::nb_transport_bw,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
-  if (cache_size % cache_block_size != 0)
-    SC_LOG_ERROR(this, "Cache size must be multiple of block size.");
+  // Assertions
+  sc_assert(cache_size % cache_block_size == 0);
 
   num_lines = cache_size / cache_block_size;
   cache_lines.resize(num_lines);
