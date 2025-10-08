@@ -1,5 +1,7 @@
 #include "modules/interconnects/serial_link/DataLinkLayer.h"
 
+#include "logging.h"
+
 #include "common/Router.h"
 
 SLDataLinkLayer::SLDataLinkLayer(sc_module_name name, unsigned chiplet_id,
@@ -40,11 +42,14 @@ void SLDataLinkLayer::clk_posedge() {
       sc_time delay = SC_ZERO_TIME;
       pack_payload(*transaction, *payload);
 
-      int route = Router::instance().get_link_id(
-          chiplet_id, UserSignals::decode(payload->user).destination);
+      uint8_t destination_id = UserSignals::decode(payload->user).destination;
+      int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
+      if (link_id == -1)
+        SC_LOG_ERROR(this, "No valid routing path from "
+                               << chiplet_id << " to " << int(destination_id));
 
-      tlm_sync_enum reply =
-          data_out_isockets[route]->nb_transport_fw(*transaction, phase, delay);
+      tlm_sync_enum reply = data_out_isockets[link_id]->nb_transport_fw(
+          *transaction, phase, delay);
 
       if (reply == TLM_UPDATED) {
         stream_fifo_out->read();

@@ -66,8 +66,12 @@ void SLNetworkLayer::clk_posedge() {
       SC_LOG_DEBUG(this, "Payload written to FIFO");
 
       // Flow control
-      int link_id = Router::instance().get_link_id(
-          chiplet_id, UserSignals::decode(payload_out->user).destination);
+      uint8_t destination_id =
+          UserSignals::decode(payload_out->user).destination;
+      int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
+      if (link_id == -1)
+        SC_LOG_ERROR(this, "No valid routing path from "
+                               << chiplet_id << " to " << int(destination_id));
       decrement_credits(link_id);
     }
 
@@ -75,8 +79,8 @@ void SLNetworkLayer::clk_posedge() {
     Payload_t *payload = stream_fifo_in->peek();
     if (payload) {
       // Prioritize forwarding packets
-      int link_id = Router::instance().get_link_id(
-          chiplet_id, UserSignals::decode(payload->user).destination);
+      uint8_t destination_id = UserSignals::decode(payload->user).destination;
+      int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
 
       if (link_id != -1) {
         bool is_valid =
@@ -425,13 +429,19 @@ void SLNetworkLayer::sender_thread() {
         }
       }
       // Find the connected chiplet
-      user.destination = Router::instance().get_dest_id(chiplet_id, link_id);
+      int destination_id = Router::instance().get_dest_id(chiplet_id, link_id);
+      if (destination_id == -1)
+        SC_LOG_ERROR(this, "No valid routing path from "
+                               << chiplet_id << " via link" << int(link_id));
+      user.destination = destination_id;
       payload_out->user = user.encode();
     }
 
-    int link_id = Router::instance().get_link_id(
-        chiplet_id, UserSignals::decode(payload_out->user).destination);
-    link_id = link_id == -1 ? 0 : link_id;
+    uint8_t destination_id = UserSignals::decode(payload_out->user).destination;
+    int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
+    if (link_id == -1)
+      SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to "
+                                                       << int(destination_id));
 
     payload_out->credit = credits_to_send[link_id];
 

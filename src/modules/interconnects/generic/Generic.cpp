@@ -147,6 +147,10 @@ void GenericInterconnect::protocol_clk_posedge() {
           UserSignals::decode(axi_transaction.payload->user).destination;
       const unsigned tx_idx =
           Router::instance().get_link_id(chiplet_id, destination_id);
+      if (tx_idx == -1)
+        SC_LOG_ERROR(this, "No valid routing path from "
+                               << chiplet_id << " to " << int(destination_id));
+
       const size_t tail = tx_ptrs[tx_idx];
       const size_t room = tx_buffers[tx_idx].size() - tail;
 
@@ -649,6 +653,10 @@ void GenericInterconnect::write_flit_to_buffer(uint8_t *dest, const Flit &flit,
 
 void GenericInterconnect::forward_flit(unsigned rx_idx, uint8_t dest_id) {
   const unsigned tx_idx = Router::instance().get_link_id(chiplet_id, dest_id);
+  if (tx_idx == -1)
+    SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to "
+                                                     << int(dest_id));
+
   const size_t tail = tx_ptrs[tx_idx];
   const size_t room = tx_buffers[tx_idx].size() - tail;
 
