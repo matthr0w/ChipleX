@@ -10,7 +10,6 @@ This project provides a high-level simulation environment for chiplet-based syst
 
 ```bash
 sudo dnf install clang cmake
-sudo dnf install glibc-static libstdc++-static  # required for static linking
 ```
 
 ### Installation Steps
@@ -32,10 +31,10 @@ sudo dnf install glibc-static libstdc++-static  # required for static linking
    ```
 
 3. **Generate the Makefiles using CMake**  
-   Configure the build to install SystemC into a local directory (`../install`) and build using static libraries:
+   Configure the build to install SystemC into a local directory (`../install`):
 
    ```bash
-   cmake .. -DCMAKE_INSTALL_PREFIX=../install -DBUILD_SHARED_LIBS=OFF
+   cmake .. -DCMAKE_INSTALL_PREFIX=../install
    ```
 
 4. **Compile the source**  
