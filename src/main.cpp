@@ -12,15 +12,14 @@
 #include "modules/chiplets/MemoryChiplet.h"
 
 int sc_main(int argc, char *argv[]) {
+  std::cout << std::endl;
+  // Parse command line arguments
   Parser parser(argc, argv);
-
   // Initialize system loader
   SystemLoader sysloader("system.yaml", "./configs");
   SystemConfig sysconf = sysloader.get_config();
   // Initialize router instance
   Router::instance().init(sysconf);
-
-  auto start_timestamp = std::chrono::high_resolution_clock::now();
 
   // Create chiplets
   std::vector<ChipletBase *> chiplets;
@@ -58,24 +57,10 @@ int sc_main(int argc, char *argv[]) {
                     ->interconnect->link_in_ports[conn.endpoint0.link_id]);
   }
 
-  std::cout << std::endl;
-
-  if (sim_duration == SC_ZERO_TIME) {
+  if (sim_duration == SC_ZERO_TIME)
     sc_start();
-  } else {
+  else
     sc_start(sim_duration);
-  }
-
-  auto stop_timestamp = std::chrono::high_resolution_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-      stop_timestamp - start_timestamp);
-
-  // -------------------------------------------------------
-  // Statistics
-  // -------------------------------------------------------
-  std::cout << "=== Statistics ===" << std::endl;
-  std::cout << "Simulation Time: " << sc_time_stamp() << std::endl;
-  std::cout << "Execution Time: " << std::dec << duration.count() << " ms\n";
 
   for (auto *chiplet : chiplets)
     delete chiplet;

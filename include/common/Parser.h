@@ -7,5 +7,5 @@ public:
   void print_help(const char *progname);
 
 private:
-  int parse(int argc, char *argv[]);
+  void parse(int argc, char *argv[]);
 };

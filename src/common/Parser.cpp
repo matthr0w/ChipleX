@@ -3,27 +3,25 @@
 #include "globals.h"
 #include "logging.h"
 
-int Parser::parse(int argc, char *argv[]) {
+void Parser::parse(int argc, char *argv[]) {
   for (int i = 1; i < argc; ++i) {
     std::string arg = argv[i];
 
     if (arg == "--help") {
       print_help(argv[0]);
-      return 0;
+      exit(0);
     } else if (arg.rfind("--time=", 0) == 0) {
       try {
         double value = std::stod(arg.substr(7));
         sim_duration = sc_time(value, SC_NS);
       } catch (...) {
         LOG_ERROR("Invalid value for --time");
-        return 1;
       }
     } else if (arg.rfind("--ber=", 0) == 0) {
       try {
         bit_error_rate = std::stod(arg.substr(6));
       } catch (...) {
         LOG_ERROR("Invalid value for --ber");
-        return 1;
       }
     } else if (arg.rfind("--logging=", 0) == 0) {
       std::string level = arg.substr(10);
@@ -44,16 +42,12 @@ int Parser::parse(int argc, char *argv[]) {
       } else {
         print_help(argv[0]);
         LOG_ERROR("Unknown logging level: " << level);
-        return 1;
       }
     } else {
       print_help(argv[0]);
       LOG_ERROR("Unknown argument: " << arg);
-      return 1;
     }
   }
-
-  return 0;
 }
 
 void Parser::print_help(const char *progname) {
