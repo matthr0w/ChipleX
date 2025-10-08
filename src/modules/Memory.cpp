@@ -36,7 +36,7 @@ void Memory::clk_posedge() {
     }
   }
 
-  // Write request
+  // Write transaction
   if (!b_outgoing && !aw_queue.empty()) {
     if (active_addr == UINT32_MAX) {
       set_active_address(*aw_queue.front());
@@ -68,7 +68,7 @@ void Memory::clk_posedge() {
     }
   }
 
-  // Read request
+  // Read transaction
   else if (!r_outgoing && !ar_queue.empty()) {
     if (active_addr == UINT32_MAX) {
       set_active_address(*ar_queue.front());
@@ -174,78 +174,35 @@ void Memory::set_active_address(ARM::AXI::Payload &payload) {
 
   if (is_onchip) {
     if (read_op) {
-      // On-chip read request
+      // On-chip read transaction
       // Free allocated address range on read
       deallocate_dynamic_address(address, data_size);
       active_addr = address;
-    } else if (write_op && user.flit_count != 0) {
-      // Off-chip read response
-      active_addr = set_flit_address(payload);
     } else if (write_op && user.fixed_address) {
-      // On-chip fixed write request
+      // On-chip fixed write transaction
       allocated_ranges[address] = data_size;
       active_addr = address;
     } else if (write_op && !user.fixed_address) {
-      // On-chip dynamic write request
+      // On-chip dynamic write transaction
       active_addr = allocate_dynamic_address(true, data_size);
     }
   } else {
     if (read_op) {
-      // Off-chip read request
-      active_addr = address + offchip_base_address;
+      // Off-chip read transaction
       // Free allocated address range on read
       deallocate_dynamic_address(address + offchip_base_address, data_size);
-    } else if (write_op && user.fixed_address) {
-      // Off-chip fixed write request
       active_addr = address + offchip_base_address;
+    } else if (write_op && user.fixed_address) {
+      // Off-chip fixed write transaction
       allocated_ranges[address + offchip_base_address] = data_size;
+      active_addr = address + offchip_base_address;
     } else if (write_op && !user.fixed_address) {
-      // Off-chip dynamic write request
-      active_addr = set_flit_address(payload);
+      // Off-chip dynamic write transaction
+      active_addr = allocate_dynamic_address(false, data_size);
     }
   }
 
   payload.set_address(active_addr);
-}
-
-uint32_t Memory::set_flit_address(ARM::AXI::Payload &payload) {
-  const UserSignals user = UserSignals::decode(payload.user);
-
-  int request_id = payload.id;
-  int source_id = user.source;
-  int core_id = user.core;
-
-  FlitKey flit_key = {request_id, source_id, core_id};
-
-  if (flit_id == 0) {
-    flit_data_size = payload.get_data_length();
-    unsigned request_data_size = flit_data_size * user.flit_count;
-    // Allocate dynamic address range with first flit
-    uint32_t flit_base_address =
-        allocate_dynamic_address(false, request_data_size);
-    pending_flit_writes[flit_key] = flit_base_address;
-    flit_id += 1;
-    return flit_base_address;
-  } else {
-    // Increment dynamic address for upcoming flits
-    auto it = pending_flit_writes.find(flit_key);
-
-    uint32_t flit_base_address = it->second;
-    uint32_t flit_address = flit_base_address + flit_id * flit_data_size;
-
-    if (flit_id == user.flit_count - 1) {
-      // Deallocate flit padding on last flit
-      deallocate_dynamic_address(flit_address + payload.get_data_length(),
-                                 flit_data_size - payload.get_data_length());
-      flit_id = 0;
-      // Remove pending on last flit
-      pending_flit_writes.erase(it);
-    } else {
-      flit_id += 1;
-    }
-
-    return flit_address;
-  }
 }
 
 uint32_t Memory::allocate_dynamic_address(bool onchip, unsigned length) {

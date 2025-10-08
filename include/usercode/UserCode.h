@@ -22,12 +22,11 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         auto reqw = Core::WriteRequest(
                         1, reinterpret_cast<unsigned char *>(data), num_bytes)
                         .set_dest(2)
-                        .set_addr(0x1000)
                         .skip_cache();
 
         auto h = core.write(reqw);
 
-        auto reqr = Core::ReadRequest(2, 0x1000,
+        auto reqr = Core::ReadRequest(2, 0x0,
                                       reinterpret_cast<unsigned char *>(data),
                                       num_bytes)
                         .set_dest(2)
