@@ -1,14 +1,33 @@
 # Duckiebot Camera Example
 
-## Description
+## Overview
 
-This example processes the `duckiebot_input.jpg` image by cropping and converting it to grayscale, then saves the result as `duckiebot_outputX.jpg`. The operation repeats every **8 ms** for ten times to simulate a **120 FPS** video stream.
+This example simulates a simple camera processing pipeline using the **Duckiebot** image.  
+It reads the `duckiebot_input.jpg` image, crops it, converts it to grayscale, and saves the results as sequentially numbered output files (`duckiebot_outputX.jpg`).
 
-## Requirements
+The process repeats every **8 ms** (= 125 FPS) for **ten frames**, emulating a real-time video stream.
 
-1. The example is designed for two chiplets.
-2. The chiplets and the FPGA must have at least **5 KB** of RAM each.
+## Setup & Usage
 
-## Usage
+1. **Prepare the environment**  
+   Copy the following files into the project:
+   - Header files → `include/usercode/`
+   - Input image → `include/usercode/duckiebot_input.jpg`
+   - Configuration → `system.yaml` (place it in the same directory as the executable)
 
-To use this example, copy the header files and the `duckiebot_input.jpg` image file into the `usercode` directory, then build the project. You can ignore the `spike` directory.
+2. **Build the project**  
+   Compile the simulation:
+   ```bash
+   make
+   ```
+
+3. **Run the example**  
+   The program will generate cropped and grayscale frames named:
+   ```bash
+   include/usercode/duckiebot_output0.jpg
+   include/usercode/duckiebot_output1.jpg
+   ...
+   include/usercode/duckiebot_output9.jpg
+   ```
+
+> The `spike` directory is not required and can be ignored.
