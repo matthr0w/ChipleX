@@ -1,3 +1,4 @@
+use_dma: false
 protocol:
   staging_buffer_size: 1024 # bytes
   flit_size: 68 # bytes

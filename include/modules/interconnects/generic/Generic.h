@@ -244,8 +244,8 @@ private:
 
   void send_irq(ARM::AXI::Payload & payload);
 
-  bool send_dma_request(ARM::AXI::Payload & payload) {
-    return dma_engine->forward_from_virtual(dma_vm_id, payload);
+  bool send_dma_request(ARM::AXI::Payload & payload, ARM::AXI4::Channel channel) {
+    return dma_engine->forward_from_virtual(dma_vm_id, payload, channel);
   }
 
   void erase_payload(

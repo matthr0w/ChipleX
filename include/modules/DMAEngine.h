@@ -36,14 +36,6 @@ public:
 
   DMAEngine(sc_module_name name, YAML::Node config);
 
-  // -------------------------------------------------------
-  // API
-  // -------------------------------------------------------
-  int register_virtual_initiator(VirtualAXIInitiatorIF * owner);
-  void unregister_virtual_initiator(int vm_id);
-
-  bool forward_from_virtual(int vm_id, ARM::AXI::Payload &payload);
-
 private:
   // -------------------------------------------------------
   // Internal Declarations
@@ -71,4 +63,14 @@ private:
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);
+
+public:
+  // -------------------------------------------------------
+  // API
+  // -------------------------------------------------------
+  int register_virtual_initiator(VirtualAXIInitiatorIF * owner);
+  void unregister_virtual_initiator(int vm_id);
+
+  bool forward_from_virtual(int vm_id, ARM::AXI::Payload &payload,
+                            ARM::AXI::Channel channel);
 };
