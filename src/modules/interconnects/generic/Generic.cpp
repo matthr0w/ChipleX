@@ -250,46 +250,20 @@ GenericInterconnect::nb_transport_fw_axi(ARM::AXI::Payload &payload,
                                          ARM::AXI::Phase &phase) {
   switch (phase) {
   case ARM::AXI::AW_VALID:
-    if (axi_transaction.channel != None ||
-        staging_buffer_ptr + axi_width > staging_buffer_size)
-      return TLM_ACCEPTED; // Backpressure
-    flush_staging_buffer = true;
-    axi_transaction.payload = &payload;
-    axi_transaction.channel = AW;
     aw_queue_in.push_back(&payload);
-    phase = ARM::AXI::AW_READY;
-    return TLM_UPDATED;
+    break;
   case ARM::AXI::W_VALID:
-    if (staging_buffer_ptr + axi_width > staging_buffer_size)
-      return TLM_ACCEPTED; // Backpressure
-    axi_transaction.channel = W;
-    w_queue_in.push_back(&payload);
-    phase = ARM::AXI::W_READY;
-    return TLM_UPDATED;
   case ARM::AXI::W_VALID_LAST:
-    if (staging_buffer_ptr + axi_width > staging_buffer_size)
-      return TLM_ACCEPTED; // Backpressure
-    flush_staging_buffer = true;
-    reset_axi_channel = true;
-    axi_transaction.channel = W;
     w_queue_in.push_back(&payload);
-    phase = ARM::AXI::W_READY;
-    return TLM_UPDATED;
+    break;
   case ARM::AXI::AR_VALID:
-    if (axi_transaction.channel != None ||
-        staging_buffer_ptr + axi_width > staging_buffer_size)
-      return TLM_ACCEPTED; // Backpressure
-    flush_staging_buffer = true;
-    reset_axi_channel = true;
-    axi_transaction.payload = &payload;
-    axi_transaction.channel = AR;
     ar_queue_in.push_back(&payload);
-    phase = ARM::AXI::AR_READY;
-    return TLM_UPDATED;
+    break;
   default:
     SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase");
-    return TLM_ACCEPTED;
   }
+
+  return TLM_ACCEPTED;
 }
 
 tlm_sync_enum
@@ -298,48 +272,25 @@ GenericInterconnect::nb_transport_bw_axi(ARM::AXI::Payload &payload,
   switch (phase) {
   case ARM::AXI::AW_READY:
     aw_state = aw_state == REQ ? ACK : CLEAR;
-    return TLM_ACCEPTED;
+    break;
   case ARM::AXI::W_READY:
     w_state = w_state == REQ ? ACK : CLEAR;
-    return TLM_ACCEPTED;
+    break;
   case ARM::AXI::B_VALID:
-    if (axi_transaction.channel != None ||
-        staging_buffer_ptr + axi_width > staging_buffer_size)
-      return TLM_ACCEPTED; // Backpressure
-    flush_staging_buffer = true;
-    reset_axi_channel = true;
-    axi_transaction.payload = &payload;
-    axi_transaction.channel = B;
     b_queue_in.push_back(&payload);
-    phase = ARM::AXI::B_READY;
-    return TLM_UPDATED;
+    break;
   case ARM::AXI::AR_READY:
     ar_state = ar_state == REQ ? ACK : CLEAR;
-    return TLM_ACCEPTED;
+    break;
   case ARM::AXI::R_VALID:
-    if ((axi_transaction.channel != None && axi_transaction.channel != R) ||
-        staging_buffer_ptr + axi_width > staging_buffer_size)
-      return TLM_ACCEPTED; // Backpressure
-    axi_transaction.payload = &payload;
-    axi_transaction.channel = R;
-    r_queue_in.push_back(&payload);
-    phase = ARM::AXI::R_READY;
-    return TLM_UPDATED;
   case ARM::AXI::R_VALID_LAST:
-    if ((axi_transaction.channel != None && axi_transaction.channel != R) ||
-        staging_buffer_ptr + axi_width > staging_buffer_size)
-      return TLM_ACCEPTED; // Backpressure
-    flush_staging_buffer = true;
-    reset_axi_channel = true;
-    axi_transaction.payload = &payload;
-    axi_transaction.channel = R;
     r_queue_in.push_back(&payload);
-    phase = ARM::AXI::R_READY;
-    return TLM_UPDATED;
+    break;
   default:
     SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
-    return TLM_ACCEPTED;
   }
+
+  return TLM_ACCEPTED;
 }
 
 tlm_sync_enum
@@ -441,10 +392,18 @@ void GenericInterconnect::clear_axi_states() {
 }
 
 void GenericInterconnect::handle_axi_channels() {
+  if (staging_buffer_ptr + axi_width > staging_buffer_size ||
+      flush_staging_buffer)
+    return;
+
   // AW channel
-  if (!aw_queue_in.empty()) {
+  if (!aw_queue_in.empty() && axi_transaction.channel == None) {
     auto *payload = aw_queue_in.front();
     aw_queue_in.pop_front();
+
+    // Set channel information
+    axi_transaction.channel = AW;
+    axi_transaction.payload = payload;
 
     // Save payload for response
     UserSignals user = UserSignals::decode(payload->user);
@@ -458,12 +417,22 @@ void GenericInterconnect::handle_axi_channels() {
                   sizeof(uint32_t));
       staging_buffer_ptr += sizeof(uint32_t);
     }
+
+    // Respond on AXI port
+    ARM::AXI::Phase phase = ARM::AXI::AW_READY;
+    axi_in.nb_transport_bw(*payload, phase);
+    // Set flags
+    flush_staging_buffer = true;
   }
 
   // W channel
   if (!w_queue_in.empty()) {
     auto *payload = w_queue_in.front();
     w_queue_in.pop_front();
+
+    // Set channel information
+    axi_transaction.channel = W;
+    axi_transaction.payload = payload;
 
     // Write data to staging buffer
     size_t beat_bytes = payload->get_beat_data_length();
@@ -473,12 +442,25 @@ void GenericInterconnect::handle_axi_channels() {
       axi_transaction.beat_idx += 1;
       staging_buffer_ptr += beat_bytes;
     }
+
+    // Respond on AXI port
+    ARM::AXI::Phase phase = ARM::AXI::W_READY;
+    axi_in.nb_transport_bw(*payload, phase);
+    // Set flags
+    if (axi_transaction.beat_idx == payload->get_beat_count()) {
+      flush_staging_buffer = true;
+      reset_axi_channel = true;
+    }
   }
 
   // B channel
   if (!b_queue_in.empty()) {
     auto *payload = b_queue_in.front();
     b_queue_in.pop_front();
+
+    // Set channel information
+    axi_transaction.channel = B;
+    axi_transaction.payload = payload;
 
     // Source becomes destination
     UserSignals user = UserSignals::decode(axi_transaction.payload->user);
@@ -493,12 +475,23 @@ void GenericInterconnect::handle_axi_channels() {
                   sizeof(ARM::AXI4::RespEnum));
       staging_buffer_ptr += sizeof(ARM::AXI4::RespEnum);
     }
+
+    // Respond on AXI port
+    ARM::AXI::Phase phase = ARM::AXI::B_READY;
+    axi_out.nb_transport_fw(*payload, phase);
+    // Set flags
+    flush_staging_buffer = true;
+    reset_axi_channel = true;
   }
 
   // AR channel
-  if (!ar_queue_in.empty()) {
+  if (!ar_queue_in.empty() && axi_transaction.channel == None) {
     auto *payload = ar_queue_in.front();
     ar_queue_in.pop_front();
+
+    // Set channel information
+    axi_transaction.channel = AR;
+    axi_transaction.payload = payload;
 
     // Save payload for response
     UserSignals user = UserSignals::decode(payload->user);
@@ -512,12 +505,22 @@ void GenericInterconnect::handle_axi_channels() {
                   sizeof(uint32_t));
       staging_buffer_ptr += sizeof(uint32_t);
     }
+
+    // Respond on AXI port
+    ARM::AXI::Phase phase = ARM::AXI::AR_READY;
+    axi_in.nb_transport_bw(*payload, phase);
+    // Set flags
+    flush_staging_buffer = true;
   }
 
   // R channel
   if (!r_queue_in.empty()) {
     auto *payload = r_queue_in.front();
     r_queue_in.pop_front();
+
+    // Set channel information
+    axi_transaction.channel = R;
+    axi_transaction.payload = payload;
 
     // Source becomes destination
     UserSignals user = UserSignals::decode(axi_transaction.payload->user);
@@ -531,6 +534,15 @@ void GenericInterconnect::handle_axi_channels() {
                              &staging_buffer[staging_buffer_ptr]);
       axi_transaction.beat_idx += 1;
       staging_buffer_ptr += beat_bytes;
+    }
+
+    // Respond on AXI port
+    ARM::AXI::Phase phase = ARM::AXI::R_READY;
+    axi_out.nb_transport_fw(*payload, phase);
+    // Set flags
+    if (axi_transaction.beat_idx == payload->get_beat_count()) {
+      flush_staging_buffer = true;
+      reset_axi_channel = true;
     }
   }
 }
@@ -712,7 +724,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
     if (it != manager_payloads.end())
       payload = it->second;
     else
-      SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown payload");
+      SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown W payload");
     if (w_state == CLEAR) {
       payload->write_in_beat(flit.axi_data.data.data() +
                              flit_w_beat_count * axi_width / 8);
@@ -738,7 +750,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
     if (it != subordinate_payloads.end())
       payload = it->second;
     else
-      SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown payload");
+      SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown B payload");
     if (b_state == CLEAR) {
       b_queue_out.push_back(payload);
       // Consume from Rx buffer
@@ -774,7 +786,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
     if (it != subordinate_payloads.end())
       payload = it->second;
     else
-      SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown payload");
+      SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown R payload");
     if (r_state == CLEAR) {
       payload->read_in_beat(flit.axi_data.data.data() +
                             flit_r_beat_count * axi_width / 8);
