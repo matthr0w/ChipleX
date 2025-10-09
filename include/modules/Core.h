@@ -23,6 +23,7 @@ private:
   const unsigned chiplet_id;
   const unsigned core_id;
   const unsigned axi_width;
+  const sc_time clk_cycle;
   const sc_time irq_delay;
 
 public:
@@ -45,6 +46,8 @@ public:
 
   std::function<void(Core &)> thread_fn;
   std::function<void(Core &, tlm_generic_payload *)> interrupt_fn;
+
+  void wait_cycles(unsigned count);
 
   // -------------------------------------------------------
   // Usercode Types
@@ -126,9 +129,8 @@ public:
     }
 
     void wait() {
-      if (!completed) {
+      if (!completed)
         ::wait(done);
-      }
     }
   };
 

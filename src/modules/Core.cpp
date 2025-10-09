@@ -4,6 +4,7 @@ Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
            YAML::Node config)
     : sc_module(name), chiplet_id(chiplet_id), core_id(core_id),
       axi_width(config["axi"]["width"].as<unsigned>()),
+      clk_cycle(config["cores"]["clk_cycle"].as<unsigned>(), SC_NS),
       irq_delay(config["cores"]["irq_delay"].as<unsigned>(), SC_NS),
       isocket("isocket", *this, &Core::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4,
               axi_width) {
@@ -45,6 +46,8 @@ void Core::interrupt_thread() {
     }
   }
 }
+
+void Core::wait_cycles(unsigned count) { wait(count * clk_cycle); }
 
 void Core::clk_posedge() {
   if (aw_state == ACK) {
