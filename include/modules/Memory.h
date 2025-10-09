@@ -23,7 +23,7 @@ public:
   // -------------------------------------------------------
   // Signals
   // -------------------------------------------------------
-  sc_core::sc_in<bool> clk;
+  sc_in<bool> clk;
 
   // -------------------------------------------------------
   // Sockets
@@ -79,10 +79,4 @@ private:
 
   uint32_t allocate_dynamic_address(bool onchip, unsigned size);
   void deallocate_dynamic_address(uint32_t address, unsigned size);
-
-  // -------------------------------------------------------
-  // Debug Functions
-  // -------------------------------------------------------
-public:
-  void report_usage();
 };

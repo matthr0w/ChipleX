@@ -37,7 +37,7 @@ void Memory::clk_posedge() {
   }
 
   // Write transaction
-  if (!b_outgoing && !aw_queue.empty()) {
+  if (!b_outgoing && !r_outgoing && !aw_queue.empty()) {
     if (active_addr == UINT32_MAX) {
       set_active_address(*aw_queue.front());
 
@@ -69,7 +69,7 @@ void Memory::clk_posedge() {
   }
 
   // Read transaction
-  else if (!r_outgoing && !ar_queue.empty()) {
+  if (!r_outgoing && !b_outgoing && !ar_queue.empty()) {
     if (active_addr == UINT32_MAX) {
       set_active_address(*ar_queue.front());
 
@@ -101,9 +101,8 @@ void Memory::clk_posedge() {
 
 void Memory::clk_negedge() {
   if (b_state == CLEAR && b_outgoing) {
-    ARM::AXI::Phase phase = ARM::AXI::B_VALID;
-
     b_state = REQ;
+    ARM::AXI::Phase phase = ARM::AXI::B_VALID;
     tlm_sync_enum reply = tsocket.nb_transport_bw(*b_outgoing, phase);
     if (reply == TLM_UPDATED) {
       sc_assert(phase == ARM::AXI::B_READY);
@@ -112,10 +111,9 @@ void Memory::clk_negedge() {
   }
 
   if (r_state == CLEAR && r_outgoing) {
+    r_state = REQ;
     ARM::AXI::Phase phase =
         (r_beat_count == 1) ? ARM::AXI::R_VALID_LAST : ARM::AXI::R_VALID;
-
-    r_state = REQ;
     tlm_sync_enum reply = tsocket.nb_transport_bw(*r_outgoing, phase);
     if (reply == TLM_UPDATED) {
       sc_assert(phase == ARM::AXI::R_READY);
@@ -285,15 +283,4 @@ uint32_t Memory::set_beat_address(uint32_t base, unsigned beat_idx,
     // Treat unknown as INCR (safe fallback)
     return base + static_cast<uint32_t>(beat_idx * beat_bytes);
   }
-}
-
-// -------------------------------------------------------
-// Debug functions
-// -------------------------------------------------------
-void Memory::report_usage() {
-  size_t written_bytes =
-      std::count(write_flags.begin(), write_flags.end(), true);
-
-  std::cout << "  Used Bytes: " << written_bytes << " / " << mem.size() << " ("
-            << (100.0 * written_bytes / mem.size()) << "%)\n";
 }
