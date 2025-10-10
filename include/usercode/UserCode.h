@@ -13,7 +13,7 @@ using CoreKey = std::pair<int, int>;
 inline std::map<CoreKey, CoreFunctions> core_code = {
     {{0, 0},
      {[](Core &core) {
-        size_t num_bytes = 128;
+        size_t num_bytes = 256;
         uint8_t *data = new uint8_t[num_bytes];
 
         for (size_t i = 0; i < num_bytes; ++i)

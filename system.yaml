@@ -9,7 +9,7 @@ chiplets:
     type: single-core
 
 interconnect:
-  type: ucie
+  type: spi
   connections:
     - endpoints: [chiplet0, chiplet1]
     - endpoints: [chiplet1, chiplet2]
