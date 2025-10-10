@@ -1,4 +1,5 @@
 #include "modules/interconnects/Manager.h"
+#include "modules/interconnects/SPI.h"
 #include "modules/interconnects/generic/Generic.h"
 #include "modules/interconnects/serial_link/SerialLink.h"
 
@@ -17,6 +18,10 @@ std::unique_ptr<InterconnectBase> InterconnectManager::create_interconnect() {
     return std::make_unique<SerialLink>(
         sc_module_name(interconnect_config.type.to_string().c_str()),
         chiplet_id, chiplet_config, interconnect_config, num_cores);
+  case InterconnectType::Type::SPI:
+    return std::make_unique<SPI>(
+        sc_module_name(interconnect_config.type.to_string().c_str()),
+        chiplet_id, chiplet_config, interconnect_config, num_cores, dma_engine);
   default:
     LOG_ERROR(interconnect_config.type.to_string() << " not implemented");
     return nullptr;
