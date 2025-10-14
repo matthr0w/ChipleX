@@ -1,13 +1,29 @@
 # LZ4 Compression/Decompression Example
 
-## Description
+## Overview
 
 This example compresses and decompresses a test string.
 
-## Requirements
+## Setup & Usage
 
-1. The example is designed for two chiplets.
+1. **Prepare the environment**  
+   Copy the following files into the project:
+   - Header files → `include/usercode/`
+   - Source files → `include/usercode/`
+   - Configuration → `system.yaml` (place it in the same directory as the executable)
 
-## Usage
+   Add the following line to the `CMakeLists.txt`:
+   ```cmake
+   set(PROJECT_SOURCES ${PROJECT_SOURCES} ${PROJECT_SOURCE_DIR}/include/usercode/lz4.c)
+   ```
 
-To use this example, copy the header and implementation files into the `usercode` directory, then build the project. You can ignore the `spike` directory.
+2. **Build the project**  
+   Compile the simulation:
+   ```bash
+   make
+   ```
+
+3. **Run the example**  
+   The program will print the results to the terminal.
+
+> The `spike` directory is not required and can be ignored.

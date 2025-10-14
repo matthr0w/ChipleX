@@ -1,6 +1,6 @@
 # Matrix Operations Example
 
-## Description
+## Overview
 
 This example performs four different matrix operations on an **10x10** input matrix. The operations are:
 
@@ -9,10 +9,20 @@ This example performs four different matrix operations on an **10x10** input mat
 3. Transpose
 4. Subtract -5
 
-## Requirements
+## Setup & Usage
 
-1. The example is designed for four chiplets.
+1. **Prepare the environment**  
+   Copy the following files into the project:
+   - Header files → `include/usercode/`
+   - Configuration → `system.yaml` (place it in the same directory as the executable)
 
-## Usage
+2. **Build the project**  
+   Compile the simulation:
+   ```bash
+   make
+   ```
 
-To use this example, copy the header file into the `usercode` directory, then build the project. You can ignore the `spike` directory.
+3. **Run the example**  
+   The program will print the results to the terminal.
+
+> The `spike` directory is not required and can be ignored.
