@@ -69,7 +69,7 @@ struct Payload_t {
   uint64_t user = 0;
 
   // Only for flow control
-  int interconnect_id = 0;
+  int link_id = 0;
 
   // Only for AXI TLM payload construction
   uint8_t len = 0;

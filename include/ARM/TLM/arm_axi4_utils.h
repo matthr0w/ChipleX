@@ -6,7 +6,6 @@ struct UserSignals {
   uint8_t source = 0;
   uint8_t destination = 0;
   bool fixed_address = true;
-  uint16_t flit_count = 0;
 
   uint64_t encode() const {
     uint64_t val = 0;
@@ -14,7 +13,6 @@ struct UserSignals {
     val |= (static_cast<uint64_t>(source) & 0xFF) << 48;
     val |= (static_cast<uint64_t>(destination) & 0xFF) << 40;
     val |= (static_cast<uint64_t>(fixed_address) & 0x1) << 39;
-    val |= (static_cast<uint64_t>(flit_count) & 0xFFFF) << 23;
     return val;
   }
 
@@ -24,7 +22,6 @@ struct UserSignals {
     user.source = static_cast<uint8_t>((val >> 48) & 0xFF);
     user.destination = static_cast<uint8_t>((val >> 40) & 0xFF);
     user.fixed_address = ((val >> 39) & 0x1) != 0;
-    user.flit_count = static_cast<uint16_t>((val >> 23) & 0xFFFF);
     return user;
   }
 };

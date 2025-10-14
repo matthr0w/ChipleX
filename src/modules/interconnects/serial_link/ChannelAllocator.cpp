@@ -1,8 +1,10 @@
 #include "modules/interconnects/serial_link/ChannelAllocator.h"
 
-SLChannelAllocater::SLChannelAllocater(sc_module_name name, unsigned axi_width,
-                                       double distance)
-    : sc_module(name), axi_width(axi_width), distance(distance) {
+SLChannelAllocater::SLChannelAllocater(sc_module_name name, unsigned link_id,
+                                       ChipletConfig chiplet_config)
+    : sc_module(name), link_id(link_id),
+      axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
+      connections(chiplet_config.connections) {
   data_in_tsocket.register_nb_transport_fw(
       this, &SLChannelAllocater::nb_transport_fw_data_in, 0);
   data_in_isocket.register_nb_transport_bw(
@@ -20,7 +22,8 @@ tlm_sync_enum
 SLChannelAllocater::nb_transport_fw_data_in(int id,
                                             tlm_generic_payload &transaction,
                                             tlm_phase &phase, sc_time &delay) {
-  delay += delays.transfer_delay(transaction);
+  Transfer transfer = delays.transfer_delay(link_id, transaction);
+  delay += transfer.delay;
   return data_in_isocket->nb_transport_fw(transaction, phase, delay);
 }
 

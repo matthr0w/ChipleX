@@ -1,14 +1,24 @@
 # TUM Logo Example
 
-## Description
+## Overview
 
 This example reads the `tum_input.jpg` image, crops and inverts it, and finally saves it as `tum_output.jpg`.
 
-## Requirements
+## Setup & Usage
 
-1. The example is designed for two chiplets.
-2. The chiplets and the FPGA must have at least **512 KB** of RAM each.
+1. **Prepare the environment**  
+   Copy the following files into the project:
+   - Header files → `include/usercode/`
+   - Input image → `include/usercode/tum_input.jpg`
+   - Configuration → `system.yaml` (place it in the same directory as the executable)
 
-## Usage
+2. **Build the project**  
+   Compile the simulation:
+   ```bash
+   make
+   ```
 
-To use this example, copy the header files and the `tum_input.jpg` image file into the `usercode` directory, then build the project. You can ignore the `spike` directory.
+3. **Run the example**  
+   The program will generate the cropped and grayscale frame.
+
+> The `spike` directory is not required and can be ignored.

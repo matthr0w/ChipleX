@@ -1,14 +1,7 @@
 #pragma once
 
-#include <functional>
-#include <map>
-#include <utility>
-
-#include "common/Tracker.h"
-
-#include "include/configs.h"
-#include "include/globals.h"
-#include "include/logging.h"
+#include "globals.h"
+#include "logging.h"
 
 #include "modules/Core.h"
 
@@ -23,429 +16,287 @@ struct ImageHeader {
   uint32_t channels;
 };
 
+unsigned TOTAL_PASSES = 10;
+
 using CoreFunctions =
-    std::pair<std::function<void(Core &, UtilizationTracker *)>, // main thread
-              std::function<void(Core &, UtilizationTracker *,
-                                 tlm_generic_payload *)> // interrupt handler
-              >;
+    std::pair<std::function<void(Core &)>,
+              std::function<void(Core &, tlm_generic_payload *)>>;
 using CoreKey = std::pair<int, int>;
 
-// =========================================================================
-// This file allows you to program the FPGA and chiplet cores.
-//
-// Each core supports two user-defined functions:
-//   - Main thread function (runs once at simulation start; you may use an
-//     infinite loop with wait() if it should remain active)
-//   - Interrupt handler (called when the core receives an IRQ)
-//
-// If no user code is provided for a core, it will remain idle.
-// =========================================================================
-//
-// -----------------------------
-//  Available Functions:
-// -----------------------------
-//
-// 1. void send_random(unsigned int delay,
-//                     double write_prob,
-//                     unsigned int destination_min,
-//                     unsigned int destination_max,
-//                     size_t data_size);
-//
-//    Sends random read/write requests every `delay` nanoseconds.
-//
-//    Parameters:
-//    - `write_prob`: Probability of issuing a write
-//       (0.0 = all reads, 1.0 = all writes)
-//    - `destination_min` and `destination_max`: Target modules ID range
-//       (0 = FPGA, 1 = Chiplet1, ...)
-//    - `data_size`: Number of bytes per request
-//
-// 2. ChipletPayload* send_request(tlm_command command,
-//                                 int request_id,
-//                                 int destination_id,
-//                                 uint32_t address,
-//                                 bool fixed_address,
-//                                 bool is_volatile,
-//                                 unsigned char* data,
-//                                 unsigned int data_size);
-//
-//    Sends a TLM request to the target over the bus.
-//
-//    Parameters:
-//    - `command`: `TLM_READ_COMMAND` or `TLM_WRITE_COMMAND`
-//    - `request_id`: Used to identify the request later in the interrupt
-//       handler (you may start at 0 and increment as needed).
-//    - `destination_id`: Target module ID
-//       (0 = FPGA, 1 = Chiplet1, ...)
-//    - `address`: The address to read from or write to.
-//       - `TLM_READ_COMMAND`: the passed address is always used.
-//       - `TLM_WRITE_COMMAND`: if `fixed_address` is true, the passed
-//          address is used; otherwise, the memory controller will assign the
-//          address and you can pass any address.
-//    - `fixed_address`: Indicates whether the write request should use the
-//       provided address (`true`) or allow the memory controller to allocate
-//       it dynamically (`false`). Ignored for read requests.
-//    - `is_volatile`: Indicates whether the data should bypass the cache.
-//       If set to `true`, the cache will be skipped during access. This is
-//       useful for frequently changing or time-sensitive data that should
-//       always be read directly from memory.
-//    - `data`: Must be allocated on the heap using `new`.
-//       - `TLM_WRITE_COMMAND`: the buffer contents will be sent to the target.
-//       - `TLM_READ_COMMAND`: an empty buffer of the appropriate size must
-//         be passed. DO NOT delete the buffer manually. It will be freed
-//         automatically when the returned transaction is deleted.
-//    - `data_size`: Number of bytes in the request buffer
-//
-//    Returns:
-//      A pointer to the `ChipletPayload` transaction that was internally set up
-//      by this function. You are responsible for deleting the returned
-//      transaction using `delete`. This will also correctly deallocate the
-//      associated data buffer.
-//
-//    Notes:
-//    - The returned transaction's contents (e.g., data pointer) are only valid
-//      and meaningful for on-chip read and write requests.
-//    - For off-chip requests (to other chiplets or the FPGA), the response
-//      transaction does NOT contain meaningful data and can be ignored.
-//    - For off-chip read requests: the initiating module will receive an
-//      IRQ when the data becomes available and should handle the data fetch
-//      in the IRQ handler.
-//    - For off-chip write requests: the target will receive an IRQ when the
-//      write has completed and should handle the data fetch in the IRQ handler.
-//
-// -----------------------------
-//  Simulation Notes:
-// -----------------------------
-//
-// - Your user functions receive a pointer to the utilization tracker:
-//     void main_thread(Module &module, UtilizationTracker *tracker)
-//     void irq_handler(Module &module, UtilizationTracker *tracker,
-//                      tlm_generic_payload *transaction)
-//
-// - You should use `tracker.set_active()` and `tracker.set_idle()` to track the
-//   utilization.
-//
-// - You should add realistic process delays before sending requests.
-//
-// -----------------------------
-//  Interrupt Handler Notes:
-// -----------------------------
-//
-// - Your handler receives a pointer to the incoming transaction:
-//     void irq_handler(Module &module, UtilizationTracker *tracker,
-//                      tlm_generic_payload *transaction)
-//
-// - The incoming transaction does NOT contain any valid payload data.
-//   It only includes important metadata such as:
-//     - `get_address()`: the location where the data can be fetched
-//     - `get_data_length()`: the size of the data
-//     - `ChipletExtension`: custom metadata like `request_id`, etc.
-//
-// - To fetch the actual data related to this IRQ, you must issue a new
-//   on-chip request using the `send_request()` function, passing the
-//   parameters from the IRQ transaction.
-//
-// - You are responsible for deleting the response returned from
-//   `send_request()` to avoid memory leaks.
-//
-// - DO NOT delete the IRQ transaction passed to the handler.
-//   It is owned and managed by the system that dispatched the IRQ.
-//
-// -----------------------------
-//  Configuration Access:
-// -----------------------------
-//
-// - Global constants:                 see `globals.h`
-// - FPGA configuration parameters:
-//     const Config &config = ConfigRegistry::instance().get("FPGA");
-//     type param = config.get<type>("YAML.PATH")
-// - Chiplet configuration parameters:
-//     const Config &config = ConfigRegistry::instance().get("Chiplet");
-//     type param = config.get<type>("YAML.PATH")
-// - Interconnect configuration parameters:
-//     const Config &config = ConfigRegistry::instance().get("Interconnect");
-//     type param = config.get<type>("YAML.PATH")
-//
-// -----------------------------
-//  Logging:
-// -----------------------------
-//
-// - Use `SC_LOG_DEBUG_NO_TX(&module, "message")` to print to the unified log.
-//
-// -----------------------------
-//  Code Instructions:
-// -----------------------------
-//
-// Use the following format to define behavior per core in the `core_code`:
-//
-//     // FPGA Core0
-//     {{0, 0},
-//      {[](Core &core, UtilizationTracker *tracker) {
-//           // MAIN THREAD CODE
-//       },
-//       [](Core &core, UtilizationTracker *tracker,
-//          tlm_generic_payload *transaction) {
-//           // INTERRUPT HANDLER CODE
-//       }}},
-//
-//     // ChipletX CoreY
-//     {{X, Y},
-//      {[](Core &core, UtilizationTracker *tracker) {
-//           // MAIN THREAD CODE
-//       },
-//       [](Core &core, UtilizationTracker *tracker,
-//          tlm_generic_payload *transaction) {
-//           // INTERRUPT HANDLER CODE
-//       }}},
-//
-// -----------------------------
-//  Examples:
-// -----------------------------
-//
-// Core Code Example:
-// // Chiplet1 Core0
-// {{1, 0},
-//  {[](Core &core, UtilizationTracker *tracker) {
-//     SC_LOG_DEBUG_NO_TX(&core, "Starting Core Logic");
-//     tracker.set_active();
-//     uint32_t *data = new uint32_t(0xABCD);
-//     wait(100, SC_NS); // example delay
-//     auto response =
-//         core.send_request(TLM_WRITE_COMMAND, 0, 0, 0x1000, false,
-//                           reinterpret_cast<unsigned char *>(data), 4);
-//     delete response;
-//     tracker.set_idle();
-//   },
-//   [](Core &core, UtilizationTracker *tracker,
-//      tlm_generic_payload *transaction) {
-//     auto *ext = transaction->get_extension<ChipletExtension>();
-//     if (ext) {
-//       SC_LOG_DEBUG_NO_TX(&core,
-//                          "Received IRQ to request ID " << ext->request_id);
-//     }
-//   }}},
-//
-// `send_random` Examples:
-// // Send 64 bytes every 200ns randomly to modules 0–2
-// // (FPGA, Chiplet1, Chiplet2) with 50% write probability:
-// module.send_random(200, 0.5, 0, 2, 64);
-//
-// // Send 32 bytes every 100ns to Chiplet1 with 75% write probability:
-// module.send_random(100, 0.75, 1, 1, 32);
-//
-// ============================================================
-
 inline std::map<CoreKey, CoreFunctions> core_code = {
-    // FPGA Core0
+    // FPGA Core:
     {{0, 0},
-     {[](Core &core, UtilizationTracker *tracker) {
-        static unsigned int request = 0;
-        static sc_time request_delay(8, SC_MS); // approximately 120 fps
+     {// Main thread: Loads image, sends it frame by frame
+      [](Core &core) {
+        static unsigned request_count = 0;
+        static sc_time request_delay(8, SC_MS); // ~125 FPS
 
-        int width, height, channels;
-        unsigned char *input_img = stbi_load("usercode/duckiebot_input.jpg",
-                                             &width, &height, &channels, 3);
+        int width = 0, height = 0, channels = 0;
+        unsigned char *input_image =
+            stbi_load("include/usercode/duckiebot_input.jpg", &width, &height,
+                      &channels, 3);
 
-        size_t header_size = sizeof(ImageHeader);
-        size_t img_size = width * height * channels;
-        size_t buffer_size = header_size + img_size;
+        const size_t header_size = sizeof(ImageHeader);
+        const size_t image_size = width * height * channels;
+        const size_t buffer_size = header_size + image_size;
 
         while (true) {
-          tracker->set_active();
+          auto *buffer = new unsigned char[buffer_size];
 
-          unsigned char *buffer = new unsigned char[buffer_size];
-
-          ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
+          auto *header = reinterpret_cast<ImageHeader *>(buffer);
           header->width = width;
           header->height = height;
           header->channels = channels;
 
-          std::memcpy(buffer + header_size, input_img, img_size);
+          std::memcpy(buffer + header_size, input_image, image_size);
 
-          sc_time request_start_stamp = sc_time_stamp();
+          sc_time start_stamp = sc_time_stamp();
 
-          // write to Chiplet1 RAM
-          auto response = core.send_request(TLM_WRITE_COMMAND, request, 1, 0x0,
-                                            false, true, buffer, buffer_size);
+          size_t max_size = core.MAX_INCR_BURST_SIZE;
+          size_t offset = 0;
+          int req_id = 0;
 
-          delete response;
+          while (offset < buffer_size) {
+            size_t chunk_size = std::min(buffer_size - offset, max_size);
 
-          sc_time request_end_stamp = sc_time_stamp();
+            auto reqw = Core::WriteRequest(req_id, buffer + offset, chunk_size)
+                            .set_dest(1)
+                            .skip_cache();
 
-          ++request;
-
-          tracker->set_idle();
-
-          if (request == 10) {
-            break;
+            core.write(reqw);
+            offset += chunk_size;
+            ++req_id;
           }
 
-          wait(request_delay - (request_end_stamp - request_start_stamp));
+          sc_time end_stamp = sc_time_stamp();
+          ++request_count;
+
+          if (request_count == TOTAL_PASSES)
+            break;
+
+          wait(request_delay - (end_stamp - start_stamp));
+          delete[] buffer;
         }
 
-        stbi_image_free(input_img);
+        stbi_image_free(input_image);
       },
-      [](Core &core, UtilizationTracker *tracker,
-         tlm_generic_payload *transaction) {
-        static unsigned int request = 0;
+      // Interrupt handler: Saves processed images
+      [](Core &core, tlm_generic_payload *txn) {
+        static unsigned pass = 0;
 
-        tracker->set_active();
+        uint32_t addr = txn->get_address();
+        size_t length = txn->get_data_length();
 
-        auto addr = transaction->get_address();
-        auto len = transaction->get_data_length();
+        auto *read_buf = new unsigned char[length];
 
-        // read from FPGA RAM
-        unsigned char *buffer = new unsigned char[len];
-        auto *response = core.send_request(TLM_READ_COMMAND, request, 0, addr,
-                                           true, true, buffer, len);
+        size_t max_size = core.MAX_INCR_BURST_SIZE;
+        size_t offset = 0;
+        int req_id = 0;
+        Core::RequestHandle *handle = nullptr;
 
-        ImageHeader *header = reinterpret_cast<ImageHeader *>(buffer);
-        uint32_t width = header->width;
-        uint32_t height = header->height;
-        uint32_t channels = header->channels;
+        while (offset < length) {
+          size_t chunk_size = std::min(length - offset, max_size);
 
-        unsigned char *img_data = buffer + sizeof(ImageHeader);
+          auto reqr = Core::ReadRequest(req_id, addr + offset,
+                                        read_buf + offset, chunk_size)
+                          .set_dest(0)
+                          .skip_cache();
+
+          handle = core.read(reqr);
+          offset += chunk_size;
+          ++req_id;
+        }
+
+        handle->wait();
+
+        auto *header = reinterpret_cast<ImageHeader *>(read_buf);
+        unsigned char *img_data = read_buf + sizeof(ImageHeader);
 
         std::string filename =
-            "usercode/duckiebot_output" + std::to_string(request) + ".jpg";
+            "include/usercode/duckiebot_output" + std::to_string(pass) + ".jpg";
 
-        stbi_write_jpg(filename.c_str(), width, height, channels, img_data,
-                       100);
+        stbi_write_jpg(filename.c_str(), header->width, header->height,
+                       header->channels, img_data, 100);
 
-        delete response;
+        delete[] read_buf;
+        ++pass;
 
-        ++request;
-
-        tracker->set_idle();
+        if (pass == TOTAL_PASSES)
+          sc_stop();
       }}},
-    // Chiplet1 Core0
+
+    // Chiplet0: Crop image
     {{1, 0},
-     {[](Core &core, UtilizationTracker *tracker) {},
-      [](Core &core, UtilizationTracker *tracker,
-         tlm_generic_payload *transaction) {
-        static const Config &config = ConfigRegistry::instance().get("Chiplet");
-        static unsigned int request = 0;
+     {[](Core &) {},
+      [](Core &core, tlm_generic_payload *txn) {
+        static unsigned interrupt_count = 0;
+        static uint32_t base_addr = 0;
+        static size_t total_len = 0;
 
-        tracker->set_active();
+        if (interrupt_count == 0)
+          base_addr = txn->get_address();
 
-        auto addr = transaction->get_address();
-        auto len = transaction->get_data_length();
+        total_len += txn->get_data_length();
+        ++interrupt_count;
 
-        // read from Chiplet1 RAM
-        unsigned char *read_buffer = new unsigned char[len];
-        auto response = core.send_request(TLM_READ_COMMAND, request, 1, addr,
-                                          false, true, read_buffer, len);
+        if (interrupt_count != 3)
+          return;
 
-        // image header
-        size_t header_size = sizeof(ImageHeader);
-        ImageHeader *header = reinterpret_cast<ImageHeader *>(read_buffer);
-        uint32_t width = header->width;
-        uint32_t height = header->height;
+        auto *read_buf = new unsigned char[total_len];
+        size_t max_size = core.MAX_INCR_BURST_SIZE;
+        size_t offset = 0;
+        int req_id = 0;
+        Core::RequestHandle *handle = nullptr;
+
+        while (offset < total_len) {
+          size_t chunk_size = std::min(total_len - offset, max_size);
+
+          auto reqr = Core::ReadRequest(req_id, base_addr + offset,
+                                        read_buf + offset, chunk_size)
+                          .set_dest(1)
+                          .skip_cache();
+
+          handle = core.read(reqr);
+          offset += chunk_size;
+          ++req_id;
+        }
+
+        handle->wait();
+
+        const size_t header_size = sizeof(ImageHeader);
+        auto *header = reinterpret_cast<ImageHeader *>(read_buf);
+
+        const int crop_margin = 12;
+        uint32_t new_width = header->width;
+        uint32_t new_height = header->height - crop_margin;
         uint32_t channels = header->channels;
 
-        // update image header
-        const int crop_margin = 12;
-        uint32_t new_width = width;
-        uint32_t new_height = height - crop_margin;
-
         size_t new_img_size = new_width * new_height * 3;
-        size_t new_buffer_size = header_size + new_img_size;
+        size_t new_buf_size = header_size + new_img_size;
 
-        unsigned char *write_buffer = new unsigned char[new_buffer_size];
-
-        ImageHeader *new_header = reinterpret_cast<ImageHeader *>(write_buffer);
+        auto *write_buf = new unsigned char[new_buf_size];
+        auto *new_header = reinterpret_cast<ImageHeader *>(write_buf);
         new_header->width = new_width;
         new_header->height = new_height;
         new_header->channels = channels;
 
-        // crop image
-        unsigned char *src_pixels = read_buffer + header_size;
-        unsigned char *dst_pixels = write_buffer + header_size;
+        auto *src = read_buf + header_size;
+        auto *dst = write_buf + header_size;
 
-        for (uint32_t y = 0; y < new_height; ++y) {
-          unsigned char *src_row = src_pixels + ((y + crop_margin) * width) * 3;
-          unsigned char *dst_row = dst_pixels + (y * new_width) * 3;
-          std::memcpy(dst_row, src_row, new_width * 3);
+        for (uint32_t y = 0; y < new_height; ++y)
+          std::memcpy(dst + y * new_width * 3,
+                      src + (y + crop_margin) * new_width * 3, new_width * 3);
+
+        core.wait_cycles(1347);
+
+        offset = 0;
+        while (offset < new_buf_size) {
+          size_t chunk_size = std::min(new_buf_size - offset, max_size);
+
+          auto reqw = Core::WriteRequest(req_id, write_buf + offset, chunk_size)
+                          .set_dest(2)
+                          .skip_cache();
+
+          handle = core.write(reqw);
+          offset += chunk_size;
+          ++req_id;
         }
 
-        delete response;
+        handle->wait();
 
-        // cycle count simulated with Spike
-        wait(1347 * config.get<sc_time>("cores.clk_cycle"));
+        delete[] read_buf;
+        delete[] write_buf;
 
-        // write to Chiplet2 RAM
-        response = core.send_request(TLM_WRITE_COMMAND, request, 2, 0x0, false,
-                                     true, write_buffer, new_buffer_size);
-
-        delete response;
-
-        ++request;
-
-        tracker->set_idle();
+        interrupt_count = 0;
+        base_addr = 0;
+        total_len = 0;
       }}},
-    // Chiplet2 Core0
+
+    // Chiplet1: Convert image to grayscale
     {{2, 0},
-     {[](Core &core, UtilizationTracker *tracker) {},
-      [](Core &core, UtilizationTracker *tracker,
-         tlm_generic_payload *transaction) {
-        static const Config &config = ConfigRegistry::instance().get("Chiplet");
-        static unsigned int request = 0;
+     {[](Core &) {},
+      [](Core &core, tlm_generic_payload *txn) {
+        static unsigned interrupt_count = 0;
+        static uint32_t base_addr = 0;
+        static size_t total_len = 0;
 
-        tracker->set_active();
+        if (interrupt_count == 0)
+          base_addr = txn->get_address();
 
-        auto addr = transaction->get_address();
-        auto len = transaction->get_data_length();
+        total_len += txn->get_data_length();
+        ++interrupt_count;
 
-        // read from Chiplet2 RAM
-        unsigned char *read_buffer = new unsigned char[len];
-        auto response = core.send_request(TLM_READ_COMMAND, request, 2, addr,
-                                          false, true, read_buffer, len);
+        if (interrupt_count != 2)
+          return;
 
-        // image header
+        auto *read_buf = new unsigned char[total_len];
+        size_t max_size = core.MAX_INCR_BURST_SIZE;
+        size_t offset = 0;
+        int req_id = 0;
+        Core::RequestHandle *handle = nullptr;
+
+        while (offset < total_len) {
+          size_t chunk_size = std::min(total_len - offset, max_size);
+
+          auto reqr = Core::ReadRequest(req_id, base_addr + offset,
+                                        read_buf + offset, chunk_size)
+                          .set_dest(2)
+                          .skip_cache();
+
+          handle = core.read(reqr);
+          offset += chunk_size;
+          ++req_id;
+        }
+
+        handle->wait();
+
         const size_t header_size = sizeof(ImageHeader);
-        ImageHeader *header = reinterpret_cast<ImageHeader *>(read_buffer);
+        auto *header = reinterpret_cast<ImageHeader *>(read_buf);
         uint32_t width = header->width;
         uint32_t height = header->height;
 
-        // update header
-        size_t new_img_size = width * height * 1;
-        size_t new_buffer_size = header_size + new_img_size;
+        size_t new_img_size = width * height;
+        size_t new_buf_size = header_size + new_img_size;
 
-        unsigned char *write_buffer = new unsigned char[new_buffer_size];
-        std::memcpy(write_buffer, read_buffer, header_size);
+        auto *write_buf = new unsigned char[new_buf_size];
+        std::memcpy(write_buf, read_buf, header_size);
 
-        ImageHeader *new_header = reinterpret_cast<ImageHeader *>(write_buffer);
+        auto *new_header = reinterpret_cast<ImageHeader *>(write_buf);
         new_header->channels = 1;
 
-        // convert to grayscale
-        unsigned char *src_pixels = read_buffer + header_size;
-        unsigned char *dst_pixels = write_buffer + header_size;
+        auto *src = read_buf + header_size;
+        auto *dst = write_buf + header_size;
 
         for (size_t i = 0; i < new_img_size; ++i) {
-          unsigned char r = src_pixels[i * 3 + 0];
-          unsigned char g = src_pixels[i * 3 + 1];
-          unsigned char b = src_pixels[i * 3 + 2];
+          unsigned char r = src[i * 3 + 0];
+          unsigned char g = src[i * 3 + 1];
+          unsigned char b = src[i * 3 + 2];
 
-          // standard grayscale conversion
-          unsigned char gray =
+          dst[i] =
               static_cast<unsigned char>(0.299 * r + 0.587 * g + 0.114 * b);
-
-          dst_pixels[i] = gray;
         }
 
-        delete response;
+        core.wait_cycles(54006);
 
-        // cycle count simulated with Spike
-        wait(54006 * config.get<sc_time>("cores.clk_cycle"));
+        offset = 0;
+        while (offset < new_buf_size) {
+          size_t chunk_size = std::min(new_buf_size - offset, max_size);
 
-        // write to FPGA RAM
-        response = core.send_request(TLM_WRITE_COMMAND, request, 0, 0x0, false,
-                                     true, write_buffer, new_buffer_size);
+          auto reqw = Core::WriteRequest(req_id, write_buf + offset, chunk_size)
+                          .set_dest(0)
+                          .skip_cache();
 
-        delete response;
+          handle = core.write(reqw);
+          offset += chunk_size;
+          ++req_id;
+        }
 
-        ++request;
+        handle->wait();
 
-        tracker->set_idle();
-      }}},
-};
+        delete[] read_buf;
+        delete[] write_buf;
+
+        interrupt_count = 0;
+        base_addr = 0;
+        total_len = 0;
+      }}}};

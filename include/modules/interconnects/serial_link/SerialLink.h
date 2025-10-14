@@ -3,7 +3,9 @@
 #include <systemc>
 #include <tlm>
 
-#include "modules/interconnects/Base.h"
+#include "common/System.h"
+
+#include "modules/interconnects/InterconnectBase.h"
 #include "modules/interconnects/serial_link/ChannelAllocator.h"
 #include "modules/interconnects/serial_link/DataLinkLayer.h"
 #include "modules/interconnects/serial_link/NetworkLayer.h"
@@ -14,17 +16,23 @@ using namespace tlm;
 using namespace tlm_utils;
 
 SC_MODULE(SerialLink), public InterconnectBase {
+private:
+  // -------------------------------------------------------
+  // Config
+  // -------------------------------------------------------
+  const ChipletConfig chiplet_config;
+  const InterconnectConfig interconnect_config;
+  const unsigned num_cores;
+  const unsigned num_links;
+
 public:
-  SerialLink(sc_module_name name, unsigned chip_id, unsigned axi_width,
-             unsigned num_cores, unsigned num_interconnects,
-             unsigned num_credits);
+  SerialLink(sc_module_name name, unsigned chiplet_id,
+             ChipletConfig chiplet_config,
+             InterconnectConfig interconnect_config, unsigned num_cores);
   ~SerialLink();
 
-  simple_initiator_socket_tagged<SerialLink> *irq_sockets;
-
   // InterconnectBase
-  void bind_axi(AXIBus & bus, sc_clock & clk) override;
-  void bind_core(unsigned index, Core &core) override;
+  void bind_clock(sc_clock & clk) override;
 
 private:
   SLNetworkLayer network_layer;
@@ -34,11 +42,5 @@ private:
   StreamFifo stream_fifo_out;
   StreamFifo stream_fifo_in;
 
-  unsigned compute_fifo_depth(unsigned axi_width, unsigned num_credits);
-
-  // -------------------------------------------------------
-  // Parameters
-  // -------------------------------------------------------
-  const unsigned num_cores;
-  const unsigned num_interconnects;
+  unsigned compute_fifo_depth();
 };

@@ -1,48 +1,35 @@
 #pragma once
 
-#include "configs.h"
 #include "globals.h"
 #include "logging.h"
-
-#include "common/Tracker.h"
 
 #include "modules/Core.h"
 
 using CoreFunctions =
-    std::pair<std::function<void(Core &, UtilizationTracker *)>, // main thread
-              std::function<void(Core &, UtilizationTracker *,
-                                 tlm_generic_payload *)> // interrupt handler
-              >;
+    std::pair<std::function<void(Core &)>,
+              std::function<void(Core &, tlm_generic_payload *)>>;
 using CoreKey = std::pair<int, int>;
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
-    // FPGA Core0
     {{0, 0},
-     {[](Core &core, UtilizationTracker *tracker) {},
-      [](Core &core, UtilizationTracker *tracker,
-         tlm_generic_payload *transaction) {}}},
-    // Chiplet1 Core0
-    {{1, 0},
-     {[](Core &core, UtilizationTracker *tracker) {
-        size_t num_bytes = 64;
+     {[](Core &core) {
+        size_t num_bytes = 256;
         uint8_t *data = new uint8_t[num_bytes];
 
-        for (size_t i = 0; i < num_bytes; ++i) {
+        for (size_t i = 0; i < num_bytes; ++i)
           data[i] = static_cast<uint8_t>(i);
-        }
 
         auto reqw = Core::WriteRequest(
                         1, reinterpret_cast<unsigned char *>(data), num_bytes)
-                        .set_dest(3)
-                        .set_addr(0x1000)
+                        .set_dest(2)
                         .skip_cache();
 
         auto h = core.write(reqw);
 
-        auto reqr = Core::ReadRequest(1, 0x1000,
+        auto reqr = Core::ReadRequest(2, 0x0,
                                       reinterpret_cast<unsigned char *>(data),
                                       num_bytes)
-                        .set_dest(3)
+                        .set_dest(2)
                         .skip_cache();
 
         h = core.read(reqr);
@@ -62,5 +49,4 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         sc_stop();
       },
-      [](Core &core, UtilizationTracker *tracker,
-         tlm_generic_payload *transaction) {}}}};
+      [](Core &core, tlm_generic_payload *transaction) {}}}};

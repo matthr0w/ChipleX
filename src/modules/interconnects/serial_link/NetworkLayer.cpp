@@ -1,26 +1,34 @@
 #include "modules/interconnects/serial_link/NetworkLayer.h"
 
-#include "common/RoutingTable.h"
 #include "logging.h"
 
-SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chip_id,
-                               unsigned axi_width, unsigned num_interconnects,
-                               unsigned num_credits)
-    : sc_module(name), chip_id(chip_id), axi_width(axi_width),
-      num_credits(num_credits), force_send_thresh(num_credits - 4),
+#include "common/Router.h"
+#include "common/System.h"
+
+SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chiplet_id,
+                               ChipletConfig chiplet_config,
+                               InterconnectConfig interconnect_config,
+                               unsigned num_cores)
+    : sc_module(name), chiplet_id(chiplet_id), num_cores(num_cores),
+      num_links(chiplet_config.connections.size()),
+      axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
+      num_credits(interconnect_config.config["num_credits"].as<unsigned>()),
+      force_send_thresh(num_credits - 4),
       axi_in("axi_in", *this, &SLNetworkLayer::nb_transport_fw,
              ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &SLNetworkLayer::nb_transport_bw,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
+  irq_sockets = new simple_initiator_socket_tagged<SLNetworkLayer>[num_cores];
+
   // Initial values
   committer_state_q.write(Committer::Idle);
   committer_state_d.write(Committer::Idle);
   axis_reg_valid_in.write(false);
   axis_reg_ready_in.write(false);
 
-  credits_out.resize(num_interconnects, num_credits);
-  credits_to_send.resize(num_interconnects, 0);
-  credit_to_send_force.resize(num_interconnects, false);
+  credits_out.resize(num_links, num_credits);
+  credits_to_send.resize(num_links, 0);
+  credit_to_send_force.resize(num_links, false);
 
   SC_THREAD(clk_posedge);
   dont_initialize();
@@ -34,6 +42,8 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chip_id,
   sensitive << update_event << aw_gnt << w_gnt << b_gnt << ar_gnt << r_gnt
             << axis_reg_valid_in << axis_reg_ready_in;
 }
+
+SLNetworkLayer::~SLNetworkLayer() { delete[] irq_sockets; }
 
 void SLNetworkLayer::clk_posedge() {
   while (true) {
@@ -56,8 +66,12 @@ void SLNetworkLayer::clk_posedge() {
       SC_LOG_DEBUG(this, "Payload written to FIFO");
 
       // Flow control
-      int link_id = RoutingTable::get_route(
-          chip_id, UserSignals::decode(payload_out->user).destination);
+      uint8_t destination_id =
+          UserSignals::decode(payload_out->user).destination;
+      int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
+      if (link_id == -1)
+        SC_LOG_ERROR(this, "No valid routing path from "
+                               << chiplet_id << " to " << int(destination_id));
       decrement_credits(link_id);
     }
 
@@ -65,8 +79,8 @@ void SLNetworkLayer::clk_posedge() {
     Payload_t *payload = stream_fifo_in->peek();
     if (payload) {
       // Prioritize forwarding packets
-      int link_id = RoutingTable::get_route(
-          chip_id, UserSignals::decode(payload->user).destination);
+      uint8_t destination_id = UserSignals::decode(payload->user).destination;
+      int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
 
       if (link_id != -1) {
         bool is_valid =
@@ -81,7 +95,7 @@ void SLNetworkLayer::clk_posedge() {
 
           // Flow control
           decrement_credits(link_id);
-          increment_credits(payload->interconnect_id, payload->credit);
+          increment_credits(payload->link_id, payload->credit);
         }
       } else {
         switch (payload->hdr) {
@@ -89,7 +103,7 @@ void SLNetworkLayer::clk_posedge() {
           stream_fifo_in->read();
 
           // Flow control
-          increment_credits(payload->interconnect_id, payload->credit);
+          increment_credits(payload->link_id, payload->credit);
         } break;
 
         case TagAW:
@@ -104,7 +118,7 @@ void SLNetworkLayer::clk_posedge() {
             axi_out_trans.w_payload = payload_in;
 
             // Flow control
-            increment_credits(payload->interconnect_id, payload->credit);
+            increment_credits(payload->link_id, payload->credit);
           }
           break;
 
@@ -115,7 +129,7 @@ void SLNetworkLayer::clk_posedge() {
             w_queue.push_back(payload_in);
 
             // Flow control
-            increment_credits(payload->interconnect_id, payload->credit);
+            increment_credits(payload->link_id, payload->credit);
           }
           break;
 
@@ -131,7 +145,7 @@ void SLNetworkLayer::clk_posedge() {
             axi_out_trans.r_payload = payload_in;
 
             // Flow control
-            increment_credits(payload->interconnect_id, payload->credit);
+            increment_credits(payload->link_id, payload->credit);
           }
           break;
 
@@ -145,7 +159,7 @@ void SLNetworkLayer::clk_posedge() {
               pending_read_responses.pop_front();
 
             // Flow control
-            increment_credits(payload->interconnect_id, payload->credit);
+            increment_credits(payload->link_id, payload->credit);
           }
           break;
 
@@ -156,7 +170,7 @@ void SLNetworkLayer::clk_posedge() {
             pending_write_responses.pop_front();
 
             // Flow control
-            increment_credits(payload->interconnect_id, payload->credit);
+            increment_credits(payload->link_id, payload->credit);
           }
           break;
 
@@ -169,9 +183,8 @@ void SLNetworkLayer::clk_posedge() {
     send_axi_beats();
 
     // Flow control
-    for (size_t i = 0; i < credit_to_send_force.size(); ++i) {
+    for (size_t i = 0; i < credit_to_send_force.size(); ++i)
       credit_to_send_force[i] = credits_to_send[i] >= force_send_thresh;
-    }
 
     // Update combinational logic
     update_event.notify(SC_ZERO_TIME);
@@ -347,7 +360,7 @@ void SLNetworkLayer::sender_thread() {
     // Prioritize forwarding packets
     Payload_t *payload = stream_fifo_in->peek();
     if (payload) {
-      if (UserSignals::decode(payload->user).destination != chip_id) {
+      if (UserSignals::decode(payload->user).destination != chiplet_id) {
         axis_reg_valid_in.write(false);
         axis_reg_ready_in.write(false);
         continue;
@@ -405,24 +418,30 @@ void SLNetworkLayer::sender_thread() {
     // Credit only packets
     if (payload_out->hdr == TagIdle) {
       UserSignals user;
-      user.source = chip_id;
-      // Find the interconnect with max credits_to_send
-      unsigned index = 0;
+      user.source = chiplet_id;
+      // Find the link with max credits_to_send
+      unsigned link_id = 0;
       unsigned max_credits = 0;
       for (size_t i = 0; i < credit_to_send_force.size(); ++i) {
         if (credit_to_send_force[i] && credits_to_send[i] > max_credits) {
-          index = i;
+          link_id = i;
           max_credits = credits_to_send[i];
         }
       }
       // Find the connected chiplet
-      user.destination = RoutingTable::get_destination(chip_id, index);
+      int destination_id = Router::instance().get_dest_id(chiplet_id, link_id);
+      if (destination_id == -1)
+        SC_LOG_ERROR(this, "No valid routing path from "
+                               << chiplet_id << " via link" << int(link_id));
+      user.destination = destination_id;
       payload_out->user = user.encode();
     }
 
-    int link_id = RoutingTable::get_route(
-        chip_id, UserSignals::decode(payload_out->user).destination);
-    link_id = link_id == -1 ? 0 : link_id;
+    uint8_t destination_id = UserSignals::decode(payload_out->user).destination;
+    int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
+    if (link_id == -1)
+      SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to "
+                                                       << int(destination_id));
 
     payload_out->credit = credits_to_send[link_id];
 
@@ -460,7 +479,7 @@ void SLNetworkLayer::sender_thread() {
 }
 
 // -------------------------------------------------------
-// Transport functions
+// Transport Functions
 // -------------------------------------------------------
 tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
                                               ARM::AXI::Phase &phase) {
@@ -517,13 +536,13 @@ tlm_sync_enum SLNetworkLayer::nb_transport_bw(ARM::AXI::Payload &payload,
   case ARM::AXI::B_VALID:
     return TLM_ACCEPTED;
   default:
-    SC_REPORT_ERROR(name(), "AXI TLM Protocol: Unrecognized phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
     return TLM_ACCEPTED;
   }
 }
 
 // -------------------------------------------------------
-// Helper functions
+// Helper Functions
 // -------------------------------------------------------
 void SLNetworkLayer::clear_axi_state() {
   if (aw_state == ACK) {
@@ -534,8 +553,10 @@ void SLNetworkLayer::clear_axi_state() {
   if (w_state == ACK) {
     w_state = CLEAR;
     w_beat_count++;
-    if (w_beat_count == w_queue.front()->get_beat_count())
+    if (w_beat_count == w_queue.front()->get_beat_count()) {
       w_beat_count = 0;
+      send_irq(*w_queue.front());
+    }
     w_queue.pop_front();
   }
 
@@ -660,6 +681,23 @@ void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
       axi_in.nb_transport_bw(*payload, phase);
     trans.req_phase = ARM::AXI4::PHASE_UNINITIALIZED;
   }
+}
+
+void SLNetworkLayer::send_irq(ARM::AXI::Payload &payload) {
+  if (num_cores == 0)
+    return;
+
+  tlm_phase phase = BEGIN_REQ;
+  sc_time delay = SC_ZERO_TIME;
+
+  tlm_generic_payload *irq = new tlm_generic_payload;
+
+  irq->set_command(TLM_READ_COMMAND);
+  irq->set_address(payload.get_address());
+  irq->set_data_length(payload.get_data_length());
+
+  SC_LOG_DEBUG(this, "Sending IRQ to Core0");
+  irq_sockets[0]->nb_transport_fw(*irq, phase, delay);
 }
 
 void SLNetworkLayer::increment_credits(int link_id, unsigned credit) {

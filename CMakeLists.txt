@@ -7,14 +7,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 
-# SystemC library
-find_library(SYSTEMC_LIB 
-    NAMES libsystemc.a 
-    PATHS $ENV{SYSTEMC_PATH}/lib64
-    REQUIRED
-)
+# SystemC
+set(SYSTEMC_PATH $ENV{SYSTEMC_PATH})
+if(EXISTS "${SYSTEMC_PATH}/lib/libsystemc.so")
+  set(SYSTEMC_LIB "${SYSTEMC_PATH}/lib/libsystemc.so")
+elseif(EXISTS "${SYSTEMC_PATH}/lib64/libsystemc.so")
+  set(SYSTEMC_LIB "${SYSTEMC_PATH}/lib64/libsystemc.so")
+else()
+  message(FATAL_ERROR "SystemC library not found in ${SYSTEMC_PATH}/lib or lib64")
+endif()
+message(STATUS "Using SystemC library: ${SYSTEMC_LIB}")
 
-# YAML library
+# YAML
 FetchContent_Declare(
   yaml-cpp
   GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
@@ -30,9 +34,6 @@ target_include_directories(sim PRIVATE $ENV{SYSTEMC_PATH}/include)
 
 target_link_libraries(sim PRIVATE ${SYSTEMC_LIB})
 target_link_libraries(sim PUBLIC yaml-cpp::yaml-cpp)
-
-# link statically, and disable PIE (VSCodium flatpak enforces PIE by default)
-set(CMAKE_EXE_LINKER_FLAGS "-static -no-pie")
 
 set_target_properties(sim
     PROPERTIES

@@ -2,14 +2,30 @@
 
 #include <systemc>
 #include <tlm>
+#include <tlm_utils/simple_initiator_socket.h>
+#include <tlm_utils/simple_target_socket.h>
+
+#include "common/System.h"
 
 #include "modules/interconnects/serial_link/FifoIf.h"
 #include "modules/interconnects/serial_link/Types.h"
 
 using namespace sc_core;
 using namespace tlm;
+using namespace tlm_utils;
 
 SC_MODULE(SLNetworkLayer) {
+private:
+  // -------------------------------------------------------
+  // Config
+  // -------------------------------------------------------
+  const unsigned chiplet_id;
+  const unsigned num_cores;
+  const unsigned num_links;
+  const unsigned axi_width;
+  const unsigned num_credits;
+  const unsigned force_send_thresh;
+
 public:
   // -------------------------------------------------------
   // Signals
@@ -29,11 +45,18 @@ public:
   ARM::AXI::SimpleTargetSocket<SLNetworkLayer> axi_in;
   // AXI master port
   ARM::AXI::SimpleInitiatorSocket<SLNetworkLayer> axi_out;
+  // IRQ sockets
+  simple_initiator_socket_tagged<SLNetworkLayer> *irq_sockets;
 
-  SLNetworkLayer(sc_module_name name, unsigned chip_id, unsigned axi_width,
-                 unsigned num_interconnects, unsigned num_credits);
+  SLNetworkLayer(sc_module_name name, unsigned chiplet_id,
+                 ChipletConfig chiplet_config,
+                 InterconnectConfig interconnect_config, unsigned num_cores);
+  ~SLNetworkLayer();
 
 private:
+  // -------------------------------------------------------
+  // Internal Declarations
+  // -------------------------------------------------------
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState aw_state = CLEAR;
@@ -57,15 +80,7 @@ private:
   void sender_thread();
 
   // -------------------------------------------------------
-  // Parameters
-  // -------------------------------------------------------
-  const unsigned chip_id;
-  const unsigned axi_width;
-  const unsigned num_credits;
-  const unsigned force_send_thresh;
-
-  // -------------------------------------------------------
-  // Internal signals
+  // Internal Signals
   // -------------------------------------------------------
   sc_signal<AxiTrans_t> axi_in_sig;
   AxiTrans_t axi_in_trans;
@@ -94,7 +109,7 @@ private:
   sc_event update_event;
 
   // -------------------------------------------------------
-  // Transport functions
+  // Transport Functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);
@@ -102,11 +117,13 @@ private:
                                 ARM::AXI::Phase & phase);
 
   // -------------------------------------------------------
-  // Helper functions
+  // Helper Functions
   // -------------------------------------------------------
   void clear_axi_state();
   void send_axi_beats();
   void send_axi_response(AxiTrans_t & trans, bool is_master);
+
+  void send_irq(ARM::AXI::Payload & payload);
 
   void increment_credits(int link_id, unsigned credit);
   void decrement_credits(int link_id);

@@ -1,0 +1,11 @@
+use_dma: false
+protocol:
+  staging_buffer_size: 1024 # bytes
+  flit_size: 68 # bytes
+  overhead_size: 4 # bytes
+  retries: 4
+  
+phy:
+  link_buffer_size: 512 # bytes
+  bandwidth: 128.0 # GB/s
+  efficiency: 1.0 # pJ/bit

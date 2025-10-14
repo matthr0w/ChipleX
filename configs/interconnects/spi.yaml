@@ -1,0 +1,4 @@
+use_dma: true
+clk_cycle: 10 # ns
+# SPI, Dual-SPI, Quad-SPI, Octal-SPI
+num_lanes: 1

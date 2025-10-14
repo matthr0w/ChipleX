@@ -5,9 +5,10 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
-#include "configs.h"
 #include "globals.h"
 #include "logging.h"
+
+#include "common/System.h"
 
 #include "modules/interconnects/serial_link/Types.h"
 
@@ -16,6 +17,14 @@ using namespace tlm;
 using namespace tlm_utils;
 
 SC_MODULE(SLChannelAllocater) {
+private:
+  // -------------------------------------------------------
+  // Config
+  // -------------------------------------------------------
+  const unsigned link_id;
+  const unsigned axi_width;
+  const std::vector<ChipletConnectionConfig> connections;
+
 public:
   // -------------------------------------------------------
   // Sockets
@@ -27,17 +36,71 @@ public:
   simple_initiator_socket_tagged<SLChannelAllocater>
       data_out_isocket; // tagged for InterconnectBase
 
-  SLChannelAllocater(sc_module_name name, unsigned axi_width, double distance);
+  SLChannelAllocater(sc_module_name name, unsigned link_id,
+                     ChipletConfig chiplet_config);
 
 private:
   // -------------------------------------------------------
-  // Parameters
+  // Delay Model
   // -------------------------------------------------------
-  const unsigned axi_width;
-  const double distance;
+  struct Transfer {
+    sc_time delay;
+    bool success;
+  };
+
+  struct DelayModel {
+  private:
+    const SLChannelAllocater &module;
+
+  public:
+    DelayModel(const SLChannelAllocater &m) : module(m) {}
+
+    Transfer transfer_delay(int id, tlm_generic_payload &transaction) const {
+      ChipletConnectionConfig connection = module.connections[id];
+      InterconnectType interconnect = connection.type;
+      YAML::Node config = connection.config;
+
+      sc_time delay = SC_ZERO_TIME;
+      sc_time packet_transfer_delay = SC_ZERO_TIME;
+      sc_time wire_propagation_delay = SC_ZERO_TIME;
+
+      sc_time clk_cycle(config["clk_cycle"].as<unsigned>(), SC_NS);
+      bool ddr = config["ddr"].as<bool>();
+      unsigned num_channels = config["num_channels"].as<unsigned>();
+      unsigned num_lanes = config["num_lanes"].as<unsigned>();
+
+      unsigned bandwidth = num_channels * num_lanes * (ddr ? 2 : 1);
+
+      unsigned payload_bits = Payload_t::simulation_size(module.axi_width) * 8;
+      unsigned num_cycles = (payload_bits + bandwidth - 1) / bandwidth;
+
+      packet_transfer_delay = num_cycles * clk_cycle;
+
+      // Wire propagation delay based on wire length
+      wire_propagation_delay =
+          sc_time(connection.wire_length * wire_ps_per_mm, SC_PS);
+
+      delay = packet_transfer_delay + wire_propagation_delay;
+
+      // Bit error simulation
+      double scaled_ber =
+          std::clamp(bit_error_rate * connection.ber_scalar, 0.0, 1.0);
+      double prob_bad_transfer = 1.0 - std::pow(1.0 - scaled_ber, payload_bits);
+      bool transfer_successful =
+          (bit_error_dist(bit_error_gen) >= prob_bad_transfer);
+
+      if (!transfer_successful)
+        SC_LOG_ERROR(&module, "Transfer failed");
+
+      SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
+      return {delay, transfer_successful};
+    }
+  };
+
+  DelayModel delays{*this};
 
   // -------------------------------------------------------
-  // Transport functions
+  // Transport Functions
   // -------------------------------------------------------
   tlm_sync_enum nb_transport_fw_data_in(int id,
                                         tlm_generic_payload &transaction,
@@ -49,45 +112,4 @@ private:
   tlm_sync_enum nb_transport_bw_data_out(int id,
                                          tlm_generic_payload &transaction,
                                          tlm_phase &phase, sc_time &delay);
-
-  // -------------------------------------------------------
-  // Delay model
-  // -------------------------------------------------------
-  struct DelayModel {
-  private:
-    const SLChannelAllocater &module;
-
-  public:
-    DelayModel(const SLChannelAllocater &m) : module(m) {}
-
-    sc_time transfer_delay(tlm_generic_payload &transaction) const {
-      static const Config &interconnect_config =
-          ConfigRegistry::instance().get("Interconnect");
-
-      sc_time delay = SC_ZERO_TIME;
-      sc_time packet_transfer_delay = SC_ZERO_TIME;
-      sc_time wire_propagation_delay = SC_ZERO_TIME;
-
-      unsigned bandwidth = interconnect_config.get<unsigned>("num_channels") *
-                           interconnect_config.get<unsigned>("num_lanes") *
-                           (interconnect_config.get<bool>("ddr") ? 2 : 1);
-
-      unsigned num_cycles =
-          (Payload_t::simulation_size(module.axi_width) * 8 + bandwidth - 1) /
-          bandwidth;
-
-      packet_transfer_delay =
-          num_cycles * interconnect_config.get<sc_time>("clk_cycle");
-
-      // Wire propagation delay based on distance
-      wire_propagation_delay = sc_time(module.distance * wire_ps_per_mm, SC_PS);
-
-      delay = packet_transfer_delay + wire_propagation_delay;
-
-      SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
-      return delay;
-    }
-  };
-
-  DelayModel delays{*this};
 };

@@ -2,28 +2,21 @@
 
 #include <random>
 #include <systemc>
-#include <vector>
 
 using namespace sc_core;
 
+// ---------------------------
+// Logging
+// ---------------------------
 enum class LogLevel { DEBUG, DELAY, INFO, WARN, ERROR, SILENT };
+inline LogLevel log_level = LogLevel::WARN;
 
-enum class ConnectionType { Custom, PCIe, UCIe, SerialLink, SPI, Unknown };
-
-extern LogLevel log_level;
-
-extern sc_time sim_duration;
-
-extern unsigned int num_chiplets;
-
-extern ConnectionType connection_type;
-const char *to_string(ConnectionType type);
-extern std::vector<unsigned int> connections;
-
-extern double chiplet_distance_um;
-extern double fpga_distance_mm;
-extern double wire_ps_per_mm;
-
-extern double bit_error_rate;
-extern std::mt19937 bit_error_gen;
-extern std::uniform_real_distribution<> bit_error_dist;
+// ---------------------------
+// Simulation Parameters
+// ---------------------------
+inline sc_time sim_duration = sc_time(0, SC_NS);
+inline double wire_length_mm = 1.0;
+inline double wire_ps_per_mm = 5.0;
+inline double bit_error_rate = 1e-12;
+inline std::mt19937 bit_error_gen{std::random_device{}()};
+inline std::uniform_real_distribution<> bit_error_dist{0.0, 1.0};

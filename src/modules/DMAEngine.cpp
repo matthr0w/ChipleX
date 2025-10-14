@@ -1,7 +1,9 @@
 #include "modules/DMAEngine.h"
 
-DMAEngine::DMAEngine(sc_module_name name, unsigned axi_width)
-    : sc_module(name), axi_width(axi_width),
+#include "logging.h"
+
+DMAEngine::DMAEngine(sc_module_name name, YAML::Node config)
+    : sc_module(name), axi_width(config["axi"]["width"].as<unsigned>()),
       isocket("isocket", *this, &DMAEngine::nb_transport_bw,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
   SC_METHOD(clk_posedge);
@@ -14,9 +16,9 @@ DMAEngine::DMAEngine(sc_module_name name, unsigned axi_width)
 }
 
 int DMAEngine::register_virtual_initiator(VirtualAXIInitiatorIF *owner) {
-  int id = static_cast<int>(owners.size());
+  int vm_id = static_cast<int>(owners.size());
   owners.push_back(owner);
-  return id;
+  return vm_id;
 }
 
 void DMAEngine::unregister_virtual_initiator(int vm_id) {
@@ -26,21 +28,22 @@ void DMAEngine::unregister_virtual_initiator(int vm_id) {
 }
 
 void DMAEngine::clk_posedge() {
+  // AW channel
   if (aw_state == ACK) {
     aw_state = CLEAR;
-    w_queue.push_back(aw_queue.front());
     aw_queue.pop_front();
   }
 
+  // W channel
   if (w_state == ACK) {
     w_state = CLEAR;
     w_beat_count++;
-    if (w_beat_count == w_queue.front()->get_beat_count()) {
+    if (w_beat_count == w_queue.front()->get_beat_count())
       w_beat_count = 0;
-      w_queue.pop_front();
-    }
+    w_queue.pop_front();
   }
 
+  // AR channel
   if (ar_state == ACK) {
     ar_state = CLEAR;
     ar_queue.pop_front();
@@ -48,60 +51,70 @@ void DMAEngine::clk_posedge() {
 }
 
 void DMAEngine::clk_negedge() {
-  /* Send next payload AWVALID */
-  if ((aw_state == CLEAR || aw_state == REQ) && !aw_queue.empty()) {
+  // AW channel
+  if (aw_state == CLEAR && !aw_queue.empty()) {
+    aw_state = REQ;
     ARM::AXI::Payload *payload = aw_queue.front();
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
-
-    aw_state = REQ;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
       sc_assert(phase == ARM::AXI::AW_READY);
       aw_state = ACK;
+      // Backward to virtual initiator
+      int vm_id = payload_owner_map.find(payload)->second;
+      owners[vm_id]->nb_transport_bw_axi(*payload, phase);
     }
   }
 
-  /* Send write beat WVALID */
-  if ((w_state == CLEAR || w_state == REQ) && !w_queue.empty()) {
+  // W channel
+  if (w_state == CLEAR && !w_queue.empty()) {
+    w_state = REQ;
     ARM::AXI::Payload *payload = w_queue.front();
     ARM::AXI::Phase phase = (w_beat_count + 1 == payload->get_beat_count())
                                 ? ARM::AXI::W_VALID_LAST
                                 : ARM::AXI::W_VALID;
-
-    w_state = REQ;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
       sc_assert(phase == ARM::AXI::W_READY);
       w_state = ACK;
+      // Backward to virtual initiator
+      int vm_id = payload_owner_map.find(payload)->second;
+      owners[vm_id]->nb_transport_bw_axi(*payload, phase);
     }
   }
 
-  /* Send next payload ARVALID */
-  if ((ar_state == CLEAR || ar_state == REQ) && !ar_queue.empty()) {
+  // AR channel
+  if (ar_state == CLEAR && !ar_queue.empty()) {
+    ar_state = REQ;
     ARM::AXI::Payload *payload = ar_queue.front();
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
-
-    ar_state = REQ;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
       sc_assert(phase == ARM::AXI::AR_READY);
       ar_state = ACK;
+      // Backward to virtual initiator
+      int vm_id = payload_owner_map.find(payload)->second;
+      owners[vm_id]->nb_transport_bw_axi(*payload, phase);
     }
   }
 }
 
-bool DMAEngine::forward_from_virtual(int vm_id, ARM::AXI::Payload &payload) {
+bool DMAEngine::forward_from_virtual(int vm_id, ARM::AXI::Payload &payload,
+                                     ARM::AXI::Channel channel) {
   assert(vm_id >= 0 && static_cast<size_t>(vm_id) < owners.size());
   VirtualAXIInitiatorIF *owner = owners[vm_id];
   assert(owner != nullptr);
 
-  payload_owner_map.emplace(&payload, vm_id);
+  payload_owner_map[&payload] = vm_id;
 
-  switch (payload.get_command()) {
-  case ARM::AXI::COMMAND_WRITE:
+  switch (channel) {
+  case ARM::AXI::Channel::CHANNEL_AW:
     aw_queue.push_back(&payload);
     return true;
-  case ARM::AXI::COMMAND_READ:
+  case ARM::AXI::Channel::CHANNEL_W:
+    w_queue.push_back(&payload);
+    return true;
+  case ARM::AXI::Channel::CHANNEL_AR:
     ar_queue.push_back(&payload);
     return true;
   default:
@@ -110,26 +123,25 @@ bool DMAEngine::forward_from_virtual(int vm_id, ARM::AXI::Payload &payload) {
 }
 
 // -------------------------------------------------------
-// transport functions
+// Transport Functions
 // -------------------------------------------------------
 tlm_sync_enum DMAEngine::nb_transport_bw(ARM::AXI::Payload &payload,
                                          ARM::AXI::Phase &phase) {
-  // Find which virtual initiator issued this payload
   auto it = payload_owner_map.find(&payload);
   if (it == payload_owner_map.end()) {
-    SC_REPORT_ERROR(name(), "Unrecognized payload");
+    SC_LOG_ERROR(this, "Unrecognized payload");
     return TLM_ACCEPTED;
   }
 
   switch (phase) {
-  case ARM::AXI::AR_READY:
-    ar_state = ACK;
-    break;
   case ARM::AXI::AW_READY:
-    aw_state = ACK;
+    aw_state = aw_state == REQ ? ACK : CLEAR;
     break;
   case ARM::AXI::W_READY:
-    w_state = ACK;
+    w_state = w_state == REQ ? ACK : CLEAR;
+    break;
+  case ARM::AXI::AR_READY:
+    ar_state = ar_state == REQ ? ACK : CLEAR;
     break;
   default:
     break;
@@ -141,12 +153,10 @@ tlm_sync_enum DMAEngine::nb_transport_bw(ARM::AXI::Payload &payload,
   tlm_sync_enum reply = owners[vm_id]->nb_transport_bw_axi(payload, phase);
 
   // Remove payload if response sent
-  if (is_r_valid_last(prev_phase) && is_r_ready(phase)) {
+  if (is_r_valid_last(prev_phase) && is_r_ready(phase))
     payload_owner_map.erase(it);
-  }
-  if (is_b_valid(prev_phase) && is_b_ready(phase)) {
+  if (is_b_valid(prev_phase) && is_b_ready(phase))
     payload_owner_map.erase(it);
-  }
 
   return reply;
 }

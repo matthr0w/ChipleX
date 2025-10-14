@@ -1,13 +1,23 @@
 # Parallel Matrix Multiplication Example
 
-## Description
+## Overview
 
 This example performs parallel matrix multiplication of two **16x16** matrices distributed across four chiplets, where each chiplet computes one matrix row.
 
-## Requirements
+## Setup & Usage
 
-1. The example is designed for four chiplets.
+1. **Prepare the environment**  
+   Copy the following files into the project:
+   - Header files → `include/usercode/`
+   - Configuration → `system.yaml` (place it in the same directory as the executable)
 
-## Usage
+2. **Build the project**  
+   Compile the simulation:
+   ```bash
+   make
+   ```
 
-To use this example, copy the header file into the `usercode` directory, then build the project. You can ignore the `spike` directory.
+3. **Run the example**  
+   The program will print the results to the terminal.
+
+> The `spike` directory is not required and can be ignored.
