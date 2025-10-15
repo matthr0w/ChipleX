@@ -8,7 +8,7 @@
 using CoreFunctions =
     std::pair<std::function<void(Core &)>,
               std::function<void(Core &, tlm_generic_payload *)>>;
-using CoreKey = std::pair<int, int>;
+using CoreKey = std::pair<std::string, int>;
 
 static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2,
                             uint32_t dest_addr) {
@@ -54,11 +54,8 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2,
 }
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
-    // FPGA
-    {{0, 0},
+    {{"fpga", 0},
      {[](Core &core) {
-        // |1 2|
-        // |3 4|
         int matrix[4] = {1, 2, 3, 4};
         auto *data = new unsigned char[sizeof(matrix)];
         memcpy(data, matrix, sizeof(matrix));
@@ -90,9 +87,11 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
                            << result[2] << " " << result[3] << "]");
 
         delete[] data;
+
+        sc_stop();
       }}},
-    // Chiplet1 Core0
-    {{1, 0},
+
+    {{"chiplet0", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         uint32_t matrix_addr = txn->get_address();

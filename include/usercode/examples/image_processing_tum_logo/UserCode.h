@@ -18,11 +18,10 @@ struct ImageHeader {
 using CoreFunctions =
     std::pair<std::function<void(Core &)>,
               std::function<void(Core &, tlm_generic_payload *)>>;
-using CoreKey = std::pair<int, int>;
+using CoreKey = std::pair<std::string, int>;
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
-    // FPGA
-    {{0, 0},
+    {{"fpga", 0},
      {[](Core &core) {
         int width = 0, height = 0, channels = 0;
         unsigned char *input_img = stbi_load("include/usercode/tum_input.jpg",
@@ -109,8 +108,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         sc_stop();
       }}},
-    // Chiplet0
-    {{1, 0},
+
+    {{"chiplet0", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         static unsigned interrupt_count = 0;
@@ -192,8 +191,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         delete[] read_buf;
         delete[] write_buf;
       }}},
-    // Chiplet1
-    {{2, 0},
+
+    {{"chiplet1", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         static unsigned interrupt_count = 0;

@@ -8,7 +8,7 @@
 using CoreFunctions =
     std::pair<std::function<void(Core &)>,
               std::function<void(Core &, tlm_generic_payload *)>>;
-using CoreKey = std::pair<int, int>;
+using CoreKey = std::pair<std::string, int>;
 
 struct MatrixHeader {
   uint32_t rows;
@@ -31,8 +31,7 @@ void inline print_matrix(const int *matrix, int rows, int cols,
 }
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
-    // FPGA
-    {{0, 0},
+    {{"fpga", 0},
      {[](Core &core) {
         const unsigned MATRIX_ROWS = 10;
         const unsigned MATRIX_COLS = 10;
@@ -66,7 +65,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         auto addr = txn->get_address();
         auto len = txn->get_data_length();
 
-        // read from FPGA RAM
+        // Read from FPGA RAM
         auto *data = new unsigned char[len];
         auto reqr =
             Core::ReadRequest(0, addr, data, len).set_dest(0).skip_cache();
@@ -88,8 +87,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         sc_stop();
       }}},
-    // Chiplet0
-    {{1, 0},
+
+    {{"chiplet0", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         auto addr = txn->get_address();
@@ -131,8 +130,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         delete[] read_buf;
         delete[] write_buf;
       }}},
-    // Chiplet1
-    {{2, 0},
+
+    {{"chiplet1", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         auto addr = txn->get_address();
@@ -174,8 +173,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         delete[] read_buf;
         delete[] write_buf;
       }}},
-    // Chiplet2
-    {{3, 0},
+
+    {{"chiplet2", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         auto addr = txn->get_address();
@@ -222,8 +221,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         delete[] read_buf;
         delete[] write_buf;
       }}},
-    // Chiplet3
-    {{4, 0},
+
+    {{"chiplet3", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         auto addr = txn->get_address();

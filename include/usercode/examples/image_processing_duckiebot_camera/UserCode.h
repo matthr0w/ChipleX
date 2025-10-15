@@ -21,11 +21,10 @@ unsigned TOTAL_PASSES = 10;
 using CoreFunctions =
     std::pair<std::function<void(Core &)>,
               std::function<void(Core &, tlm_generic_payload *)>>;
-using CoreKey = std::pair<int, int>;
+using CoreKey = std::pair<std::string, int>;
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
-    // FPGA Core:
-    {{0, 0},
+    {{"fpga", 0},
      {// Main thread: Loads image, sends it frame by frame
       [](Core &core) {
         static unsigned request_count = 0;
@@ -125,8 +124,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
           sc_stop();
       }}},
 
-    // Chiplet0: Crop image
-    {{1, 0},
+    {{"chiplet0", 0},
      {[](Core &) {},
       [](Core &core, tlm_generic_payload *txn) {
         static unsigned interrupt_count = 0;
@@ -212,8 +210,7 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         total_len = 0;
       }}},
 
-    // Chiplet1: Convert image to grayscale
-    {{2, 0},
+    {{"chiplet1", 0},
      {[](Core &) {},
       [](Core &core, tlm_generic_payload *txn) {
         static unsigned interrupt_count = 0;

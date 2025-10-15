@@ -15,11 +15,10 @@ struct DataHeader {
 using CoreFunctions =
     std::pair<std::function<void(Core &)>,
               std::function<void(Core &, tlm_generic_payload *)>>;
-using CoreKey = std::pair<int, int>;
+using CoreKey = std::pair<std::string, int>;
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
-    // FPGA
-    {{0, 0},
+    {{"fpga", 0},
      {[](Core &core) {
         std::string str = "Hello, World! This is a test string for the LZ4 "
                           "compression algorithm. Hello, World! This is a test "
@@ -58,8 +57,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         sc_stop();
       }}},
-    // Chiplet0
-    {{1, 0},
+
+    {{"chiplet0", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         auto addr = txn->get_address();
@@ -113,8 +112,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         delete[] compressed_data;
         delete[] packet;
       }}},
-    // Chiplet1
-    {{2, 0},
+
+    {{"chiplet1", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         auto addr = txn->get_address();

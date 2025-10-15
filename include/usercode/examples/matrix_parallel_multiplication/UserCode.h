@@ -8,7 +8,7 @@
 using CoreFunctions =
     std::pair<std::function<void(Core &)>,
               std::function<void(Core &, tlm_generic_payload *)>>;
-using CoreKey = std::pair<int, int>;
+using CoreKey = std::pair<std::string, int>;
 
 const int MATRIX_SIZE = 4;
 const int ELEMENT_SIZE = sizeof(int);
@@ -21,8 +21,7 @@ const int matrixB[MATRIX_SIZE][MATRIX_SIZE] = {
     {17, 18, 19, 20}, {21, 22, 23, 24}, {25, 26, 27, 28}, {29, 30, 31, 32}};
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
-    // FPGA
-    {{0, 0},
+    {{"fpga", 0},
      {[](Core &core) {
         const int data_size_per_chiplet =
             ROW_SIZE + MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE;
@@ -87,8 +86,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         if (interrupt_count == 4)
           sc_stop();
       }}},
-    // Chiplet0
-    {{1, 0},
+
+    {{"chiplet0", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         uint32_t address = txn->get_address();
@@ -124,8 +123,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         delete[] data;
         delete[] result;
       }}},
-    // Chiplet1
-    {{2, 0},
+
+    {{"chiplet1", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         uint32_t address = txn->get_address();
@@ -161,8 +160,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         delete[] data;
         delete[] result;
       }}},
-    // Chiplet2
-    {{3, 0},
+
+    {{"chiplet2", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         uint32_t address = txn->get_address();
@@ -198,8 +197,8 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
         delete[] data;
         delete[] result;
       }}},
-    // Chiplet3
-    {{4, 0},
+
+    {{"chiplet3", 0},
      {[](Core &core) {},
       [](Core &core, tlm_generic_payload *txn) {
         uint32_t address = txn->get_address();
