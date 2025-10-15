@@ -9,7 +9,7 @@ struct MemoryChiplet : ChipletBase {
   // Dummy AXI initiator socket
   ARM::AXI::SimpleInitiatorSocket<MemoryChiplet> dummy_axi_isocket;
 
-  MemoryChiplet(sc_core::sc_module_name name, unsigned id, SystemConfig sysconf)
+  MemoryChiplet(sc_module_name name, unsigned id, SystemConfig sysconf)
       : ChipletBase(name, id, sysconf),
         memory("memory", sysconf.chiplets[chiplet_name].config),
         dummy_axi_isocket("dummy_axi_isocket", *this, nullptr,

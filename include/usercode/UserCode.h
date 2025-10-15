@@ -8,10 +8,10 @@
 using CoreFunctions =
     std::pair<std::function<void(Core &)>,
               std::function<void(Core &, tlm_generic_payload *)>>;
-using CoreKey = std::pair<int, int>;
+using CoreKey = std::pair<std::string, int>;
 
 inline std::map<CoreKey, CoreFunctions> core_code = {
-    {{0, 0},
+    {{"chiplet0", 0},
      {[](Core &core) {
         size_t num_bytes = 256;
         uint8_t *data = new uint8_t[num_bytes];
@@ -26,11 +26,11 @@ inline std::map<CoreKey, CoreFunctions> core_code = {
 
         auto h = core.write(reqw);
 
-        auto reqr = Core::ReadRequest(2, 0x0,
-                                      reinterpret_cast<unsigned char *>(data),
-                                      num_bytes)
-                        .set_dest(2)
-                        .skip_cache();
+        auto reqr =
+            Core::ReadRequest(2, 0x0, reinterpret_cast<unsigned char *>(data),
+                              num_bytes)
+                .set_dest(2)
+                .skip_cache();
 
         h = core.read(reqr);
         h->wait();

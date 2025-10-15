@@ -18,7 +18,7 @@ struct CoreChiplet : ChipletBase {
   std::vector<std::unique_ptr<Core>> cores;
   std::vector<std::unique_ptr<Cache>> caches;
 
-  CoreChiplet(sc_core::sc_module_name name, unsigned id, SystemConfig sysconf)
+  CoreChiplet(sc_module_name name, unsigned id, SystemConfig sysconf)
       : ChipletBase(name, id, sysconf),
         num_cores(sysconf.chiplets[std::string(name)]
                       .config["cores"]["num"]
@@ -29,12 +29,15 @@ struct CoreChiplet : ChipletBase {
         memory("memory", sysconf.chiplets[chiplet_name].config) {
     // Cores/Caches
     for (int i = 0; i < num_cores; ++i) {
-      cores.push_back(std::make_unique<Core>(
-          std::string("core" + std::to_string(i)).c_str(), chiplet_id, i,
-          sysconf.chiplets[chiplet_name].config));
-      caches.push_back(std::make_unique<Cache>(
-          std::string("cache" + std::to_string(i)).c_str(), chiplet_id,
-          sysconf.chiplets[chiplet_name].config));
+      std::string core_name = "core" + std::to_string(i);
+      std::string cache_name = "cache" + std::to_string(i);
+
+      cores.push_back(
+          std::make_unique<Core>(core_name.c_str(), chiplet_id, i,
+                                 sysconf.chiplets[chiplet_name].config));
+      caches.push_back(
+          std::make_unique<Cache>(cache_name.c_str(), chiplet_id,
+                                  sysconf.chiplets[chiplet_name].config));
 
       // Bind clocks and sockets
       cores[i]->clk.bind(system_clk);
@@ -43,10 +46,13 @@ struct CoreChiplet : ChipletBase {
       caches[i]->isocket.bind(*axi_bus.mgr_tsockets[i]);
 
       // Assign user code
-      auto it = core_code.find({chiplet_id, i});
+      auto it = core_code.find({std::string(name), i});
       if (it != core_code.end()) {
         cores[i]->thread_fn = it->second.first;
         cores[i]->interrupt_fn = it->second.second;
+      } else {
+        LOG_WARN(std::string(name)
+                 << "." << core_name << " has no code assigned. Ignoring.");
       }
     }
 
