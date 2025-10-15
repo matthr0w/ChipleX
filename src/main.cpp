@@ -12,7 +12,6 @@
 #include "modules/chiplets/MemoryChiplet.h"
 
 int sc_main(int argc, char *argv[]) {
-  std::cout << std::endl;
   // Parse command line arguments
   Parser parser(argc, argv);
   // Initialize system loader
