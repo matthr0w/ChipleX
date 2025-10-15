@@ -4,6 +4,8 @@
 #include "modules/interconnects/Manager.h"
 
 struct MemoryChiplet : ChipletBase {
+  const YAML::Node chiplet_config;
+
   Memory memory;
 
   // Dummy AXI initiator socket
@@ -11,12 +13,16 @@ struct MemoryChiplet : ChipletBase {
 
   MemoryChiplet(sc_module_name name, unsigned id, SystemConfig sysconf)
       : ChipletBase(name, id, sysconf),
+        chiplet_config(sysconf.chiplets[chiplet_name].config),
         memory("memory", sysconf.chiplets[chiplet_name].config),
         dummy_axi_isocket("dummy_axi_isocket", *this, nullptr,
                           ARM::TLM::PROTOCOL_AXI4,
-                          sysconf.chiplets[chiplet_name]
-                              .config["axi"]["width"]
-                              .as<unsigned>()) {
+                          chiplet_config["axi"]["width"].as<int>()) {
+    // Assertions
+    LOG_ASSERT(chiplet_config["axi"]["width"].as<int>() >= 8 ||
+                   (chiplet_config["axi"]["width"].as<int>() % 8) == 0,
+               "Parameter Error: AXI size must be a multiple of 8");
+
     // Memory
     memory.clk.bind(system_clk);
 

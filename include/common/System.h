@@ -155,7 +155,6 @@ public:
   }
 
   const SystemConfig &get_config() const { return system_; }
-  void print_config() const;
 
 private:
   std::string interconnects_path_;

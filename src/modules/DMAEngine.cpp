@@ -58,7 +58,8 @@ void DMAEngine::clk_negedge() {
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::AW_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       aw_state = ACK;
       // Backward to virtual initiator
       int vm_id = payload_owner_map.find(payload)->second;
@@ -75,7 +76,8 @@ void DMAEngine::clk_negedge() {
                                 : ARM::AXI::W_VALID;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::W_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       w_state = ACK;
       // Backward to virtual initiator
       int vm_id = payload_owner_map.find(payload)->second;
@@ -90,7 +92,8 @@ void DMAEngine::clk_negedge() {
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::AR_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       ar_state = ACK;
       // Backward to virtual initiator
       int vm_id = payload_owner_map.find(payload)->second;
@@ -101,9 +104,11 @@ void DMAEngine::clk_negedge() {
 
 bool DMAEngine::forward_from_virtual(int vm_id, ARM::AXI::Payload &payload,
                                      ARM::AXI::Channel channel) {
-  assert(vm_id >= 0 && static_cast<size_t>(vm_id) < owners.size());
+  SC_LOG_ASSERT(this, vm_id >= 0 && static_cast<size_t>(vm_id) < owners.size(),
+                "DMA Registration: Unregistered virtual");
   VirtualAXIInitiatorIF *owner = owners[vm_id];
-  assert(owner != nullptr);
+  SC_LOG_ASSERT(this, owner != nullptr,
+                "DMA Registration: Unregistered virtual");
 
   payload_owner_map[&payload] = vm_id;
 

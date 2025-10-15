@@ -247,7 +247,6 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
       payload.snoop_out_beat(burst_index, beat_data);
       break;
     default:
-      assert(0);
       break;
     }
 

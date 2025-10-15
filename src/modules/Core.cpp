@@ -74,7 +74,7 @@ void Core::clk_posedge() {
 }
 
 void Core::clk_negedge() {
-  /* Send next payload AWVALID */
+  // AW channel
   if (aw_state == CLEAR && !aw_queue.empty()) {
     ARM::AXI::Payload *payload = aw_queue.front();
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
@@ -82,12 +82,13 @@ void Core::clk_negedge() {
     aw_state = REQ;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::AW_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       aw_state = ACK;
     }
   }
 
-  /* Send write beat WVALID */
+  // W channel
   if (w_state == CLEAR && !w_queue.empty()) {
     ARM::AXI::Payload *payload = w_queue.front();
     ARM::AXI::Phase phase = (w_beat_count + 1 == payload->get_beat_count())
@@ -97,12 +98,13 @@ void Core::clk_negedge() {
     w_state = REQ;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::W_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       w_state = ACK;
     }
   }
 
-  /* Send next payload ARVALID */
+  // AR channel
   if (ar_state == CLEAR && !ar_queue.empty()) {
     ARM::AXI::Payload *payload = ar_queue.front();
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
@@ -110,7 +112,8 @@ void Core::clk_negedge() {
     ar_state = REQ;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::AR_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       ar_state = ACK;
     }
   }

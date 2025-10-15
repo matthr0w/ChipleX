@@ -23,12 +23,23 @@
     }                                                                          \
   } while (0)
 
+#define LOG_ASSERT(assertion, ...)                                             \
+  do {                                                                         \
+    if (log_level <= LogLevel::ERROR && !(assertion)) {                        \
+      std::ostringstream _stream;                                              \
+      _stream << "\033[31m[ERROR]\033[0m | " << __VA_ARGS__;                   \
+      std::cout << _stream.str() << std::endl;                                 \
+      throw std::runtime_error("");                                            \
+    }                                                                          \
+  } while (0)
+
 #define LOG_ERROR(...)                                                         \
   do {                                                                         \
     if (log_level <= LogLevel::ERROR) {                                        \
       std::ostringstream _stream;                                              \
       _stream << "\033[31m[ERROR]\033[0m | " << __VA_ARGS__;                   \
-      throw std::runtime_error(_stream.str());                                 \
+      std::cout << _stream.str() << std::endl;                                 \
+      throw std::runtime_error("");                                            \
     }                                                                          \
   } while (0)
 
@@ -63,6 +74,18 @@
     }                                                                          \
   } while (0)
 
+#define SC_LOG_ASSERT(module, assertion, ...)                                  \
+  do {                                                                         \
+    if (log_level <= LogLevel::ERROR && !(assertion)) {                        \
+      std::ostringstream _stream;                                              \
+      _stream << "\033[31m[ERROR]\033[0m | " << std::left << std::setw(16)     \
+              << sc_time_stamp() << " | " << std::setw(40) << (module)->name() \
+              << " | " << __VA_ARGS__;                                         \
+      std::cout << _stream.str() << std::endl;                                 \
+      throw std::runtime_error("");                                            \
+    }                                                                          \
+  } while (0)
+
 #define SC_LOG_ERROR(module, ...)                                              \
   do {                                                                         \
     if (log_level <= LogLevel::ERROR) {                                        \
@@ -70,7 +93,8 @@
       _stream << "\033[31m[ERROR]\033[0m | " << std::left << std::setw(16)     \
               << sc_time_stamp() << " | " << std::setw(40) << (module)->name() \
               << " | " << __VA_ARGS__;                                         \
-      throw std::runtime_error(_stream.str());                                 \
+      std::cout << _stream.str() << std::endl;                                 \
+      throw std::runtime_error("");                                            \
     }                                                                          \
   } while (0)
 

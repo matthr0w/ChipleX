@@ -17,8 +17,6 @@ public:
     build_table();
   }
 
-  void print_table() const;
-
   int get_link_id(int src_id, int dst_id) const;
   int get_dest_id(int src_id, int link_id) const;
 

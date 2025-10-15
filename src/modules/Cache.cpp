@@ -15,7 +15,9 @@ Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
       isocket("isocket", *this, &Cache::nb_transport_bw,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
   // Assertions
-  sc_assert(cache_size % cache_block_size == 0);
+  LOG_ASSERT(
+      cache_size % cache_block_size == 0,
+      "Parameter Error: Cache size must be a multiple of cache block size");
 
   num_lines = cache_size / cache_block_size;
   cache_lines.resize(num_lines);
@@ -220,7 +222,7 @@ void Cache::clk_negedge() {
   if (store_buffer_head != store_buffer_tail)
     enqueue_storebuffer_write();
 
-  /* Send next store buffer payload AWVALID */
+  // AW channel
   if (aw_state == CLEAR && !aw_queue_out.empty()) {
     ARM::AXI::Payload *payload = aw_queue_out.front();
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
@@ -228,12 +230,13 @@ void Cache::clk_negedge() {
     aw_state = REQ;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::AW_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       aw_state = ACK;
     }
   }
 
-  /* Send store buffer write beat WVALID */
+  // W channel
   if ((w_state == CLEAR || w_state == REQ) && !w_queue_out.empty()) {
     ARM::AXI::Payload *payload = w_queue_out.front();
     ARM::AXI::Phase phase = (w_beat_count_out + 1 == payload->get_beat_count())
@@ -243,12 +246,13 @@ void Cache::clk_negedge() {
     w_state = REQ;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::W_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       w_state = ACK;
     }
   }
 
-  /* Send next cache line request payload ARVALID */
+  // AR channel
   if (ar_state == CLEAR && !ar_queue_out.empty()) {
     ARM::AXI::Payload *payload = ar_queue_out.front();
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
@@ -256,12 +260,13 @@ void Cache::clk_negedge() {
     ar_state = REQ;
     tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::AR_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       ar_state = ACK;
     }
   }
 
-  /* Send read data beat when loaded */
+  // R channel
   if (r_beat_ready) {
     ARM::AXI::Phase phase = (r_beat_count + 1 == r_outgoing->get_beat_count())
                                 ? ARM::AXI::R_VALID_LAST
@@ -269,7 +274,8 @@ void Cache::clk_negedge() {
 
     tlm_sync_enum reply = tsocket.nb_transport_bw(*r_outgoing, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::R_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::R_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       if (r_beat_count + 1 == r_outgoing->get_beat_count()) {
         r_outgoing->unref();
         r_outgoing = nullptr;
@@ -280,13 +286,14 @@ void Cache::clk_negedge() {
     }
   }
 
-  /* Send write response beat when buffered */
+  // B channel
   if (b_beat_ready) {
     ARM::AXI::Phase phase = ARM::AXI::B_VALID;
 
     tlm_sync_enum reply = tsocket.nb_transport_bw(*b_outgoing, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::B_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::B_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       b_outgoing->unref();
       b_outgoing = nullptr;
       b_beat_ready = false;
@@ -479,15 +486,5 @@ void Cache::dump() {
                 << " ";
     }
     std::cout << std::dec << "\n";
-  }
-}
-
-void Cache::report_rates() {
-  std::cout << "  Cache Accesses: " << num_accesses << std::endl;
-  if (num_accesses > 0) {
-    double hit_rate = double(100) * num_hits / num_accesses;
-    double miss_rate = double(100) * num_misses / num_accesses;
-    std::cout << "  Hit Rate: " << std::dec << hit_rate << "%\n";
-    std::cout << "  Miss Rate: " << std::dec << miss_rate << "%\n";
   }
 }

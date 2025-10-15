@@ -29,7 +29,10 @@ GenericInterconnect::GenericInterconnect(sc_module_name name,
       axi_out("axi_out", *this, &GenericInterconnect::nb_transport_bw_axi,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
   // Assertions
-  sc_assert(flit_size >= overhead_size + Flit::header_size() + axi_width / 8);
+  unsigned min_flit_size = overhead_size + Flit::header_size() + axi_width / 8;
+  LOG_ASSERT(flit_size >= min_flit_size,
+             "Parameter Error: Flit size must be at least " << min_flit_size
+                                                            << " bytes");
 
   if (dma_engine)
     dma_vm_id = dma_engine->register_virtual_initiator(this);
@@ -558,7 +561,8 @@ void GenericInterconnect::send_axi_beats() {
     } else {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
-        sc_assert(phase == ARM::AXI::AW_READY);
+        SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
+                      "AXI TLM Protocol: Unexpected phase");
         aw_state = ACK;
       }
     }
@@ -576,7 +580,8 @@ void GenericInterconnect::send_axi_beats() {
     } else {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
-        sc_assert(phase == ARM::AXI::W_READY);
+        SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
+                      "AXI TLM Protocol: Unexpected phase");
         w_state = ACK;
       }
     }
@@ -589,7 +594,8 @@ void GenericInterconnect::send_axi_beats() {
     ARM::AXI::Phase phase = ARM::AXI::B_VALID;
     tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::B_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::B_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       b_state = ACK;
     }
   }
@@ -604,7 +610,8 @@ void GenericInterconnect::send_axi_beats() {
     } else {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
-        sc_assert(phase == ARM::AXI::AR_READY);
+        SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,
+                      "AXI TLM Protocol: Unexpected phase");
         ar_state = ACK;
       }
     }
@@ -619,7 +626,8 @@ void GenericInterconnect::send_axi_beats() {
                                 : ARM::AXI::R_VALID;
     tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::R_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::R_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       r_state = ACK;
     }
   }

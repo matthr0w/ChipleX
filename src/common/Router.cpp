@@ -43,33 +43,6 @@ void Router::build_table() {
   }
 }
 
-void Router::print_table() const {
-  std::cout << "================ ROUTING TABLE ================\n";
-
-  int n = static_cast<int>(routing_table_.size());
-
-  std::cout << "rows=src, cols=dst\n";
-  std::cout << "     ";
-  for (int j = 0; j < n; ++j) {
-    std::cout << "[" << j << "]  ";
-  }
-  std::cout << "\n";
-
-  for (int i = 0; i < n; ++i) {
-    std::cout << "[" << i << "] ";
-    for (int j = 0; j < n; ++j) {
-      int val = routing_table_[i][j];
-      if (val == -1)
-        std::cout << "  -  ";
-      else
-        std::cout << "  " << val << "  ";
-    }
-    std::cout << "\n";
-  }
-
-  std::cout << "===============================================\n";
-}
-
 int Router::get_link_id(int src_id, int dst_id) const {
   if (src_id < 0 || src_id >= (int)routing_table_.size() || dst_id < 0 ||
       dst_id >= (int)routing_table_[src_id].size())

@@ -8,35 +8,38 @@
 void SystemLoader::load(const std::string &system_yaml) {
   YAML::Node root = YAML::LoadFile(system_yaml);
 
-  if (!root["chiplets"])
-    LOG_ERROR("SystemLoader: Missing required section 'chiplets' in system "
-              "description.");
-  if (!root["interconnect"])
-    LOG_ERROR("SystemLoader: Missing required section 'interconnect' in system "
-              "description.");
-  if (!root["interconnect"]["type"])
-    LOG_ERROR(
-        "SystemLoader: Missing required key 'type' in 'interconnect' section.");
-  if (!root["interconnect"]["preset"] && !root["interconnect"]["connections"])
-    LOG_ERROR("SystemLoader: Missing required section 'connections' in "
-              "'interconnect' section.");
+  // Assertions
+  LOG_ASSERT(root["chiplets"],
+             "SystemLoader: Missing required section 'chiplets' in system "
+             "description");
+  LOG_ASSERT(root["interconnect"],
+             "SystemLoader: Missing required section 'interconnect' in system "
+             "description");
+  LOG_ASSERT(
+      root["interconnect"]["type"],
+      "SystemLoader: Missing required key 'type' in 'interconnect' section");
+  LOG_ASSERT(root["interconnect"]["preset"] ||
+                 root["interconnect"]["connections"],
+             "SystemLoader: Missing required "
+             "section 'connections' in "
+             "'interconnect' section");
 
   // -------------------------------------------------------
   // Chiplets
   // -------------------------------------------------------
   for (const auto &c : root["chiplets"]) {
-    if (!c["name"])
-      LOG_ERROR(
-          "SystemLoader: Missing required key 'name' in chiplet description.");
-    if (!c["type"])
-      LOG_ERROR(
-          "SystemLoader: Missing required key 'type' in chiplet description.");
+    LOG_ASSERT(
+        c["name"],
+        "SystemLoader: Missing required key 'name' in chiplet description");
+    LOG_ASSERT(
+        c["type"],
+        "SystemLoader: Missing required key 'type' in chiplet description");
 
     std::string name_str = c["name"].as<std::string>();
     std::string type_str = c["type"].as<std::string>();
 
-    if (!chiplets_defaults_[type_str])
-      LOG_ERROR("SystemLoader: Unknown chiplet type: " + type_str);
+    LOG_ASSERT(chiplets_defaults_[type_str],
+               "SystemLoader: Unknown chiplet type: " + type_str);
 
     YAML::Node chiplet_config = YAML::Clone(chiplets_defaults_[type_str]);
 
@@ -61,9 +64,9 @@ void SystemLoader::load(const std::string &system_yaml) {
   std::string type_str = root["interconnect"]["type"].as<std::string>();
   std::string interconnect_yaml = interconnects_path_ + type_str + ".yaml";
 
-  if (!(std::filesystem::exists(interconnect_yaml) &&
-        std::filesystem::is_regular_file(interconnect_yaml)))
-    LOG_ERROR("SystemLoader: Unknown interconnect type: " + type_str);
+  LOG_ASSERT(std::filesystem::exists(interconnect_yaml) &&
+                 std::filesystem::is_regular_file(interconnect_yaml),
+             "SystemLoader: Unknown interconnect type: " + type_str);
 
   YAML::Node interconnect_defaults = YAML::LoadFile(interconnect_yaml);
 
@@ -96,9 +99,9 @@ void SystemLoader::load(const std::string &system_yaml) {
 
   // Add connections to chiplets and create mapping
   for (const auto &conn : connections_node) {
-    if (!conn["endpoints"] || conn["endpoints"].size() != 2)
-      LOG_ERROR("SystemLoader: Missing required key 'endpoints' in connection "
-                "description.");
+    LOG_ASSERT(conn["endpoints"] && conn["endpoints"].size() == 2,
+               "SystemLoader: Missing required key 'endpoints' in connection "
+               "description");
 
     std::string endpoint0 = conn["endpoints"][0].as<std::string>();
     std::string endpoint1 = conn["endpoints"][1].as<std::string>();
@@ -301,71 +304,4 @@ void SystemLoader::merge_nodes(YAML::Node target, const YAML::Node &override,
                  ". Ignoring.");
     }
   }
-}
-
-static void print_yaml_node(const YAML::Node &node, int indent = 0) {
-  std::string pad(indent, ' ');
-  if (!node) {
-    std::cout << pad << "(null)\n";
-    return;
-  }
-
-  if (node.IsScalar()) {
-    std::cout << pad << node.as<std::string>() << "\n";
-  } else if (node.IsSequence()) {
-    for (auto v : node) {
-      print_yaml_node(v, indent + 2);
-    }
-  } else if (node.IsMap()) {
-    for (auto kv : node) {
-      std::cout << pad << kv.first.as<std::string>() << ":\n";
-      print_yaml_node(kv.second, indent + 2);
-    }
-  }
-}
-
-void SystemLoader::print_config() const {
-  std::cout << "================ SYSTEM CONFIG ================\n";
-
-  // -------------------------------------------------------
-  // Chiplets
-  // -------------------------------------------------------
-  std::cout << "Chiplets:\n";
-  for (const auto &name : system_.chiplet_order) {
-    const ChipletConfig &chip = system_.chiplets.at(name);
-    std::cout << "  Chiplet: " << name << " (type=" << chip.type.to_string()
-              << ")\n";
-
-    std::cout << "    Config:\n";
-    print_yaml_node(chip.config, 6);
-
-    std::cout << "    Connections:\n";
-    for (size_t i = 0; i < chip.connections.size(); ++i) {
-      const auto &conn_cfg = chip.connections[i];
-      std::cout << "      [" << i << "] type=" << conn_cfg.type.to_string()
-                << ", wire_length=" << conn_cfg.wire_length
-                << "mm, ber_scalar=" << conn_cfg.ber_scalar << "\n";
-      print_yaml_node(conn_cfg.config, 8);
-    }
-  }
-
-  // -------------------------------------------------------
-  // Interconnect
-  // -------------------------------------------------------
-  std::cout << "Interconnect:\n";
-  std::cout << "  Type: " << system_.interconnect.type.to_string() << "\n";
-  std::cout << "  Defaults:\n";
-  print_yaml_node(system_.interconnect.config, 4);
-
-  std::cout << "  Mappings:\n";
-  for (int i = 0; i < system_.interconnect.connections.size(); ++i) {
-    const auto &conn = system_.interconnect.connections[i];
-    std::cout << "    [" << i << "] " << conn.endpoint0.chiplet_name << ".conn["
-              << conn.endpoint0.chiplet_id << "," << conn.endpoint0.link_id
-              << "] <-> " << conn.endpoint1.chiplet_name << ".conn["
-              << conn.endpoint1.chiplet_id << "," << conn.endpoint1.link_id
-              << "]\n";
-  }
-
-  std::cout << "===============================================\n";
 }

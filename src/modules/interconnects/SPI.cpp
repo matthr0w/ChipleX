@@ -357,7 +357,8 @@ void SPI::send_axi_beats() {
     } else {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
-        sc_assert(phase == ARM::AXI::AW_READY);
+        SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
+                      "AXI TLM Protocol: Unexpected phase");
         aw_state = ACK;
       }
     }
@@ -378,7 +379,8 @@ void SPI::send_axi_beats() {
     } else {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
-        sc_assert(phase == ARM::AXI::W_READY);
+        SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
+                      "AXI TLM Protocol: Unexpected phase");
         w_state = ACK;
       }
     }
@@ -393,7 +395,8 @@ void SPI::send_axi_beats() {
     active_links[link_req.link_id] = false;
     tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::B_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::B_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       b_state = ACK;
     }
   }
@@ -410,7 +413,8 @@ void SPI::send_axi_beats() {
     } else {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
-        sc_assert(phase == ARM::AXI::AR_READY);
+        SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,
+                      "AXI TLM Protocol: Unexpected phase");
         ar_state = ACK;
       }
     }
@@ -428,7 +432,8 @@ void SPI::send_axi_beats() {
     active_links[link_req.link_id] = false;
     tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::R_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::R_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       r_state = ACK;
     }
   }

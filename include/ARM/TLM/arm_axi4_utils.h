@@ -27,12 +27,9 @@ struct UserSignals {
 };
 
 inline ARM::AXI::Size get_axi_size(unsigned bits) {
-  if (bits < 8 || (bits % 8) != 0)
-    throw std::invalid_argument("AXI size must be a multiple of 8");
-
   unsigned bytes = bits / 8;
 
-  // compute log2(bytes)
+  // Compute log2(bytes)
   unsigned log2val = 0;
   while ((1u << log2val) < bytes) {
     ++log2val;

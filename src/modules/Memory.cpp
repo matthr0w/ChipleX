@@ -52,10 +52,7 @@ void Memory::clk_posedge() {
       unsigned beat_bytes = b_outgoing->get_beat_data_length();
       ARM::AXI::Burst burst = b_outgoing->get_burst();
 
-      size_t total_len = static_cast<size_t>(beats * beat_bytes);
-      sc_assert(total_len == b_outgoing->get_data_length());
-
-      std::vector<uint8_t> buffer(total_len);
+      std::vector<uint8_t> buffer(b_outgoing->get_data_length());
       b_outgoing->write_out(buffer.data());
 
       for (unsigned i = 0; i < beats; ++i) {
@@ -84,10 +81,7 @@ void Memory::clk_posedge() {
       unsigned beat_bytes = r_outgoing->get_beat_data_length();
       ARM::AXI::Burst burst = r_outgoing->get_burst();
 
-      size_t total_len = static_cast<size_t>(beats * beat_bytes);
-      sc_assert(total_len == r_outgoing->get_data_length());
-
-      std::vector<uint8_t> buffer(total_len);
+      std::vector<uint8_t> buffer(r_outgoing->get_data_length());
       for (unsigned i = 0; i < beats; ++i) {
         const uint32_t a =
             set_beat_address(active_addr, i, beat_bytes, beats, burst);
@@ -105,7 +99,8 @@ void Memory::clk_negedge() {
     ARM::AXI::Phase phase = ARM::AXI::B_VALID;
     tlm_sync_enum reply = tsocket.nb_transport_bw(*b_outgoing, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::B_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::B_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       b_state = ACK;
     }
   }
@@ -116,7 +111,8 @@ void Memory::clk_negedge() {
         (r_beat_count == 1) ? ARM::AXI::R_VALID_LAST : ARM::AXI::R_VALID;
     tlm_sync_enum reply = tsocket.nb_transport_bw(*r_outgoing, phase);
     if (reply == TLM_UPDATED) {
-      sc_assert(phase == ARM::AXI::R_READY);
+      SC_LOG_ASSERT(this, phase == ARM::AXI::R_READY,
+                    "AXI TLM Protocol: Unexpected phase");
       r_state = ACK;
     }
   }

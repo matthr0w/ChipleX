@@ -18,7 +18,7 @@ public:
   ChipletBase(sc_module_name name, unsigned id, SystemConfig sysconf)
       : sc_module(name), chiplet_name(name), chiplet_id(id),
         system_clk("system_clk",
-                   sysconf.chiplets[std::string(name)]
+                   sysconf.chiplets[chiplet_name]
                        .config["system"]["clk_cycle"]
                        .as<int>(),
                    SC_NS, 0.5) {}
