@@ -303,7 +303,6 @@ void SPI::clear_axi_states() {
   if (aw_state == ACK) {
     aw_state = CLEAR;
     ARM::AXI::Payload *payload = aw_queue_out.front().payload;
-    register_beat_count(*payload);
     aw_queue_out.pop_front();
   }
 
@@ -337,10 +336,10 @@ void SPI::clear_axi_states() {
   if (r_state == ACK) {
     r_state = CLEAR;
     ARM::AXI::Payload *payload = r_queue_out.front().payload;
-    register_beat_count(*payload);
     increment_beat_count(*payload);
     if (get_beat_count(*payload) == payload->get_beat_count())
       unregister_beat_count(*payload);
+    r_queue_out.pop_front();
   }
 }
 
@@ -351,6 +350,7 @@ void SPI::send_axi_beats() {
     LinkRequest link_req = aw_queue_out.front();
     ARM::AXI::Payload *payload = link_req.payload;
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
+    register_beat_count(*payload);
     active_links[link_req.link_id] = false;
     if (dma_vm_id != -1) {
       send_dma_request(*payload, ARM::AXI4::CHANNEL_AW);
@@ -429,6 +429,7 @@ void SPI::send_axi_beats() {
         (get_beat_count(*payload) + 1 == payload->get_beat_count())
             ? ARM::AXI::R_VALID_LAST
             : ARM::AXI::R_VALID;
+    register_beat_count(*payload);
     active_links[link_req.link_id] = false;
     tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
     if (reply == TLM_UPDATED) {
