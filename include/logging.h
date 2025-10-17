@@ -9,7 +9,8 @@
   do {                                                                         \
     if (log_level <= LogLevel::INFO) {                                         \
       std::ostringstream _stream;                                              \
-      _stream << "\033[0m[INFO]\033[0m  | " << __VA_ARGS__;                    \
+      _stream << "\033[0m[INFO]\033[0m  | " << std::left << std::setw(16)      \
+              << sc_time_stamp() << " | " << __VA_ARGS__;                      \
       std::cout << _stream.str() << std::endl;                                 \
     }                                                                          \
   } while (0)
@@ -18,7 +19,8 @@
   do {                                                                         \
     if (log_level <= LogLevel::WARN) {                                         \
       std::ostringstream _stream;                                              \
-      _stream << "\033[33m[WARN]\033[0m  | " << __VA_ARGS__;                   \
+      _stream << "\033[33m[WARN]\033[0m  | " << std::left << std::setw(16)     \
+              << sc_time_stamp() << " | " << __VA_ARGS__;                      \
       std::cout << _stream.str() << std::endl;                                 \
     }                                                                          \
   } while (0)
@@ -27,7 +29,8 @@
   do {                                                                         \
     if (log_level <= LogLevel::ERROR && !(assertion)) {                        \
       std::ostringstream _stream;                                              \
-      _stream << "\033[31m[ERROR]\033[0m | " << __VA_ARGS__;                   \
+      _stream << "\033[31m[ERROR]\033[0m | " << std::left << std::setw(16)     \
+              << sc_time_stamp() << " | " << __VA_ARGS__;                      \
       std::cout << _stream.str() << std::endl;                                 \
       throw std::runtime_error("");                                            \
     }                                                                          \
@@ -37,7 +40,8 @@
   do {                                                                         \
     if (log_level <= LogLevel::ERROR) {                                        \
       std::ostringstream _stream;                                              \
-      _stream << "\033[31m[ERROR]\033[0m | " << __VA_ARGS__;                   \
+      _stream << "\033[31m[ERROR]\033[0m | " << std::left << std::setw(16)     \
+              << sc_time_stamp() << " | " << __VA_ARGS__;                      \
       std::cout << _stream.str() << std::endl;                                 \
       throw std::runtime_error("");                                            \
     }                                                                          \
@@ -47,7 +51,8 @@
   do {                                                                         \
     if (log_level <= LogLevel::DEBUG) {                                        \
       std::ostringstream _stream;                                              \
-      _stream << "\033[34m[DEBUG]\033[0m | " << __VA_ARGS__;                   \
+      _stream << "\033[34m[DEBUG]\033[0m | " << std::left << std::setw(16)     \
+              << sc_time_stamp() << " | " << __VA_ARGS__;                      \
       std::cout << _stream.str() << std::endl;                                 \
     }                                                                          \
   } while (0)
