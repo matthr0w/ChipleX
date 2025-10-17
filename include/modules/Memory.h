@@ -51,13 +51,22 @@ private:
   unsigned r_beat_count;
 
   // Memory
+  enum class MemoryState {
+    Idle,
+    WriteSet,
+    ReadSet,
+    WriteAccess,
+    ReadAccess,
+    WriteResponse,
+    ReadResponse
+  };
+
   std::vector<uint8_t> mem;
+  MemoryState mem_state = MemoryState::Idle;
   std::vector<bool> write_flags;
   std::map<uint32_t, unsigned> allocated_ranges;
   uint32_t offchip_base_address;
-
-  // State variables
-  uint32_t active_addr = UINT32_MAX;
+  uint32_t active_addr = 0;
 
   void clk_posedge();
   void clk_negedge();

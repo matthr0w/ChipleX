@@ -23,7 +23,7 @@ void Memory::clk_posedge() {
     b_state = CLEAR;
     b_outgoing->unref();
     b_outgoing = nullptr;
-    active_addr = UINT32_MAX;
+    mem_state = MemoryState::Idle;
   }
 
   if (r_state == ACK) {
@@ -32,18 +32,26 @@ void Memory::clk_posedge() {
     if (r_beat_count == 0) {
       r_outgoing->unref();
       r_outgoing = nullptr;
-      active_addr = UINT32_MAX;
+      mem_state = MemoryState::Idle;
     }
   }
 
-  // Write transaction
-  if (!b_outgoing && !r_outgoing && !aw_queue.empty()) {
-    if (active_addr == UINT32_MAX) {
-      set_active_address(*aw_queue.front());
+  // Controller
+  if (!aw_queue.empty() && mem_state == MemoryState::Idle)
+    mem_state = MemoryState::WriteSet;
+  else if (!ar_queue.empty() && mem_state == MemoryState::Idle)
+    mem_state = MemoryState::ReadSet;
 
-      ARM::AXI::Phase phase = ARM::AXI::AW_READY;
-      tsocket.nb_transport_bw(*aw_queue.front(), phase);
-    } else if (!w_queue.empty()) {
+  switch (mem_state) {
+  case MemoryState::WriteSet: {
+    set_active_address(*aw_queue.front());
+    ARM::AXI::Phase phase = ARM::AXI::AW_READY;
+    tsocket.nb_transport_bw(*aw_queue.front(), phase);
+    mem_state = MemoryState::WriteAccess;
+    break;
+  }
+  case MemoryState::WriteAccess: {
+    if (!w_queue.empty()) {
       b_outgoing = w_queue.front();
       aw_queue.pop_front();
       w_queue.pop_front();
@@ -61,18 +69,19 @@ void Memory::clk_posedge() {
         std::memcpy(&mem[a], &buffer[i * beat_bytes], beat_bytes);
       }
 
-      b_outgoing->unref();
+      mem_state = MemoryState::WriteResponse;
     }
+    break;
   }
-
-  // Read transaction
-  if (!r_outgoing && !b_outgoing && !ar_queue.empty()) {
-    if (active_addr == UINT32_MAX) {
-      set_active_address(*ar_queue.front());
-
-      ARM::AXI::Phase phase = ARM::AXI::AR_READY;
-      tsocket.nb_transport_bw(*ar_queue.front(), phase);
-    } else {
+  case MemoryState::ReadSet: {
+    set_active_address(*ar_queue.front());
+    ARM::AXI::Phase phase = ARM::AXI::AR_READY;
+    tsocket.nb_transport_bw(*ar_queue.front(), phase);
+    mem_state = MemoryState::ReadAccess;
+    break;
+  }
+  case MemoryState::ReadAccess: {
+    if (!ar_queue.empty()) {
       r_outgoing = ar_queue.front();
       ar_queue.pop_front();
 
@@ -82,6 +91,7 @@ void Memory::clk_posedge() {
       ARM::AXI::Burst burst = r_outgoing->get_burst();
 
       std::vector<uint8_t> buffer(r_outgoing->get_data_length());
+
       for (unsigned i = 0; i < beats; ++i) {
         const uint32_t a =
             set_beat_address(active_addr, i, beat_bytes, beats, burst);
@@ -89,7 +99,13 @@ void Memory::clk_posedge() {
       }
 
       r_outgoing->read_in(buffer.data());
+
+      mem_state = MemoryState::ReadResponse;
     }
+    break;
+  }
+  default:
+    break;
   }
 }
 
