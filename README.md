@@ -9,7 +9,7 @@ This project provides a high-level simulation environment for chiplet-based syst
 **Fedora**
 
 ```bash
-sudo dnf install clang cmake
+sudo dnf install clang clang-devel cmake
 ```
 
 ### Installation Steps

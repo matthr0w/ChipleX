@@ -1,8 +1,9 @@
 # VSCode directory
 .vscode/
 
-# Cache directory
+# Cache directories
 .cache/
+__pycache__/
 
 # Build directory
 build/
