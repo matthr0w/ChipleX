@@ -9,11 +9,9 @@
 #include "logging.h"
 
 #include "ARM/TLM/arm_axi4.h"
-
-#include "common/System.h"
-
 #include "modules/DMAEngine.h"
 #include "modules/interconnects/InterconnectBase.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 using namespace tlm;

@@ -1,3 +1,9 @@
+#pragma once
+
+#include <yaml-cpp/yaml.h>
+
+#include "logging.h"
+
 #include "modules/AXIBus.h"
 #include "modules/Cache.h"
 #include "modules/Core.h"
@@ -6,12 +12,7 @@
 #include "modules/chiplets/ChipletBase.h"
 #include "modules/interconnects/InterconnectBase.h"
 #include "modules/interconnects/Manager.h"
-
-#include <yaml-cpp/yaml.h>
-
-#include "logging.h"
-
-#include "usercode/UserCode.h"
+#include "setup/Types.h"
 
 struct CoreChiplet : ChipletBase {
   const YAML::Node chiplet_config;
@@ -23,7 +24,8 @@ struct CoreChiplet : ChipletBase {
   std::vector<std::unique_ptr<Core>> cores;
   std::vector<std::unique_ptr<Cache>> caches;
 
-  CoreChiplet(sc_module_name name, unsigned id, SystemConfig sysconf)
+  CoreChiplet(sc_module_name name, unsigned id, SystemConfig sysconf,
+              CoreCodeMap codemap)
       : ChipletBase(name, id, sysconf),
         chiplet_config(sysconf.chiplets[chiplet_name].config),
         num_cores(chiplet_config["cores"]["num"].as<int>()),
@@ -52,8 +54,8 @@ struct CoreChiplet : ChipletBase {
       caches[i]->isocket.bind(*axi_bus.mgr_tsockets[i]);
 
       // Assign user code
-      auto it = core_code.find({chiplet_name, i});
-      if (it != core_code.end()) {
+      auto it = codemap.find({chiplet_name, i});
+      if (it != codemap.end()) {
         cores[i]->thread_fn = it->second.first;
         cores[i]->interrupt_fn = it->second.second;
       } else {

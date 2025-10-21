@@ -1,7 +1,5 @@
 #include "modules/interconnects/serial_link/SerialLink.h"
 
-#include "common/System.h"
-
 SerialLink::SerialLink(sc_module_name name, unsigned chiplet_id,
                        ChipletConfig chiplet_config,
                        InterconnectConfig interconnect_config,

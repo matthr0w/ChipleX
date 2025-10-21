@@ -1,22 +1,21 @@
-#include <iostream>
 #include <vector>
 
 #include "globals.h"
 
 #include "common/Parser.h"
 #include "common/Router.h"
-#include "common/System.h"
-
 #include "modules/chiplets/ChipletBase.h"
 #include "modules/chiplets/CoreChiplet.h"
 #include "modules/chiplets/MemoryChiplet.h"
+#include "setup/Loader.h"
 
 int sc_main(int argc, char *argv[]) {
   // Parse command line arguments
   Parser parser(argc, argv);
   // Initialize system loader
-  SystemLoader sysloader("system.yaml", "./configs");
-  SystemConfig sysconf = sysloader.get_config();
+  SetupLoader setup_loader("./configs", "./setups", "default");
+  SystemConfig sysconf = setup_loader.get_config();
+  CoreCodeMap codemap = setup_loader.get_code();
   // Initialize router instance
   Router::instance().init(sysconf);
 
@@ -31,8 +30,8 @@ int sc_main(int argc, char *argv[]) {
     case ChipletType::Type::SingleCore:
     case ChipletType::Type::DualCore:
     case ChipletType::Type::QuadCore:
-      chiplets.push_back(
-          new CoreChiplet(sysconf.chiplet_order[i].c_str(), i, sysconf));
+      chiplets.push_back(new CoreChiplet(sysconf.chiplet_order[i].c_str(), i,
+                                         sysconf, codemap));
       break;
     case ChipletType::Type::Memory:
       chiplets.push_back(

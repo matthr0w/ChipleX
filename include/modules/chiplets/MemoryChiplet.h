@@ -1,3 +1,5 @@
+#pragma once
+
 #include "modules/Memory.h"
 #include "modules/chiplets/ChipletBase.h"
 #include "modules/interconnects/InterconnectBase.h"

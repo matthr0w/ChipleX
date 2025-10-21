@@ -3,7 +3,7 @@
 #include "logging.h"
 
 #include "common/Router.h"
-#include "common/System.h"
+#include "setup/Types.h"
 
 SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chiplet_id,
                                ChipletConfig chiplet_config,

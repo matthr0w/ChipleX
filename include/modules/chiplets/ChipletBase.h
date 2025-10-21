@@ -2,9 +2,8 @@
 
 #include <systemc>
 
-#include "common/System.h"
-
 #include "modules/interconnects/InterconnectBase.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 

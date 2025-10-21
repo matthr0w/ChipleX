@@ -5,10 +5,9 @@
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
 
-#include "common/System.h"
-
 #include "modules/interconnects/serial_link/FifoIf.h"
 #include "modules/interconnects/serial_link/Types.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 using namespace tlm;

@@ -1,8 +1,13 @@
 #pragma once
 
+#include <functional>
+#include <map>
 #include <string>
+#include <utility>
 #include <vector>
 #include <yaml-cpp/yaml.h>
+
+#include "modules/Core.h"
 
 struct ChipletType {
   enum class Type { SingleCore, DualCore, QuadCore, Memory, Undefined };
@@ -144,31 +149,8 @@ struct SystemConfig {
   InterconnectConfig interconnect;
 };
 
-class SystemLoader {
-public:
-  SystemLoader(const std::string &system_yaml,
-               const std::string &configs_path) {
-    interconnects_path_ = configs_path + "/interconnects/";
-    chiplets_yaml_ = configs_path + "/chiplets.yaml";
-    chiplets_defaults_ = YAML::LoadFile(chiplets_yaml_);
-    load(system_yaml);
-  }
-
-  const SystemConfig &get_config() const { return system_; }
-
-private:
-  std::string interconnects_path_;
-  std::string chiplets_yaml_;
-  YAML::Node chiplets_defaults_;
-  SystemConfig system_;
-
-  void load(const std::string &system_yaml);
-
-  YAML::Node generate_preset_connections(
-      const ConnectionPreset &preset,
-      const std::map<std::string, ChipletConfig> &chiplets,
-      const YAML::Node &overrides);
-
-  void merge_nodes(YAML::Node target, const YAML::Node &override,
-                   const std::string &path = "");
-};
+using CoreFunctions =
+    std::pair<std::function<void(Core &)>,
+              std::function<void(Core &, tlm_generic_payload *)>>;
+using CoreKey = std::pair<std::string, int>;
+using CoreCodeMap = std::map<CoreKey, CoreFunctions>;

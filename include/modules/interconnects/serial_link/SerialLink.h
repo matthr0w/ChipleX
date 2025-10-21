@@ -3,13 +3,12 @@
 #include <systemc>
 #include <tlm>
 
-#include "common/System.h"
-
 #include "modules/interconnects/InterconnectBase.h"
 #include "modules/interconnects/serial_link/ChannelAllocator.h"
 #include "modules/interconnects/serial_link/DataLinkLayer.h"
 #include "modules/interconnects/serial_link/NetworkLayer.h"
 #include "modules/interconnects/serial_link/StreamFifo.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 using namespace tlm;
