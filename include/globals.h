@@ -1,6 +1,7 @@
 #pragma once
 
 #include <random>
+#include <string>
 #include <systemc>
 
 using namespace sc_core;
@@ -14,6 +15,7 @@ inline LogLevel log_level = LogLevel::WARN;
 // ---------------------------
 // Simulation Parameters
 // ---------------------------
+inline std::string sim_setup = "default";
 inline sc_time sim_duration = sc_time(0, SC_NS);
 inline double wire_length_mm = 1.0;
 inline double wire_ps_per_mm = 5.0;

@@ -53,7 +53,7 @@ struct CoreChiplet : ChipletBase {
       caches[i]->clk.bind(system_clk);
       caches[i]->isocket.bind(*axi_bus.mgr_tsockets[i]);
 
-      // Assign user code
+      // Assign program code
       auto it = codemap.find({chiplet_name, i});
       if (it != codemap.end()) {
         cores[i]->thread_fn = it->second.first;

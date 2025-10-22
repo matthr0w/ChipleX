@@ -13,7 +13,7 @@ int sc_main(int argc, char *argv[]) {
   // Parse command line arguments
   Parser parser(argc, argv);
   // Initialize system loader
-  SetupLoader setup_loader("./configs", "./setups", "default");
+  SetupLoader setup_loader("./configs", "./setups", sim_setup);
   SystemConfig sysconf = setup_loader.get_config();
   CoreCodeMap codemap = setup_loader.get_code();
   // Initialize router instance

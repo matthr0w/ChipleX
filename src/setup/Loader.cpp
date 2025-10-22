@@ -166,17 +166,16 @@ void SetupLoader::load_config(const std::string &system_yaml) {
 }
 
 void SetupLoader::load_code(const std::string &setup_path) {
-  LOG_INFO("LOADCODE");
   std::string lib_path = setup_path + "/libsetup.so";
-  LOG_INFO("Loading setup library: " << lib_path);
 
   void *handle = dlopen(lib_path.c_str(), RTLD_LAZY);
   LOG_ASSERT(handle,
              "Failed to open setup library: " + lib_path + "\n" + dlerror());
 
   using GetCodeFn = CoreCodeMap *(*)();
-  auto get_code = reinterpret_cast<GetCodeFn>(dlsym(handle, "get_setup_code"));
-  LOG_ASSERT(get_code, "Failed to find symbol get_setup_code in " + lib_path);
+  auto get_code =
+      reinterpret_cast<GetCodeFn>(dlsym(handle, "get_program_code"));
+  LOG_ASSERT(get_code, "Failed to find symbol get_program_code in " + lib_path);
 
   codemap_ = *get_code();
 }

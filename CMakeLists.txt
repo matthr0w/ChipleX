@@ -41,23 +41,23 @@ FetchContent_MakeAvailable(yaml-cpp)
 # Simulator executable
 # -----------------------
 if(NOT BUILD_SETUP)
-    file(GLOB_RECURSE PROJECT_SOURCES "${PROJECT_SOURCE_DIR}/src/*.cpp")
+  file(GLOB_RECURSE PROJECT_SOURCES "${PROJECT_SOURCE_DIR}/src/*.cpp")
 
-    add_executable(sim ${PROJECT_SOURCES})
+  add_executable(sim ${PROJECT_SOURCES})
 
-    target_include_directories(sim PRIVATE
-      ${PROJECT_SOURCE_DIR}/include
-      $ENV{SYSTEMC_PATH}/include
-    )
+  target_include_directories(sim PRIVATE
+    ${PROJECT_SOURCE_DIR}/include
+    $ENV{SYSTEMC_PATH}/include
+  )
 
-    target_link_libraries(sim PRIVATE
-      ${SYSTEMC_LIB}
-      yaml-cpp::yaml-cpp
-    )
+  target_link_libraries(sim PRIVATE
+    ${SYSTEMC_LIB}
+    yaml-cpp::yaml-cpp
+  )
 
-    set_target_properties(sim PROPERTIES
-      RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}"
-    )
+  set_target_properties(sim PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}"
+  )
 endif()
 
 # -----------------------
@@ -66,34 +66,34 @@ endif()
 file(GLOB SETUP_DIRS "${PROJECT_SOURCE_DIR}/setups/*")
 
 foreach(SETUP_PATH ${SETUP_DIRS})
-    if(IS_DIRECTORY ${SETUP_PATH})
-        get_filename_component(SETUP_NAME ${SETUP_PATH} NAME)
+  if(IS_DIRECTORY ${SETUP_PATH})
+    get_filename_component(SETUP_NAME ${SETUP_PATH} NAME)
 
-        if(BUILD_SETUP AND NOT SETUP_NAME STREQUAL BUILD_SETUP)
-            continue()
-        endif()
-
-        set(LIB_NAME "setup_${SETUP_NAME}")
-        file(GLOB SETUP_CPP "${SETUP_PATH}/src/*.cpp")
-
-        if(SETUP_CPP)
-            add_library(${LIB_NAME} SHARED ${SETUP_CPP})
-
-            target_include_directories(${LIB_NAME} PRIVATE
-                ${PROJECT_SOURCE_DIR}/include
-                ${SETUP_PATH}/include
-                $ENV{SYSTEMC_PATH}/include
-            )
-
-            target_link_libraries(${LIB_NAME} PRIVATE
-                ${SYSTEMC_LIB}
-                yaml-cpp::yaml-cpp
-            )
-
-            set_target_properties(${LIB_NAME} PROPERTIES
-                LIBRARY_OUTPUT_DIRECTORY "${SETUP_PATH}"
-                OUTPUT_NAME "setup"
-            )
-        endif()
+    if(BUILD_SETUP AND NOT SETUP_NAME STREQUAL BUILD_SETUP)
+      continue()
     endif()
+
+    set(LIB_NAME "setup_${SETUP_NAME}")
+    file(GLOB SETUP_CPP "${SETUP_PATH}/src/*.cpp" "${SETUP_PATH}/src/*.c")
+
+    if(SETUP_CPP)
+      add_library(${LIB_NAME} SHARED ${SETUP_CPP})
+
+      target_include_directories(${LIB_NAME} PRIVATE
+        ${PROJECT_SOURCE_DIR}/include
+        ${SETUP_PATH}/include
+        $ENV{SYSTEMC_PATH}/include
+      )
+
+      target_link_libraries(${LIB_NAME} PRIVATE
+        ${SYSTEMC_LIB}
+        yaml-cpp::yaml-cpp
+      )
+
+      set_target_properties(${LIB_NAME} PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${SETUP_PATH}"
+        OUTPUT_NAME "setup"
+      )
+    endif()
+  endif()
 endforeach()

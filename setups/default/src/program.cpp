@@ -1,8 +1,8 @@
-#include "SetupCode.h"
+#include "program.h"
 
 #include "modules/Core.h"
 
-CoreCodeMap *get_setup_code() {
+CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"chiplet0", 0},
        {[](Core &core) {

@@ -50,7 +50,7 @@ public:
   void wait_cycles(unsigned count);
 
   // -------------------------------------------------------
-  // Usercode Types
+  // AXI Request Types
   // -------------------------------------------------------
   struct ReadRequest {
     uint32_t request_id;
