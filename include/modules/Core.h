@@ -10,6 +10,7 @@
 #include "logging.h"
 
 #include "ARM/TLM/arm_axi4.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -23,6 +24,7 @@ private:
   const unsigned chiplet_id;
   const unsigned core_id;
   const unsigned axi_width;
+  const CyclesDB cycles;
   const sc_time clk_cycle;
   const sc_time irq_delay;
 
@@ -39,13 +41,14 @@ public:
   simple_target_socket<Core> irq_socket;
 
   Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
-       YAML::Node config);
+       YAML::Node config, const CyclesDB &cycles);
 
   void core_thread();
   void interrupt_thread();
 
-  std::function<void(Core &)> thread_fn;
-  std::function<void(Core &, tlm_generic_payload *)> interrupt_fn;
+  std::function<void(Core &, const CyclesDB &)> thread_fn;
+  std::function<void(Core &, const CyclesDB &, tlm_generic_payload *)>
+      interrupt_fn;
 
   void wait_cycles(unsigned count);
 

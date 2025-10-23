@@ -3,11 +3,14 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <tlm>
 #include <utility>
 #include <vector>
 #include <yaml-cpp/yaml.h>
 
-#include "modules/Core.h"
+using namespace tlm;
+
+class Core;
 
 struct ChipletType {
   enum class Type { SingleCore, DualCore, QuadCore, Memory, Undefined };
@@ -143,14 +146,25 @@ struct InterconnectConfig {
   std::vector<ConnectionMapping> connections;
 };
 
+struct CyclesDB {
+  std::unordered_map<std::string, unsigned> cycles;
+
+  unsigned get(const std::string &name) const {
+    auto it = cycles.find(name);
+    return it != cycles.end() ? it->second : 0;
+  }
+};
+
+using CoreFunctions = std::pair<
+    std::function<void(Core &, const CyclesDB &)>,
+    std::function<void(Core &, const CyclesDB &, tlm_generic_payload *)>>;
+using CoreKey = std::pair<std::string, int>;
+using CoreCodeMap = std::map<CoreKey, CoreFunctions>;
+
 struct SystemConfig {
   std::map<std::string, ChipletConfig> chiplets;
   std::vector<std::string> chiplet_order;
   InterconnectConfig interconnect;
+  CoreCodeMap program_code;
+  CyclesDB cycles_db;
 };
-
-using CoreFunctions =
-    std::pair<std::function<void(Core &)>,
-              std::function<void(Core &, tlm_generic_payload *)>>;
-using CoreKey = std::pair<std::string, int>;
-using CoreCodeMap = std::map<CoreKey, CoreFunctions>;

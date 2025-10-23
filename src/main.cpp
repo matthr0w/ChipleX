@@ -15,7 +15,6 @@ int sc_main(int argc, char *argv[]) {
   // Initialize system loader
   SetupLoader setup_loader("./configs", "./setups", sim_setup);
   SystemConfig sysconf = setup_loader.get_config();
-  CoreCodeMap codemap = setup_loader.get_code();
   // Initialize router instance
   Router::instance().init(sysconf);
 
@@ -30,8 +29,8 @@ int sc_main(int argc, char *argv[]) {
     case ChipletType::Type::SingleCore:
     case ChipletType::Type::DualCore:
     case ChipletType::Type::QuadCore:
-      chiplets.push_back(new CoreChiplet(sysconf.chiplet_order[i].c_str(), i,
-                                         sysconf, codemap));
+      chiplets.push_back(
+          new CoreChiplet(sysconf.chiplet_order[i].c_str(), i, sysconf));
       break;
     case ChipletType::Type::Memory:
       chiplets.push_back(

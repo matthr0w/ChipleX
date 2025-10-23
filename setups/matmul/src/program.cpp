@@ -15,7 +15,7 @@ const int matrixB[MATRIX_SIZE][MATRIX_SIZE] = {
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core) {
+       {[](Core &core, const CyclesDB &cycles) {
           const int data_size_per_chiplet =
               ROW_SIZE + MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE;
           auto *data = new unsigned char[data_size_per_chiplet * 4];
@@ -41,14 +41,14 @@ CoreCodeMap *get_program_code() {
 
           delete[] data;
         },
-        [](Core &core, tlm_generic_payload *txn) {
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
 
           // Save result in static variable
           static int resultC[MATRIX_SIZE][MATRIX_SIZE];
 
-          uint32_t address = txn->get_address();
-          unsigned int data_size = txn->get_data_length();
+          uint32_t address = irq->get_address();
+          unsigned int data_size = irq->get_data_length();
 
           int chiplet_id = (address - 0x40000) / 0x1000;
 
@@ -82,10 +82,10 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          uint32_t address = txn->get_address();
-          int data_size = txn->get_data_length();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          uint32_t address = irq->get_address();
+          int data_size = irq->get_data_length();
 
           auto *data = new unsigned char[data_size];
           auto reqr = Core::ReadRequest(0, address, data, data_size)
@@ -119,10 +119,10 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          uint32_t address = txn->get_address();
-          int data_size = txn->get_data_length();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          uint32_t address = irq->get_address();
+          int data_size = irq->get_data_length();
 
           auto *data = new unsigned char[data_size];
           auto reqr = Core::ReadRequest(0, address, data, data_size)
@@ -156,10 +156,10 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet2", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          uint32_t address = txn->get_address();
-          int data_size = txn->get_data_length();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          uint32_t address = irq->get_address();
+          int data_size = irq->get_data_length();
 
           auto *data = new unsigned char[data_size];
           auto reqr = Core::ReadRequest(0, address, data, data_size)
@@ -193,10 +193,10 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet3", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          uint32_t address = txn->get_address();
-          int data_size = txn->get_data_length();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          uint32_t address = irq->get_address();
+          int data_size = irq->get_data_length();
 
           auto *data = new unsigned char[data_size];
           auto reqr = Core::ReadRequest(0, address, data, data_size)

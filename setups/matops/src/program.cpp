@@ -25,7 +25,7 @@ void inline print_matrix(const int *matrix, int rows, int cols,
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core) {
+       {[](Core &core, const CyclesDB &cycles) {
           const unsigned MATRIX_ROWS = 10;
           const unsigned MATRIX_COLS = 10;
 
@@ -54,9 +54,9 @@ CoreCodeMap *get_program_code() {
 
           delete[] data;
         },
-        [](Core &core, tlm_generic_payload *txn) {
-          auto addr = txn->get_address();
-          auto len = txn->get_data_length();
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          auto addr = irq->get_address();
+          auto len = irq->get_data_length();
 
           // Read from FPGA RAM
           auto *data = new unsigned char[len];
@@ -82,10 +82,10 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          auto addr = txn->get_address();
-          auto len = txn->get_data_length();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          auto addr = irq->get_address();
+          auto len = irq->get_data_length();
 
           // Read from Chiplet0 RAM
           auto *read_buf = new unsigned char[len];
@@ -126,10 +126,10 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          auto addr = txn->get_address();
-          auto len = txn->get_data_length();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          auto addr = irq->get_address();
+          auto len = irq->get_data_length();
 
           // Read from Chiplet1 RAM
           auto *read_buf = new unsigned char[len];
@@ -170,10 +170,10 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet2", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          auto addr = txn->get_address();
-          auto len = txn->get_data_length();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          auto addr = irq->get_address();
+          auto len = irq->get_data_length();
 
           // Read from Chiplet2 RAM
           auto *read_buf = new unsigned char[len];
@@ -219,10 +219,10 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet3", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          auto addr = txn->get_address();
-          auto len = txn->get_data_length();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          auto addr = irq->get_address();
+          auto len = irq->get_data_length();
 
           // Read from Chiplet3 RAM
           auto *read_buf = new unsigned char[len];

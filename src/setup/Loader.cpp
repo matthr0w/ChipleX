@@ -6,8 +6,8 @@
 #include "globals.h"
 #include "logging.h"
 
-void SetupLoader::load_config(const std::string &system_yaml) {
-  YAML::Node root = YAML::LoadFile(system_yaml);
+void SetupLoader::load_config(const std::string &system_file) {
+  YAML::Node root = YAML::LoadFile(system_file);
 
   // Assertions
   LOG_ASSERT(root["chiplets"],
@@ -165,19 +165,42 @@ void SetupLoader::load_config(const std::string &system_yaml) {
   sysconf_.interconnect = interconnect;
 }
 
-void SetupLoader::load_code(const std::string &setup_path) {
-  std::string lib_path = setup_path + "/libsetup.so";
+void SetupLoader::load_cycles(const std::string &cycles_file) {
+  if (!std::filesystem::exists(cycles_file))
+    return;
 
-  void *handle = dlopen(lib_path.c_str(), RTLD_LAZY);
+  try {
+    YAML::Node root = YAML::LoadFile(cycles_file);
+    LOG_ASSERT(root["workloads"],
+               "SetupLoader: Missing required section 'workloads' in cycles "
+               "database");
+
+    for (const auto &entry : root["workloads"]) {
+      std::string name = entry.first.as<std::string>();
+      const YAML::Node &node = entry.second;
+      LOG_ASSERT(node["total_cycles"],
+                 "SetupLoader: Missing required key 'total_cycles' for " +
+                     name);
+      sysconf_.cycles_db.cycles[name] = node["total_cycles"].as<unsigned>();
+    }
+  } catch (const YAML::Exception &e) {
+    LOG_ERROR("SetupLoader: Failed to load " + cycles_file + ": " + e.what());
+  }
+}
+
+void SetupLoader::load_code(const std::string &setup_lib) {
+  void *handle = dlopen(setup_lib.c_str(), RTLD_LAZY);
   LOG_ASSERT(handle,
-             "Failed to open setup library: " + lib_path + "\n" + dlerror());
+             "SetupLoader: Failed to open " + setup_lib + ": " + dlerror());
 
   using GetCodeFn = CoreCodeMap *(*)();
   auto get_code =
       reinterpret_cast<GetCodeFn>(dlsym(handle, "get_program_code"));
-  LOG_ASSERT(get_code, "Failed to find symbol get_program_code in " + lib_path);
+  LOG_ASSERT(get_code,
+             "SetupLoader: Failed to find symbol get_program_code in " +
+                 setup_lib);
 
-  codemap_ = *get_code();
+  sysconf_.program_code = *get_code();
 }
 
 YAML::Node SetupLoader::generate_preset_connections(

@@ -5,7 +5,7 @@
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"chiplet0", 0},
-       {[](Core &core) {
+       {[](Core &core, const CyclesDB &cycles) {
           size_t num_bytes = 256;
           uint8_t *data = new uint8_t[num_bytes];
 
@@ -42,6 +42,6 @@ CoreCodeMap *get_program_code() {
 
           sc_stop();
         },
-        [](Core &core, tlm_generic_payload *transaction) {}}}};
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {}}}};
   return &code;
 }

@@ -48,7 +48,7 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2,
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core) {
+       {[](Core &core, const CyclesDB &cycles) {
           int matrix[4] = {1, 2, 3, 4};
           auto *data = new unsigned char[sizeof(matrix)];
           memcpy(data, matrix, sizeof(matrix));
@@ -63,10 +63,10 @@ CoreCodeMap *get_program_code() {
 
           delete[] data;
         },
-        [](Core &core, tlm_generic_payload *txn) {
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
           auto *data = new unsigned char[4 * sizeof(int)];
 
-          auto reqr = Core::ReadRequest(0, txn->get_address(),
+          auto reqr = Core::ReadRequest(0, irq->get_address(),
                                         reinterpret_cast<unsigned char *>(data),
                                         4 * sizeof(int))
                           .set_dest(0)
@@ -85,9 +85,9 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          uint32_t matrix_addr = txn->get_address();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          uint32_t matrix_addr = irq->get_address();
 
           matrix_multiply(core, matrix_addr, matrix_addr,
                           0x1000); // A^2 = A * A

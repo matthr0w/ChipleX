@@ -15,7 +15,7 @@ struct ImageHeader {
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core) {
+       {[](Core &core, const CyclesDB &cycles) {
           int width = 0, height = 0, channels = 0;
           unsigned char *input_img =
               stbi_load("setups/tumlogo/data/tum_input.jpg", &width, &height,
@@ -57,15 +57,15 @@ CoreCodeMap *get_program_code() {
 
           stbi_image_free(input_img);
         },
-        [](Core &core, tlm_generic_payload *txn) {
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
 
           if (interrupt_count == 0)
-            base_addr = txn->get_address();
+            base_addr = irq->get_address();
 
-          total_len += txn->get_data_length();
+          total_len += irq->get_data_length();
           ++interrupt_count;
 
           if (interrupt_count != 118)
@@ -105,16 +105,16 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
 
           if (interrupt_count == 0)
-            base_addr = txn->get_address();
+            base_addr = irq->get_address();
 
-          total_len += txn->get_data_length();
+          total_len += irq->get_data_length();
           ++interrupt_count;
 
           if (interrupt_count != 193)
@@ -189,16 +189,16 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
 
           if (interrupt_count == 0)
-            base_addr = txn->get_address();
+            base_addr = irq->get_address();
 
-          total_len += txn->get_data_length();
+          total_len += irq->get_data_length();
           ++interrupt_count;
 
           if (interrupt_count != 118)

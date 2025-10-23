@@ -24,8 +24,7 @@ struct CoreChiplet : ChipletBase {
   std::vector<std::unique_ptr<Core>> cores;
   std::vector<std::unique_ptr<Cache>> caches;
 
-  CoreChiplet(sc_module_name name, unsigned id, SystemConfig sysconf,
-              CoreCodeMap codemap)
+  CoreChiplet(sc_module_name name, unsigned id, SystemConfig sysconf)
       : ChipletBase(name, id, sysconf),
         chiplet_config(sysconf.chiplets[chiplet_name].config),
         num_cores(chiplet_config["cores"]["num"].as<int>()),
@@ -42,8 +41,8 @@ struct CoreChiplet : ChipletBase {
       std::string core_name = "core" + std::to_string(i);
       std::string cache_name = "cache" + std::to_string(i);
 
-      cores.push_back(std::make_unique<Core>(core_name.c_str(), chiplet_id, i,
-                                             chiplet_config));
+      cores.push_back(std::make_unique<Core>(
+          core_name.c_str(), chiplet_id, i, chiplet_config, sysconf.cycles_db));
       caches.push_back(std::make_unique<Cache>(cache_name.c_str(), chiplet_id,
                                                chiplet_config));
 
@@ -54,8 +53,8 @@ struct CoreChiplet : ChipletBase {
       caches[i]->isocket.bind(*axi_bus.mgr_tsockets[i]);
 
       // Assign program code
-      auto it = codemap.find({chiplet_name, i});
-      if (it != codemap.end()) {
+      auto it = sysconf.program_code.find({chiplet_name, i});
+      if (it != sysconf.program_code.end()) {
         cores[i]->thread_fn = it->second.first;
         cores[i]->interrupt_fn = it->second.second;
       } else {

@@ -19,7 +19,7 @@ CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
        {// Main thread: Loads image, sends it frame by frame
-        [](Core &core) {
+        [](Core &core, const CyclesDB &cycles) {
           static unsigned request_count = 0;
           static sc_time request_delay(8, SC_MS); // ~125 FPS
 
@@ -74,11 +74,11 @@ CoreCodeMap *get_program_code() {
           stbi_image_free(input_image);
         },
         // Interrupt handler: Saves processed images
-        [](Core &core, tlm_generic_payload *txn) {
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
           static unsigned pass = 0;
 
-          uint32_t addr = txn->get_address();
-          size_t length = txn->get_data_length();
+          uint32_t addr = irq->get_address();
+          size_t length = irq->get_data_length();
 
           auto *read_buf = new unsigned char[length];
 
@@ -119,16 +119,16 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &) {},
-        [](Core &core, tlm_generic_payload *txn) {
+       {[](Core &, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
 
           if (interrupt_count == 0)
-            base_addr = txn->get_address();
+            base_addr = irq->get_address();
 
-          total_len += txn->get_data_length();
+          total_len += irq->get_data_length();
           ++interrupt_count;
 
           if (interrupt_count != 3)
@@ -206,16 +206,16 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &) {},
-        [](Core &core, tlm_generic_payload *txn) {
+       {[](Core &, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
 
           if (interrupt_count == 0)
-            base_addr = txn->get_address();
+            base_addr = irq->get_address();
 
-          total_len += txn->get_data_length();
+          total_len += irq->get_data_length();
           ++interrupt_count;
 
           if (interrupt_count != 2)

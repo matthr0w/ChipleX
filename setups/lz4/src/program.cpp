@@ -12,7 +12,7 @@ struct DataHeader {
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core) {
+       {[](Core &core, const CyclesDB &cycles) {
           std::string str =
               "Hello, World! This is a test string for the LZ4 "
               "compression algorithm. Hello, World! This is a test "
@@ -33,9 +33,9 @@ CoreCodeMap *get_program_code() {
 
           delete[] write_buf;
         },
-        [](Core &core, tlm_generic_payload *txn) {
-          auto addr = txn->get_address();
-          auto len = txn->get_data_length();
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          auto addr = irq->get_address();
+          auto len = irq->get_data_length();
 
           // Read from FPGA RAM
           auto *read_buf = new unsigned char[len];
@@ -54,10 +54,10 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          auto addr = txn->get_address();
-          auto len = txn->get_data_length();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          auto addr = irq->get_address();
+          auto len = irq->get_data_length();
 
           // Read from Chiplet0 RAM
           auto *read_buf = new unsigned char[len];
@@ -111,10 +111,10 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *txn) {
-          auto addr = txn->get_address();
-          auto len = txn->get_data_length();
+       {[](Core &core, const CyclesDB &cycles) {},
+        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+          auto addr = irq->get_address();
+          auto len = irq->get_data_length();
 
           // Read from Chiplet1 RAM
           auto *read_buf = new unsigned char[len];
