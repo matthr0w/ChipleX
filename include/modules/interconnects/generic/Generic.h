@@ -9,12 +9,10 @@
 #include "logging.h"
 
 #include "ARM/TLM/arm_axi4.h"
-
-#include "common/System.h"
-
 #include "modules/DMAEngine.h"
 #include "modules/interconnects/InterconnectBase.h"
 #include "modules/interconnects/generic/Types.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -244,7 +242,8 @@ private:
 
   void send_irq(ARM::AXI::Payload & payload);
 
-  bool send_dma_request(ARM::AXI::Payload & payload, ARM::AXI4::Channel channel) {
+  bool send_dma_request(ARM::AXI::Payload & payload,
+                        ARM::AXI4::Channel channel) {
     return dma_engine->forward_from_virtual(dma_vm_id, payload, channel);
   }
 

@@ -8,9 +8,8 @@
 #include "globals.h"
 #include "logging.h"
 
-#include "common/System.h"
-
 #include "modules/interconnects/serial_link/Types.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 using namespace tlm;

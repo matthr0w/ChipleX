@@ -1,11 +1,10 @@
+#include "logging.h"
+
 #include "modules/interconnects/Manager.h"
 #include "modules/interconnects/SPI.h"
 #include "modules/interconnects/generic/Generic.h"
 #include "modules/interconnects/serial_link/SerialLink.h"
-
-#include "logging.h"
-
-#include "common/System.h"
+#include "setup/Types.h"
 
 std::unique_ptr<InterconnectBase> InterconnectManager::create_interconnect() {
   switch (interconnect_config.type.type) {

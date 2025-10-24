@@ -1,9 +1,9 @@
 #include "modules/Core.h"
 
 Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
-           YAML::Node config)
+           YAML::Node config, const CyclesDB &cycles)
     : sc_module(name), chiplet_id(chiplet_id), core_id(core_id),
-      axi_width(config["axi"]["width"].as<unsigned>()),
+      axi_width(config["axi"]["width"].as<unsigned>()), cycles(cycles),
       clk_cycle(config["cores"]["clk_cycle"].as<unsigned>(), SC_NS),
       irq_delay(config["cores"]["irq_delay"].as<unsigned>(), SC_NS),
       isocket("isocket", *this, &Core::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4,
@@ -28,7 +28,7 @@ Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
 
 void Core::core_thread() {
   if (thread_fn)
-    thread_fn(*this);
+    thread_fn(*this, cycles);
 }
 
 void Core::interrupt_thread() {
@@ -40,7 +40,7 @@ void Core::interrupt_thread() {
       irq_queue.pop_front();
 
       if (interrupt_fn)
-        interrupt_fn(*this, transaction);
+        interrupt_fn(*this, cycles, transaction);
 
       delete transaction;
     }

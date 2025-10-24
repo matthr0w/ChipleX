@@ -1,9 +1,8 @@
 #pragma once
 
-#include "common/System.h"
-
 #include "modules/DMAEngine.h"
 #include "modules/interconnects/InterconnectBase.h"
+#include "setup/Types.h"
 
 class InterconnectManager {
 public:

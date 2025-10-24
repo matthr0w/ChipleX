@@ -1,22 +1,20 @@
-#include <iostream>
 #include <vector>
 
 #include "globals.h"
 
 #include "common/Parser.h"
 #include "common/Router.h"
-#include "common/System.h"
-
 #include "modules/chiplets/ChipletBase.h"
 #include "modules/chiplets/CoreChiplet.h"
 #include "modules/chiplets/MemoryChiplet.h"
+#include "setup/Loader.h"
 
 int sc_main(int argc, char *argv[]) {
   // Parse command line arguments
   Parser parser(argc, argv);
   // Initialize system loader
-  SystemLoader sysloader("system.yaml", "./configs");
-  SystemConfig sysconf = sysloader.get_config();
+  SetupLoader setup_loader("./configs", "./setups", sim_setup);
+  SystemConfig sysconf = setup_loader.get_config();
   // Initialize router instance
   Router::instance().init(sysconf);
 
