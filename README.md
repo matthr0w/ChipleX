@@ -104,18 +104,18 @@ make run ARGS="--help"
   - [x] Read/write to non-main memories
   - [ ] Smart protocol controller features
 
-- [ ] Hardware accelerator modules with local memory
-
 - [x] Expanded configuration options:
   
   - [x] Selectable chiplet components (e.g., pure memory)
   - [x] Flexible interconnect parameters between chiplets
   - [x] Custom connection topologies
 
-- [ ] New user applications using accelerators and multi-core
+- [ ] Streamlined user code workflow (#8)
 
-- [ ] Improved statistics collection, processing, and visualization
+- [ ] Hardware accelerator modules with local memory (#9)
 
-- [ ] Streamlined user code workflow
+- [ ] Improved statistics collection, processing, and visualization (#11)
+
+- [ ] New applications using accelerators and multi-core
 
 - [ ] Graphical user interface
