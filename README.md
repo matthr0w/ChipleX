@@ -4,12 +4,14 @@ This project provides a high-level simulation environment for chiplet-based syst
 
 ## SystemC Installation
 
+SystemC serves as the foundation of this simulation environment, and its installation is therefore mandatory. Please follow the steps below to set it up correctly.
+
 ### Prerequisites
 
 **Fedora**
 
 ```bash
-sudo dnf install clang clang-devel cmake
+sudo dnf install clang cmake
 ```
 
 ### Installation Steps
@@ -60,15 +62,37 @@ export SYSTEMC_PATH=/path/to/systemc/install
 export LD_LIBRARY_PATH=$SYSTEMC_PATH/lib:$LD_LIBRARY_PATH
 ```
 
-## Building
+## RISC-V Toolchain & Spike
+
+The RISC-V toolchain and the Spike simulator are used to estimate the execution cycle counts of the setup programs. While their installation is optional, it is highly recommended in order to obtain realistic processing delay estimations. Please refer to the links listed below for installation instructions.
+
+**RISC-V GNU Compiler Toolchain** 
+
+https://github.com/riscv-collab/riscv-gnu-toolchain
+
+**RISC-V Proxy Kernel and Boot Loader**
+
+https://github.com/riscv-software-src/riscv-pk
+
+**Spike RISC-V ISA Simulator**
+
+https://github.com/riscv-software-src/riscv-isa-sim
+
+## Usage
+
+### Build
 
 ```bash
 make
 ```
 
-## Model Information
+### Execute Simulation
 
-### Planned
+```bash
+make run ARGS="--help"
+```
+
+## Roadmap
 
 - [x] AXI4-like system bus with bursts and congestion handling
 
@@ -95,58 +119,3 @@ make
 - [ ] Streamlined user code workflow
 
 - [ ] Graphical user interface
-
-## RISC-V Cycle Estimation
-
-### Prerequisites
-
-**RISC-V GNU Compiler Toolchain** 
-
-https://github.com/riscv-collab/riscv-gnu-toolchain
-
-**RISC-V Proxy Kernel and Boot Loader**
-
-https://github.com/riscv-software-src/riscv-pk
-
-**Spike RISC-V ISA Simulator**
-
-https://github.com/riscv-software-src/riscv-isa-sim
-
-### Simulation Steps
-
-1. **Modify the user code to measure clock cycles**  
-   Insert code to read the cycle CSR via RDCYCLE before and after the workload to capture cycle counts:
-
-   ```C
-   #include <stdio.h>
-
-   uint64_t read_cycles(void) {
-      uint64_t cycles;
-      asm volatile ("rdcycle %0" : "=r" (cycles));
-      return cycles;
-   }
-
-   int main() {
-      uint64_t start_cycles = read_cycles();
-
-      // USERCODE //
-
-      uint64_t end_cycles = read_cycles();
-
-      printf("Cycles: %lu\n", end_cycles - start_cycles);
-
-      return 0;
-   }
-   ```
-
-2. **Compile the code using the RISC-V toolchain**
-
-   ```bash
-   riscv64-unknown-elf-gcc -o usercode usercode.c
-   ```
-
-3. **Run the compiled program on Spike simulator**
-
-   ```bash
-   spike pk usercode
-   ```

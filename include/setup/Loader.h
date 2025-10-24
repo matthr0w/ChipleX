@@ -9,7 +9,7 @@ public:
     interconnects_path_ = configs_path + "/interconnects/";
     chiplets_defaults_ = YAML::LoadFile(configs_path + "/chiplets.yaml");
     load_config(setups_path + "/" + setup_name + "/system.yaml");
-    load_cycles(setups_path + "/" + setup_name + "/cycles.yaml");
+    load_cycles(setups_path + "/" + setup_name + "/workloads.yaml");
     load_code(setups_path + "/" + setup_name + "/libsetup.so");
   }
 
@@ -21,7 +21,7 @@ private:
   SystemConfig sysconf_;
 
   void load_config(const std::string &system_file);
-  void load_cycles(const std::string &cycles_file);
+  void load_cycles(const std::string &workloads_file);
   void load_code(const std::string &setup_lib);
 
   YAML::Node generate_preset_connections(

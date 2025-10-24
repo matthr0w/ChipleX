@@ -72,6 +72,6 @@ void Parser::print_help(const char *progname) {
       << "  --ber=<prob>              Set bit error rate (default: 1e-12)\n"
       << "  --logging=level           Set logging level: INFO, WARN, "
          "ERROR, DELAY, DEBUG, SILENT (default: ERROR)\n"
-      << "  --help                    Show this help message\n"
+      << "  --help                    Show this help message"
       << std::endl;
 }

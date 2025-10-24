@@ -165,26 +165,27 @@ void SetupLoader::load_config(const std::string &system_file) {
   sysconf_.interconnect = interconnect;
 }
 
-void SetupLoader::load_cycles(const std::string &cycles_file) {
-  if (!std::filesystem::exists(cycles_file))
+void SetupLoader::load_cycles(const std::string &workloads_file) {
+  if (!std::filesystem::exists(workloads_file))
     return;
 
   try {
-    YAML::Node root = YAML::LoadFile(cycles_file);
+    YAML::Node root = YAML::LoadFile(workloads_file);
     LOG_ASSERT(root["workloads"],
-               "SetupLoader: Missing required section 'workloads' in cycles "
+               "SetupLoader: Missing required section 'workloads' in workloads "
                "database");
 
     for (const auto &entry : root["workloads"]) {
       std::string name = entry.first.as<std::string>();
       const YAML::Node &node = entry.second;
-      LOG_ASSERT(node["total_cycles"],
-                 "SetupLoader: Missing required key 'total_cycles' for " +
+      LOG_ASSERT(node["cycles_count"],
+                 "SetupLoader: Missing required key 'cycles_count' for " +
                      name);
-      sysconf_.cycles_db.cycles[name] = node["total_cycles"].as<unsigned>();
+      sysconf_.cycles_db.cycles[name] = node["cycles_count"].as<unsigned>();
     }
   } catch (const YAML::Exception &e) {
-    LOG_ERROR("SetupLoader: Failed to load " + cycles_file + ": " + e.what());
+    LOG_ERROR("SetupLoader: Failed to load " + workloads_file + ": " +
+              e.what());
   }
 }
 
