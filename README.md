@@ -110,12 +110,10 @@ make run ARGS="--help"
   - [x] Flexible interconnect parameters between chiplets
   - [x] Custom connection topologies
 
-- [ ] Streamlined user code workflow (#8)
+- [x] Streamlined user code workflow
 
 - [ ] Hardware accelerator modules with local memory (#9)
 
 - [ ] Improved statistics collection, processing, and visualization (#11)
 
 - [ ] New applications using accelerators and multi-core
-
-- [ ] Graphical user interface
