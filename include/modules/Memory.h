@@ -7,6 +7,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
+#include "common/Statistics.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -36,6 +37,8 @@ private:
   // -------------------------------------------------------
   // Internal Declarations
   // -------------------------------------------------------
+  StatisticsManager &stats = StatisticsManager::instance();
+
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState b_state = CLEAR;

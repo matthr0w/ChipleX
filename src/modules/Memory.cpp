@@ -9,6 +9,8 @@ Memory::Memory(sc_module_name name, YAML::Node config)
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       mem(size * 1024, 0), write_flags(mem.size(), false),
       offchip_base_address(size * 1024 / 2) {
+  stats.register_module(this->name());
+
   SC_METHOD(clk_posedge);
   sensitive << clk.pos();
   dont_initialize();
@@ -24,6 +26,7 @@ void Memory::clk_posedge() {
     b_outgoing->unref();
     b_outgoing = nullptr;
     mem_state = MemoryState::Idle;
+    stats.set_idle(this->name());
   }
 
   if (r_state == ACK) {
@@ -33,14 +36,18 @@ void Memory::clk_posedge() {
       r_outgoing->unref();
       r_outgoing = nullptr;
       mem_state = MemoryState::Idle;
+      stats.set_idle(this->name());
     }
   }
 
   // Controller
-  if (!aw_queue.empty() && mem_state == MemoryState::Idle)
+  if (!aw_queue.empty() && mem_state == MemoryState::Idle) {
     mem_state = MemoryState::WriteSet;
-  else if (!ar_queue.empty() && mem_state == MemoryState::Idle)
+    stats.set_active(this->name());
+  } else if (!ar_queue.empty() && mem_state == MemoryState::Idle) {
     mem_state = MemoryState::ReadSet;
+    stats.set_active(this->name());
+  }
 
   switch (mem_state) {
   case MemoryState::WriteSet: {

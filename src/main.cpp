@@ -4,6 +4,7 @@
 
 #include "common/Parser.h"
 #include "common/Router.h"
+#include "common/Statistics.h"
 #include "modules/chiplets/ChipletBase.h"
 #include "modules/chiplets/CoreChiplet.h"
 #include "modules/chiplets/MemoryChiplet.h"
@@ -12,9 +13,12 @@
 int sc_main(int argc, char *argv[]) {
   // Parse command line arguments
   Parser parser(argc, argv);
-  // Initialize system loader
-  SetupLoader setup_loader("./configs", "./setups", sim_setup);
-  SystemConfig sysconf = setup_loader.get_config();
+  // Start statistics manager
+  StatisticsManager &stats = StatisticsManager::instance();
+  stats.start_simulation_timer();
+  // Initialize setup loader
+  SetupLoader setup("./configs", "./setups", sim_setup);
+  SystemConfig sysconf = setup.get_config();
   // Initialize router instance
   Router::instance().init(sysconf);
 
@@ -62,6 +66,9 @@ int sc_main(int argc, char *argv[]) {
   for (auto *chiplet : chiplets)
     delete chiplet;
   chiplets.clear();
+
+  stats.end_simulation_timer();
+  stats.dump_to_file("stats.json");
 
   return 0;
 }
