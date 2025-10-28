@@ -1,0 +1,13 @@
+workloads:
+  add:
+    cycles_count: 2225
+    source_hash: 6d173a2b23c697dc9669e57130b0dbc847f0c2c0
+  multiply:
+    cycles_count: 2225
+    source_hash: eb1f6457659559e5b62d1ebcad1447614f9ce46a
+  subtract:
+    cycles_count: 2225
+    source_hash: f7edd98d08a47a29499009463ade2bcaae2eb085
+  transpose:
+    cycles_count: 5498
+    source_hash: c9070429d892adc63c9cea43f66caf5a7e7dd7ac
