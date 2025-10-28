@@ -19,7 +19,7 @@ CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
        {// Main thread: Loads image, sends it frame by frame
-        [](Core &core, const CyclesDB &cycles) {
+        [](Core &core) {
           static unsigned request_count = 0;
           static sc_time request_delay(8, SC_MS); // ~125 FPS
 
@@ -74,7 +74,7 @@ CoreCodeMap *get_program_code() {
           stbi_image_free(input_image);
         },
         // Interrupt handler: Saves processed images
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+        [](Core &core, tlm_generic_payload *irq) {
           static unsigned pass = 0;
 
           uint32_t addr = irq->get_address();
@@ -119,8 +119,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &) {},
+        [](Core &core, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
@@ -179,7 +179,7 @@ CoreCodeMap *get_program_code() {
             std::memcpy(dst + y * new_width * 3,
                         src + (y + crop_margin) * new_width * 3, new_width * 3);
 
-          core.wait_cycles(1347);
+          core.wait_cycles("crop");
 
           offset = 0;
           while (offset < new_buf_size) {
@@ -206,8 +206,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &) {},
+        [](Core &core, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
@@ -268,7 +268,7 @@ CoreCodeMap *get_program_code() {
                 static_cast<unsigned char>(0.299 * r + 0.587 * g + 0.114 * b);
           }
 
-          core.wait_cycles(54006);
+          core.wait_cycles("grayscale");
 
           offset = 0;
           while (offset < new_buf_size) {

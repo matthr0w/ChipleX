@@ -15,7 +15,7 @@ struct ImageHeader {
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core, const CyclesDB &cycles) {
+       {[](Core &core) {
           int width = 0, height = 0, channels = 0;
           unsigned char *input_img =
               stbi_load("setups/tumlogo/data/tum_input.jpg", &width, &height,
@@ -57,7 +57,7 @@ CoreCodeMap *get_program_code() {
 
           stbi_image_free(input_img);
         },
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+        [](Core &core, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
@@ -105,8 +105,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
@@ -166,7 +166,7 @@ CoreCodeMap *get_program_code() {
             std::memcpy(dst_row, src_row, new_width * 3);
           }
 
-          core.wait_cycles(612248);
+          core.wait_cycles("crop");
 
           offset = 0;
           while (offset < new_buf_size) {
@@ -189,8 +189,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
@@ -231,11 +231,10 @@ CoreCodeMap *get_program_code() {
           auto *write_buf = new unsigned char[total_len];
           std::memcpy(write_buf, read_buf, header_size);
 
-          for (size_t i = header_size; i < total_len; ++i) {
+          for (size_t i = header_size; i < total_len; ++i)
             write_buf[i] = 255 - read_buf[i];
-          }
 
-          core.wait_cycles(2399898);
+          core.wait_cycles("invert");
 
           offset = 0;
           while (offset < total_len) {

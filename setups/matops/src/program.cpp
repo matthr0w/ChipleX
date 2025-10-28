@@ -25,7 +25,7 @@ void inline print_matrix(const int *matrix, int rows, int cols,
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core, const CyclesDB &cycles) {
+       {[](Core &core) {
           const unsigned MATRIX_ROWS = 10;
           const unsigned MATRIX_COLS = 10;
 
@@ -54,7 +54,7 @@ CoreCodeMap *get_program_code() {
 
           delete[] data;
         },
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -82,8 +82,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -114,7 +114,7 @@ CoreCodeMap *get_program_code() {
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
 
-          core.wait_cycles(2243);
+          core.wait_cycles("add");
 
           auto reqw =
               Core::WriteRequest(0, write_buf, len).set_dest(2).skip_cache();
@@ -126,8 +126,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -158,7 +158,7 @@ CoreCodeMap *get_program_code() {
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
 
-          core.wait_cycles(2243);
+          core.wait_cycles("multiply");
 
           auto reqw =
               Core::WriteRequest(0, write_buf, len).set_dest(3).skip_cache();
@@ -170,8 +170,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet2", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -207,7 +207,7 @@ CoreCodeMap *get_program_code() {
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
 
-          core.wait_cycles(5516);
+          core.wait_cycles("transpose");
 
           auto reqw =
               Core::WriteRequest(0, write_buf, len).set_dest(4).skip_cache();
@@ -219,8 +219,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet3", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -251,7 +251,7 @@ CoreCodeMap *get_program_code() {
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
 
-          core.wait_cycles(2243);
+          core.wait_cycles("subtract");
 
           auto reqw =
               Core::WriteRequest(0, write_buf, len).set_dest(0).skip_cache();

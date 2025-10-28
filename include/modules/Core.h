@@ -46,11 +46,17 @@ public:
   void core_thread();
   void interrupt_thread();
 
-  std::function<void(Core &, const CyclesDB &)> thread_fn;
-  std::function<void(Core &, const CyclesDB &, tlm_generic_payload *)>
-      interrupt_fn;
+  std::function<void(Core &)> thread_fn;
+  std::function<void(Core &, tlm_generic_payload *)> interrupt_fn;
 
-  void wait_cycles(unsigned count);
+  // -------------------------------------------------------
+  // Program API
+  // -------------------------------------------------------
+  unsigned MAX_INCR_BURST_SIZE = 0;
+  unsigned MAX_FIXED_BURST_SIZE = 0;
+  unsigned MAX_WRAP_BURST_SIZE = 0;
+
+  void wait_cycles(const std::string &name);
 
   // -------------------------------------------------------
   // AXI Request Types
@@ -137,9 +143,22 @@ public:
     }
   };
 
-  unsigned MAX_INCR_BURST_SIZE = 0;
-  unsigned MAX_FIXED_BURST_SIZE = 0;
-  unsigned MAX_WRAP_BURST_SIZE = 0;
+  // -------------------------------------------------------
+  // AXI API
+  // -------------------------------------------------------
+private:
+  RequestHandle *read_internal(uint32_t request_id, uint8_t destination_id,
+                               uint32_t address, bool fixed_address,
+                               unsigned char *data, unsigned data_length,
+                               ARM::AXI::Burst burst, bool is_volatile);
+  RequestHandle *write_internal(uint32_t request_id, uint8_t destination_id,
+                                uint32_t address, bool fixed_address,
+                                unsigned char *data, unsigned data_length,
+                                ARM::AXI::Burst burst, bool is_volatile);
+
+public:
+  RequestHandle *read(const ReadRequest &req);
+  RequestHandle *write(const WriteRequest &req);
 
 private:
   // -------------------------------------------------------
@@ -197,23 +216,4 @@ private:
 
   tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);
-
-  // -------------------------------------------------------
-  // AXI API
-  // -------------------------------------------------------
-private:
-  RequestHandle *read_internal(uint32_t request_id, uint8_t destination_id,
-                               uint32_t address, bool fixed_address,
-                               unsigned char *data, unsigned data_length,
-                               ARM::AXI::Burst burst, bool is_volatile);
-
-  RequestHandle *write_internal(uint32_t request_id, uint8_t destination_id,
-                                uint32_t address, bool fixed_address,
-                                unsigned char *data, unsigned data_length,
-                                ARM::AXI::Burst burst, bool is_volatile);
-
-public:
-  RequestHandle *read(const ReadRequest &req);
-
-  RequestHandle *write(const WriteRequest &req);
 };

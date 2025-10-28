@@ -28,7 +28,7 @@ Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
 
 void Core::core_thread() {
   if (thread_fn)
-    thread_fn(*this, cycles);
+    thread_fn(*this);
 }
 
 void Core::interrupt_thread() {
@@ -40,14 +40,16 @@ void Core::interrupt_thread() {
       irq_queue.pop_front();
 
       if (interrupt_fn)
-        interrupt_fn(*this, cycles, transaction);
+        interrupt_fn(*this, transaction);
 
       delete transaction;
     }
   }
 }
 
-void Core::wait_cycles(unsigned count) { wait(count * clk_cycle); }
+void Core::wait_cycles(const std::string &name) {
+  wait(cycles.get(name), SC_NS);
+}
 
 void Core::clk_posedge() {
   if (aw_state == ACK) {
