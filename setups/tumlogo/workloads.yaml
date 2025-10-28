@@ -1,0 +1,7 @@
+workloads:
+  crop:
+    cycles_count: 741010
+    source_hash: a2f6e77e3a1940e548c59815a1a52b102b543af0
+  invert:
+    cycles_count: 2148128
+    source_hash: 71ce5bd2a4a577fa3d7173bd74a25b9da8af1c71
