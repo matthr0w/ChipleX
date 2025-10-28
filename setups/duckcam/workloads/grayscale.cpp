@@ -8,7 +8,7 @@ struct ImageHeader {
 };
 
 #define WIDTH 32
-#define HEIGHT 24
+#define HEIGHT (24 - 12)
 #define CHANNELS 3
 
 void grayscale() {

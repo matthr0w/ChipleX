@@ -3,5 +3,5 @@ workloads:
     cycles_count: 4276
     source_hash: e7fe5b4653c6e0582af3d96219fa00c058f2f0f1
   grayscale:
-    cycles_count: 52145
-    source_hash: 4eb74c62757a3dfcf3f9f0076092f9e568531590
+    cycles_count: 27579
+    source_hash: fc18c81210cbb095e6b606fcfc96599bf2ac729f
