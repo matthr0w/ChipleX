@@ -1,4 +1,4 @@
 workloads:
   matmul:
-    cycles_count: 757
+    cycles_count: 759
     source_hash: 887463f3d3705dc71b4c8c57cb05b73b1314b4a0

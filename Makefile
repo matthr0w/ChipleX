@@ -13,7 +13,7 @@ LOG_ERROR = printf "\033[31m[ERROR]\033[0m  | %-16s | %s\n" "$(shell date +'%H:%
 build:
 	@$(LOG_INFO) "Building simulation..."
 	@mkdir -p $(BUILD_DIR)
-	@cd $(BUILD_DIR) && cmake .. > /dev/null && cmake --build . > /dev/null
+	@cd $(BUILD_DIR) && cmake .. && cmake --build .
 	@$(LOG_INFO) "Building simulation done."
 
 clean:
