@@ -34,4 +34,7 @@ void compress() {
   std::memcpy(packet + sizeof(DataHeader), compressed_data,
               compressed_data_size);
   //@END_MEASURE
+
+  delete[] compressed_data;
+  delete[] packet;
 }

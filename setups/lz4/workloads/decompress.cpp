@@ -26,4 +26,6 @@ void decompress() {
                           reinterpret_cast<char *>(decompressed_data),
                           compressed_size, decompressed_size);
   //@END_MEASURE
+
+  delete[] decompressed_data;
 }
