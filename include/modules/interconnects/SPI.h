@@ -124,9 +124,12 @@ private:
       sc_time wire_propagation_delay = SC_ZERO_TIME;
 
       sc_time clk_cycle(config["clk_cycle"].as<unsigned>(), SC_NS);
+      bool ddr = config["ddr"].as<bool>();
       unsigned num_lanes = config["num_lanes"].as<unsigned>();
 
-      unsigned num_cycles = (module.axi_width + num_lanes - 1) / num_lanes;
+      unsigned num_cycles =
+          ((module.axi_width + num_lanes - 1) / num_lanes + (ddr ? 1 : 0)) /
+          (ddr ? 2 : 1);
 
       beat_transfer_delay = num_cycles * clk_cycle;
 
