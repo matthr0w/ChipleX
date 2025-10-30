@@ -14,6 +14,8 @@ using namespace tlm;
 
 SC_MODULE(Memory) {
 private:
+  void end_of_simulation() override;
+
   // -------------------------------------------------------
   // Config
   // -------------------------------------------------------
@@ -37,7 +39,7 @@ private:
   // -------------------------------------------------------
   // Internal Declarations
   // -------------------------------------------------------
-  StatisticsManager &stats = StatisticsManager::instance();
+  StatManager &stats = StatManager::instance();
 
   enum ChannelState { CLEAR, REQ, ACK };
 
@@ -65,8 +67,8 @@ private:
   };
 
   std::vector<uint8_t> mem;
+  std::vector<uint8_t> mem_bitmap;
   MemoryState mem_state = MemoryState::Idle;
-  std::vector<bool> write_flags;
   std::map<uint32_t, unsigned> allocated_ranges;
   uint32_t offchip_base_address;
   uint32_t active_addr = 0;

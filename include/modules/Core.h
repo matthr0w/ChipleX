@@ -10,6 +10,7 @@
 #include "logging.h"
 
 #include "ARM/TLM/arm_axi4.h"
+#include "common/Statistics.h"
 #include "setup/Types.h"
 
 using namespace sc_core;
@@ -126,6 +127,7 @@ public:
     unsigned char *data;
 
     bool completed = false;
+    sc_time time_stamp;
     sc_event done;
 
     RequestHandle() : payload(nullptr) {}
@@ -147,23 +149,25 @@ public:
   // AXI API
   // -------------------------------------------------------
 private:
-  RequestHandle *read_internal(uint32_t request_id, uint8_t destination_id,
-                               uint32_t address, bool fixed_address,
-                               unsigned char *data, unsigned data_length,
-                               ARM::AXI::Burst burst, bool is_volatile);
-  RequestHandle *write_internal(uint32_t request_id, uint8_t destination_id,
-                                uint32_t address, bool fixed_address,
-                                unsigned char *data, unsigned data_length,
-                                ARM::AXI::Burst burst, bool is_volatile);
+  std::shared_ptr<RequestHandle> read_internal(
+      uint32_t request_id, uint8_t destination_id, uint32_t address,
+      bool fixed_address, unsigned char *data, unsigned data_length,
+      ARM::AXI::Burst burst, bool is_volatile);
+  std::shared_ptr<RequestHandle> write_internal(
+      uint32_t request_id, uint8_t destination_id, uint32_t address,
+      bool fixed_address, unsigned char *data, unsigned data_length,
+      ARM::AXI::Burst burst, bool is_volatile);
 
 public:
-  RequestHandle *read(const ReadRequest &req);
-  RequestHandle *write(const WriteRequest &req);
+  std::shared_ptr<RequestHandle> read(const ReadRequest &req);
+  std::shared_ptr<RequestHandle> write(const WriteRequest &req);
 
 private:
   // -------------------------------------------------------
   // Internal Declarations
   // -------------------------------------------------------
+  StatManager &stats = StatManager::instance();
+
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState aw_state = CLEAR;
@@ -176,7 +180,8 @@ private:
 
   unsigned w_beat_count = 0;
 
-  std::unordered_map<ARM::AXI::Payload *, RequestHandle *> request_handles;
+  std::unordered_map<ARM::AXI::Payload *, std::shared_ptr<RequestHandle>>
+      request_handles;
 
   std::deque<tlm_generic_payload *> irq_queue;
 

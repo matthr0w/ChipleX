@@ -36,7 +36,7 @@ CoreCodeMap *get_program_code() {
           size_t max_size = core.MAX_INCR_BURST_SIZE;
           size_t offset = 0;
           int req_id = 0;
-          Core::RequestHandle *handle = nullptr;
+          std::shared_ptr<Core::RequestHandle> handle = nullptr;
 
           while (offset < buffer_size) {
             size_t chunk_size = std::min(buffer_size - offset, max_size);
@@ -76,7 +76,7 @@ CoreCodeMap *get_program_code() {
           size_t max_size = core.MAX_INCR_BURST_SIZE;
           size_t offset = 0;
           int req_id = 0;
-          Core::RequestHandle *handle = nullptr;
+          std::shared_ptr<Core::RequestHandle> handle = nullptr;
 
           while (offset < total_len) {
             size_t chunk_size = std::min(total_len - offset, max_size);
@@ -124,7 +124,7 @@ CoreCodeMap *get_program_code() {
           size_t max_size = core.MAX_INCR_BURST_SIZE;
           size_t offset = 0;
           int req_id = 0;
-          Core::RequestHandle *handle = nullptr;
+          std::shared_ptr<Core::RequestHandle> handle = nullptr;
 
           while (offset < total_len) {
             size_t chunk_size = std::min(total_len - offset, max_size);
@@ -208,7 +208,7 @@ CoreCodeMap *get_program_code() {
           size_t max_size = core.MAX_INCR_BURST_SIZE;
           size_t offset = 0;
           int req_id = 0;
-          Core::RequestHandle *handle = nullptr;
+          std::shared_ptr<Core::RequestHandle> handle = nullptr;
 
           while (offset < total_len) {
             size_t chunk_size = std::min(total_len - offset, max_size);

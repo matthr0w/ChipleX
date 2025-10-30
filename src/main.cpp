@@ -14,7 +14,7 @@ int sc_main(int argc, char *argv[]) {
   // Parse command line arguments
   Parser parser(argc, argv);
   // Start statistics manager
-  StatisticsManager &stats = StatisticsManager::instance();
+  StatManager &stats = StatManager::instance();
   stats.start_simulation_timer();
   // Initialize setup loader
   SetupLoader setup("./configs", "./setups", sim_setup);

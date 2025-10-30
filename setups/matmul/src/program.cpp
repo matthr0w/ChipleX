@@ -20,7 +20,7 @@ CoreCodeMap *get_program_code() {
               ROW_SIZE + MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE;
           auto *data = new unsigned char[data_size_per_chiplet * 4];
 
-          Core::RequestHandle *handle = nullptr;
+          std::shared_ptr<Core::RequestHandle> handle = nullptr;
           for (int chiplet = 0; chiplet < 4; ++chiplet) {
             unsigned char *chunk = data + chiplet * data_size_per_chiplet;
 
