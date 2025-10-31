@@ -45,8 +45,9 @@ void StatUsage::dump(std::ostream &os) const {
 
 void StatUtilization::set_active() {
   sc_time now = sc_time_stamp();
+  event_activity = true;
   if (!active) {
-    idle_time += (now - last_change);
+    idle_time_events += (now - last_change);
     active = true;
   }
   active_count++;
@@ -56,33 +57,57 @@ void StatUtilization::set_active() {
 void StatUtilization::set_idle() {
   if (active_count == 0)
     return;
+  event_activity = true;
   active_count--;
   if (active_count == 0) {
     sc_time now = sc_time_stamp();
-    active_time += (now - last_change);
+    active_time_events += (now - last_change);
     active = false;
     last_change = now;
   }
 }
 
+void StatUtilization::add_active_time(const sc_time delta) {
+  active_time_manual += delta;
+}
+
+void StatUtilization::add_idle_time(const sc_time delta) {
+  idle_time_manual += delta;
+}
+
 void StatUtilization::dump(std::ostream &os) const {
   sc_time now = sc_time_stamp();
-  sc_time active_time_ = active_time;
-  sc_time idle_time_ = idle_time;
-  if (active)
-    active_time_ += now - last_change;
-  else
-    idle_time_ += now - last_change;
 
-  sc_time total = active_time_ + idle_time_;
-  double utilization = 0.0;
-  if (total > SC_ZERO_TIME)
-    utilization = active_time_.to_seconds() / total.to_seconds();
+  sc_time active_total;
+  sc_time idle_total;
+
+  if (event_activity) {
+    sc_time active_ev = active_time_events;
+    sc_time idle_ev = idle_time_events;
+    if (active)
+      active_ev += (now - last_change);
+    else
+      idle_ev += (now - last_change);
+
+    active_total = active_ev + active_time_manual;
+    idle_total = idle_ev + idle_time_manual;
+  } else {
+    active_total = active_time_manual;
+    sc_time idle_est = now - active_total - idle_time_manual;
+    if (idle_est < SC_ZERO_TIME)
+      idle_est = SC_ZERO_TIME;
+    idle_total = idle_time_manual + idle_est;
+  }
+
+  sc_time total = active_total + idle_total;
+  double utilization = (total > SC_ZERO_TIME)
+                           ? active_total.to_seconds() / total.to_seconds()
+                           : 0.0;
 
   os << "{ "
      << "\"percentage\": " << utilization * 100.0 << ", "
-     << "\"active_time_us\": " << active_time_.to_seconds() * 1e6 << ", "
-     << "\"idle_time_us\": " << idle_time_.to_seconds() * 1e6 << " }";
+     << "\"active_time_us\": " << active_total.to_seconds() * 1e6 << ", "
+     << "\"idle_time_us\": " << idle_total.to_seconds() * 1e6 << " }";
 }
 
 // -------------------------------------------------------
@@ -128,12 +153,11 @@ void StatManager::register_usage(const std::string &module,
     stats[name] = std::make_unique<StatUsage>();
 }
 
-void StatManager::register_utilization(const std::string &module,
-                                       const std::string &name) {
+void StatManager::register_utilization(const std::string &module) {
   auto &stats = module_stats_[module];
-  auto it = stats.find(name);
+  auto it = stats.find("utilization");
   if (it == stats.end() || !it->second)
-    stats[name] = std::make_unique<StatUtilization>();
+    stats["utilization"] = std::make_unique<StatUtilization>();
 }
 
 void StatManager::set_value(const std::string &module, const std::string &name,
@@ -171,19 +195,34 @@ void StatManager::update_usage(const std::string &module,
   stat->update(value);
 }
 
-void StatManager::set_active(const std::string &module,
-                             const std::string &name) {
-  register_utilization(module, name);
-  auto *stat =
-      dynamic_cast<StatUtilization *>(module_stats_[module][name].get());
+void StatManager::set_active(const std::string &module) {
+  register_utilization(module);
+  auto *stat = dynamic_cast<StatUtilization *>(
+      module_stats_[module]["utilization"].get());
   stat->set_active();
 }
 
-void StatManager::set_idle(const std::string &module, const std::string &name) {
-  register_utilization(module, name);
-  auto *stat =
-      dynamic_cast<StatUtilization *>(module_stats_[module][name].get());
+void StatManager::set_idle(const std::string &module) {
+  register_utilization(module);
+  auto *stat = dynamic_cast<StatUtilization *>(
+      module_stats_[module]["utilization"].get());
   stat->set_idle();
+}
+
+void StatManager::add_active_time(const std::string &module,
+                                  const sc_time delta) {
+  register_utilization(module);
+  auto *stat = dynamic_cast<StatUtilization *>(
+      module_stats_[module]["utilization"].get());
+  stat->add_active_time(delta);
+}
+
+void StatManager::add_idle_time(const std::string &module,
+                                const sc_time delta) {
+  register_utilization(module);
+  auto *stat = dynamic_cast<StatUtilization *>(
+      module_stats_[module]["utilization"].get());
+  stat->add_idle_time(delta);
 }
 
 void StatManager::start_simulation_timer() {

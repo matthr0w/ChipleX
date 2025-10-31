@@ -70,15 +70,21 @@ public:
 
 class StatUtilization : public StatBase {
 private:
+  sc_time active_time_events = SC_ZERO_TIME;
+  sc_time idle_time_events = SC_ZERO_TIME;
+  sc_time active_time_manual = SC_ZERO_TIME;
+  sc_time idle_time_manual = SC_ZERO_TIME;
+
   bool active = false;
   unsigned active_count = 0;
-  sc_time active_time = SC_ZERO_TIME;
-  sc_time idle_time = SC_ZERO_TIME;
   sc_time last_change = sc_time_stamp();
+  bool event_activity = false;
 
 public:
   void set_active();
   void set_idle();
+  void add_active_time(const sc_time delta);
+  void add_idle_time(const sc_time delta);
   void dump(std::ostream &os) const override;
 };
 
@@ -97,8 +103,7 @@ public:
   void register_accum(const std::string &module, const std::string &name);
   void register_minmax(const std::string &module, const std::string &name);
   void register_usage(const std::string &module, const std::string &name);
-  void register_utilization(const std::string &module,
-                            const std::string &name = "utilization");
+  void register_utilization(const std::string &module);
 
   void set_value(const std::string &module, const std::string &name,
                  double value);
@@ -110,10 +115,11 @@ public:
                      double value);
   void update_usage(const std::string &module, const std::string &name,
                     unsigned value);
-  void set_active(const std::string &module,
-                  const std::string &name = "utilization");
-  void set_idle(const std::string &module,
-                const std::string &name = "utilization");
+
+  void set_active(const std::string &module);
+  void set_idle(const std::string &module);
+  void add_active_time(const std::string &module, const sc_time delta);
+  void add_idle_time(const std::string &module, const sc_time delta);
 
   void start_simulation_timer();
   void end_simulation_timer();

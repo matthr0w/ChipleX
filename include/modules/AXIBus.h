@@ -6,6 +6,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
+#include "common/Statistics.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -17,6 +18,7 @@ private:
   // -------------------------------------------------------
   const unsigned chiplet_id;
   const unsigned axi_width;
+  const sc_time clk_cycle;
 
 public:
   // -------------------------------------------------------
@@ -35,6 +37,8 @@ private:
   // -------------------------------------------------------
   // Internal Declarations
   // -------------------------------------------------------
+  StatManager &stats = StatManager::instance();
+
   std::unordered_map<ARM::AXI::Payload *, int> payloads2mgr;
   std::unordered_map<ARM::AXI::Payload *, int> payloads2sub;
 
