@@ -9,6 +9,7 @@
 #include "logging.h"
 
 #include "ARM/TLM/arm_axi4.h"
+#include "common/Statistics.h"
 #include "modules/DMAEngine.h"
 #include "modules/interconnects/InterconnectBase.h"
 #include "setup/Types.h"
@@ -19,6 +20,8 @@ using namespace tlm_utils;
 
 SC_MODULE(SPI), public InterconnectBase, public VirtualAXIInitiatorIF {
 private:
+  void end_of_simulation() override;
+
   // -------------------------------------------------------
   // Config
   // -------------------------------------------------------
@@ -60,6 +63,8 @@ private:
   // -------------------------------------------------------
   // Internal Declarations
   // -------------------------------------------------------
+  StatManager &stats = StatManager::instance();
+
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState aw_state = CLEAR;
