@@ -27,13 +27,13 @@ struct CoreChiplet : ChipletBase {
   CoreChiplet(sc_module_name name, unsigned id, SystemConfig sysconf)
       : ChipletBase(name, id, sysconf),
         chiplet_config(sysconf.chiplets[chiplet_name].config),
-        num_cores(chiplet_config["cores"]["num"].as<int>()),
+        num_cores(chiplet_config["cores"]["num"].as<unsigned>()),
         axi_bus("axi_bus", chiplet_id, num_cores + 2, 2, chiplet_config),
         dma_engine("dma_engine", chiplet_config),
         memory("memory", chiplet_config) {
     // Assertions
-    LOG_ASSERT(chiplet_config["axi"]["width"].as<int>() >= 8 ||
-                   (chiplet_config["axi"]["width"].as<int>() % 8) == 0,
+    LOG_ASSERT(chiplet_config["axi"]["width"].as<unsigned>() >= 8 ||
+                   (chiplet_config["axi"]["width"].as<unsigned>() % 8) == 0,
                "Parameter Error: AXI size must be a multiple of 8");
 
     // Cores/Caches
@@ -47,9 +47,9 @@ struct CoreChiplet : ChipletBase {
                                                chiplet_config));
 
       // Bind clocks and sockets
-      cores[i]->clk.bind(system_clk);
+      cores[i]->clk.bind(clocks.get("axi"));
       cores[i]->isocket.bind(caches[i]->tsocket);
-      caches[i]->clk.bind(system_clk);
+      caches[i]->clk.bind(clocks.get("axi"));
       caches[i]->isocket.bind(*axi_bus.mgr_tsockets[i]);
 
       // Assign program code
@@ -64,11 +64,11 @@ struct CoreChiplet : ChipletBase {
     }
 
     // Memory
-    memory.clk.bind(system_clk);
+    memory.clk.bind(clocks.get("axi"));
     memory.tsocket.bind(*axi_bus.sub_isockets[0]);
 
     // DMA Engine
-    dma_engine.clk.bind(system_clk);
+    dma_engine.clk.bind(clocks.get("axi"));
     dma_engine.isocket.bind(*axi_bus.mgr_tsockets[num_cores]);
     DMAEngine *dma_engine_ptr =
         (sysconf.interconnect.config["use_dma"] &&
@@ -81,7 +81,7 @@ struct CoreChiplet : ChipletBase {
                                 sysconf.interconnect, num_cores,
                                 dma_engine_ptr);
     interconnect = manager.create_interconnect();
-    interconnect->bind_clock(system_clk);
+    interconnect->bind_clock(clocks.get("axi"));
     interconnect->axi_in_port->bind(*axi_bus.sub_isockets[1]);
     interconnect->axi_out_port->bind(*axi_bus.mgr_tsockets[num_cores + 1]);
     for (int i = 0; i < num_cores; ++i)
