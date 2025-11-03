@@ -13,6 +13,8 @@ using namespace tlm;
 
 SC_MODULE(Cache) {
 private:
+  void end_of_simulation() override;
+
   // -------------------------------------------------------
   // Config
   // -------------------------------------------------------

@@ -20,6 +20,8 @@ Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
       cache_size % cache_block_size == 0,
       "Parameter Error: Cache size must be a multiple of cache block size");
 
+  stats.register_utilization(this->name(), clk_cycle);
+
   num_lines = cache_size / cache_block_size;
   cache_lines.resize(num_lines);
   store_buffer.resize(cache_store_buffer_size);
@@ -44,6 +46,15 @@ Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
 }
 
 Cache::~Cache() { delete[] beat_data; }
+
+void Cache::end_of_simulation() {
+  double hit_rate =
+      num_accesses > 0 ? double(100) * num_hits / num_accesses : 0;
+  double miss_rate =
+      num_accesses > 0 ? double(100) * num_misses / num_accesses : 0;
+  stats.set_value(this->name(), "hit_rate", hit_rate);
+  stats.set_value(this->name(), "miss_rate", miss_rate);
+}
 
 void Cache::clk_posedge() {
   if (aw_state == ACK) {
@@ -140,10 +151,11 @@ void Cache::clk_posedge() {
       ARM::AXI::Phase phase = ARM::AXI::W_READY;
       tsocket.nb_transport_bw(*b_outgoing, phase);
 
-      if (w_beat_count_in >= b_outgoing->get_beat_count()) {
+      if (w_beat_count_in >= b_outgoing->get_beat_count())
         b_beat_ready = true;
-      }
     }
+
+    stats.mark_active_cycle(this->name(), 0.5);
   }
 
   // Read request
@@ -210,18 +222,23 @@ void Cache::clk_posedge() {
       remaining -= copy_len;
     }
 
-    if (r_beat_ready) {
+    if (r_beat_ready)
       r_outgoing->read_in_beat(beat_data);
-    }
+
+    stats.mark_active_cycle(this->name(), 0.5);
   }
 }
 
 void Cache::clk_negedge() {
-  if (!cache_line_requests.empty())
+  if (!cache_line_requests.empty()) {
     enqueue_cacheline_read();
+    stats.mark_active_cycle(this->name(), 0.5);
+  }
 
-  if (store_buffer_head != store_buffer_tail)
+  if (store_buffer_head != store_buffer_tail) {
     enqueue_storebuffer_write();
+    stats.mark_active_cycle(this->name(), 0.5);
+  }
 
   // AW channel
   if (aw_state == CLEAR && !aw_queue_out.empty()) {
@@ -300,6 +317,8 @@ void Cache::clk_negedge() {
       b_beat_ready = false;
     }
   }
+
+  stats.end_cycle(this->name());
 }
 
 // -------------------------------------------------------
