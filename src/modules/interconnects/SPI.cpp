@@ -16,6 +16,10 @@ SPI::SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
              ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &SPI::nb_transport_bw_axi,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
+  stats.register_utilization(
+      this->name(),
+      sc_time(interconnect_config.config["clk_cycle"].as<unsigned>(), SC_NS));
+
   if (dma_engine)
     dma_vm_id = dma_engine->register_virtual_initiator(this);
 
@@ -277,7 +281,9 @@ tlm_sync_enum SPI::nb_transport_fw_link(int id,
       stats.increment_counter(this->name(), "transmission_count_in_link" +
                                                 std::to_string(id));
       sc_spawn([this, id, &transaction, delay]() {
+        stats.set_active(this->name());
         wait(delay);
+        stats.set_idle(this->name());
         ARM::AXI::Payload *payload =
             reinterpret_cast<ARM::AXI::Payload *>(transaction.get_data_ptr());
         links_queue.push_back({id, payload});
@@ -299,6 +305,7 @@ tlm_sync_enum SPI::nb_transport_bw_link(int id,
                                         tlm_phase &phase, sc_time &delay) {
   switch (phase) {
   case BEGIN_RESP:
+    stats.set_idle(this->name());
     active_transfer = false;
     delete &transaction;
 
@@ -489,11 +496,13 @@ bool SPI::send_link_request(ARM::AXI::Payload &payload) {
       links_out[link_id]->nb_transport_fw(*transaction, phase, delay);
 
   if (reply == TLM_UPDATED) {
+    stats.set_active(this->name());
     stats.increment_counter(this->name(), "transmission_count_out_link" +
                                               std::to_string(link_id));
-    stats.update_accum(
-        this->name(), "transmission_duration_out_us_link" + std::to_string(link_id),
-        delay.to_seconds() * 1e6);
+    stats.update_accum(this->name(),
+                       "transmission_duration_out_us_link" +
+                           std::to_string(link_id),
+                       delay.to_seconds() * 1e6);
     return true;
   } else
     return false;
