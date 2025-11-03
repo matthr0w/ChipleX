@@ -114,6 +114,6 @@ make run ARGS="--help"
 
 - [ ] Hardware accelerator modules with local memory (#9)
 
-- [ ] Improved statistics collection, processing, and visualization (#11)
+- [x] Improved statistics collection
 
 - [ ] New applications using accelerators and multi-core
