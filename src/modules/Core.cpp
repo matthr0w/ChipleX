@@ -8,7 +8,7 @@ Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
       irq_delay(config["cores"]["irq_delay"].as<unsigned>(), SC_NS),
       isocket("isocket", *this, &Core::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4,
               axi_width) {
-  stats.register_utilization(this->name());
+  stats.register_utilization(this->name(), clk_cycle);
 
   irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
 

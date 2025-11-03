@@ -8,9 +8,9 @@ AXIBus::AXIBus(sc_module_name name, unsigned int chiplet_id,
                YAML::Node config)
     : sc_module(name), chiplet_id(chiplet_id),
       axi_width(config["axi"]["width"].as<unsigned>()),
-      clk_cycle(config["cores"]["clk_cycle"].as<unsigned>(), SC_NS),
+      clk_cycle(config["axi"]["clk_cycle"].as<unsigned>(), SC_NS),
       beat_data(new uint8_t[axi_width >> 3]) {
-  stats.register_utilization(this->name());
+  stats.register_utilization(this->name(), clk_cycle);
 
   mgr_tsockets.reserve(num_managers);
   for (unsigned i = 0; i < num_managers; ++i) {

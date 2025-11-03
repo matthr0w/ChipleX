@@ -9,6 +9,7 @@ Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
       cache_block_size(config["cache"]["block_size"].as<unsigned>()),
       cache_store_buffer_size(
           config["cache"]["store_buffer_size"].as<unsigned>()),
+      clk_cycle(config["cache"]["clk_cycle"].as<unsigned>(), SC_NS),
       beat_data(new uint8_t[axi_width >> 3]),
       tsocket("tsocket", *this, &Cache::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
@@ -65,7 +66,7 @@ void Cache::clk_posedge() {
     ar_queue_out.pop_front();
   }
 
-  /* WRITE REQUEST */
+  // Write request
   if (!b_outgoing && !aw_queue_in.empty()) {
     b_outgoing = aw_queue_in.front();
     aw_queue_in.pop_front();
@@ -145,7 +146,7 @@ void Cache::clk_posedge() {
     }
   }
 
-  /* READ REQUEST */
+  // Read request
   if (!r_outgoing && !ar_queue_in.empty()) {
     r_outgoing = ar_queue_in.front();
     ar_queue_in.pop_front();
@@ -306,7 +307,7 @@ void Cache::clk_negedge() {
 // -------------------------------------------------------
 tlm_sync_enum Cache::nb_transport_fw(ARM::AXI::Payload &payload,
                                      ARM::AXI::Phase &phase) {
-  /* Skip cache if AXI signal not set */
+  // Skip cache if AXI signal not set
   if (payload.cache != ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA)
     return isocket.nb_transport_fw(payload, phase);
 
@@ -338,11 +339,11 @@ tlm_sync_enum Cache::nb_transport_fw(ARM::AXI::Payload &payload,
 
 tlm_sync_enum Cache::nb_transport_bw(ARM::AXI::Payload &payload,
                                      ARM::AXI::Phase &phase) {
-  /* Skip cache if AXI signal not set */
+  // Skip cache if AXI signal not set
   if (payload.cache != ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA)
     return tsocket.nb_transport_bw(payload, phase);
 
-  /* Handle cache line requests and store buffer writes */
+  // Handle cache line requests and store buffer writes
   switch (phase) {
   case ARM::AXI::AR_READY:
     ar_state = ACK;

@@ -5,11 +5,12 @@
 Memory::Memory(sc_module_name name, YAML::Node config)
     : sc_module(name), axi_width(config["axi"]["width"].as<unsigned>()),
       size(config["ram"]["size"].as<unsigned>()),
+      clk_cycle(config["ram"]["clk_cycle"].as<unsigned>(), SC_NS),
       tsocket("tsocket", *this, &Memory::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       mem(size * 1024, 0), mem_bitmap((mem.size() + 7) / 8, 0),
       offchip_base_address(size * 1024 / 2) {
-  stats.register_utilization(this->name());
+  stats.register_utilization(this->name(), clk_cycle);
 
   SC_METHOD(clk_posedge);
   sensitive << clk.pos();

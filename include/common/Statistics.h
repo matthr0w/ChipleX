@@ -70,21 +70,31 @@ public:
 
 class StatUtilization : public StatBase {
 private:
-  sc_time active_time_events = SC_ZERO_TIME;
-  sc_time idle_time_events = SC_ZERO_TIME;
-  sc_time active_time_manual = SC_ZERO_TIME;
-  sc_time idle_time_manual = SC_ZERO_TIME;
+  sc_time clk_cycle;
 
+  // Event-based tracking
   bool active = false;
   unsigned active_count = 0;
   sc_time last_change = sc_time_stamp();
+  sc_time active_time_events = SC_ZERO_TIME;
+  sc_time idle_time_events = SC_ZERO_TIME;
+
+  // Manual tracking
+  double active_cycle_fraction = 0.0;
+  sc_time active_time_manual = SC_ZERO_TIME;
+  sc_time idle_time_manual = SC_ZERO_TIME;
+
   bool event_activity = false;
 
 public:
+  explicit StatUtilization(sc_time clk_cycle) : clk_cycle(clk_cycle) {}
+
   void set_active();
   void set_idle();
   void add_active_time(const sc_time delta);
   void add_idle_time(const sc_time delta);
+  void mark_active_cycle(double fraction = 1.0);
+  void end_cycle();
   void dump(std::ostream &os) const override;
 };
 
@@ -103,7 +113,7 @@ public:
   void register_accum(const std::string &module, const std::string &name);
   void register_minmax(const std::string &module, const std::string &name);
   void register_usage(const std::string &module, const std::string &name);
-  void register_utilization(const std::string &module);
+  void register_utilization(const std::string &module, const sc_time clk_cycle);
 
   void set_value(const std::string &module, const std::string &name,
                  double value);
@@ -120,6 +130,8 @@ public:
   void set_idle(const std::string &module);
   void add_active_time(const std::string &module, const sc_time delta);
   void add_idle_time(const std::string &module, const sc_time delta);
+  void mark_active_cycle(const std::string &module, double fraction = 1.0);
+  void end_cycle(const std::string &module);
 
   void start_simulation_timer();
   void end_simulation_timer();

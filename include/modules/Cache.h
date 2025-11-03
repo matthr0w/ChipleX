@@ -6,6 +6,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
+#include "common/Statistics.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -20,6 +21,7 @@ private:
   const unsigned cache_size;
   const unsigned cache_block_size;
   const unsigned cache_store_buffer_size;
+  const sc_time clk_cycle;
 
 public:
   // -------------------------------------------------------
@@ -40,6 +42,8 @@ private:
   // -------------------------------------------------------
   // Internal Declarations
   // -------------------------------------------------------
+  StatManager &stats = StatManager::instance();
+
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState aw_state = CLEAR;

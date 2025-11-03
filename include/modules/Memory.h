@@ -21,6 +21,7 @@ private:
   // -------------------------------------------------------
   const unsigned axi_width;
   const unsigned size;
+  const sc_time clk_cycle;
 
 public:
   // -------------------------------------------------------
