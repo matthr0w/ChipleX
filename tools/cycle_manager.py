@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass, field
 from logging import log_error, log_info, log_warn
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import yaml
 
@@ -37,14 +37,15 @@ MEASURE_HEADER_CONTENT = r"""#pragma once
 
 @dataclass
 class WorkloadEntry:
-    filename: Path
-    name: str
+    filepath: Path
+    copypath: Path
+    stem: str
     source_hash: str
-    cycles_count: Optional[int] = None
 
 @dataclass
 class Setup:
     path: Path
+    name: str
     workloads_yaml: Path
     workloads: Dict[str, WorkloadEntry] = field(default_factory=dict)
 
@@ -77,6 +78,17 @@ class CycleManager:
         with path.open("w", encoding="utf-8") as f:
             yaml.safe_dump(data, f, sort_keys=False)
 
+    def update_yaml(self, setup: Setup, workload: WorkloadEntry, value: int):
+        yaml_data = self.load_yaml(setup.workloads_yaml)
+        if "workloads" not in yaml_data:
+            yaml_data["workloads"] = {}
+        # Write/update YAML
+        yaml_data["workloads"].setdefault(workload.stem, {})
+        yaml_data["workloads"][workload.stem]["cycles_count"] = value
+        yaml_data["workloads"][workload.stem]["source_hash"] = workload.source_hash
+        # Write YAML back
+        self.write_yaml(setup.workloads_yaml, yaml_data)
+
     def scan_setups(self):
         for setup_dir in sorted(self.setups_root.iterdir()):
             if not setup_dir.is_dir():
@@ -84,13 +96,14 @@ class CycleManager:
             workloads_dir = setup_dir / WORKLOADS_SUBDIR
             if not workloads_dir.exists():
                 continue
+            name = setup_dir.name
             workloads_yaml = setup_dir / WORKLOADS_YAML
-            setup = Setup(path=setup_dir, workloads_yaml=workloads_yaml)
+            setup = Setup(path=setup_dir, name=name, workloads_yaml=workloads_yaml)
             for cpp_file in sorted(workloads_dir.glob("*.cpp")):
-                name = cpp_file.stem
+                stem = cpp_file.stem
                 sha = self.sha1_file(cpp_file)
-                entry = WorkloadEntry(filename=cpp_file, name=name, source_hash=sha, cycles_count=None)
-                setup.workloads[name] = entry
+                entry = WorkloadEntry(filepath=cpp_file, copypath=None, stem=stem, source_hash=sha)
+                setup.workloads[stem] = entry
             self.setups.append(setup)
 
     def determine_updates(self) -> Dict[Path, List[WorkloadEntry]]:
@@ -99,9 +112,9 @@ class CycleManager:
             yaml_data = self.load_yaml(setup.workloads_yaml)
             workloads_yaml = yaml_data.get("workloads", {}) if yaml_data else {}
             pending = []
-            for name, entry in setup.workloads.items():
+            for stem, entry in setup.workloads.items():
                 # Check if entry exists
-                yaml_entry = workloads_yaml.get(name)
+                yaml_entry = workloads_yaml.get(stem)
                 if yaml_entry is None:
                     pending.append(entry)
                     continue
@@ -115,87 +128,71 @@ class CycleManager:
                 if yaml_cycles is None or not isinstance(yaml_cycles, int):
                     pending.append(entry)
                     continue
-                # Up-to-date: populate cycles count in memory
-                entry.cycles_count = yaml_cycles
             if pending:
                 updates[setup.path] = pending
         return updates
 
-    def prepare_tmp(self, updates: Dict[Setup, List[WorkloadEntry]]) -> Dict[str, str]:
+    def prepare_tmp(self, setup: Setup, workload: WorkloadEntry):
+        # Create tmp directory
         if self.tmp_root.exists():
             shutil.rmtree(self.tmp_root)
         self.tmp_root.mkdir(parents=True, exist_ok=True)
-        copies: Dict[Path, List[WorkloadEntry]] = {}
-        for setup_path, workloads in updates.items():
-            setup = next(s for s in self.setups if s.path == setup_path)
-            # Copy workload .cpp files
-            for w in workloads:
-                dest = self.tmp_root / f"{setup.path.name}__{w.filename.name}"
-                shutil.copy2(w.filename, dest)
-                copies[w.filename.stem] = dest
-            # Copy headers and sources (except program.h/program.cpp)
-            include_dir = setup.path / "include"
-            src_dir = setup.path / "src"
-            if include_dir.exists():
-                for hdr in include_dir.glob("*.h"):
-                    if hdr.name == "program.h":
-                        continue
-                    dest = self.tmp_root / hdr.name
-                    shutil.copy2(hdr, dest)
-            if src_dir.exists():
-                for src in src_dir.glob("*.*"):
-                    if src.suffix in {".c", ".cpp", ".cc", ".C"} and src.name != "program.cpp":
-                        dest = self.tmp_root / src.name
-                        shutil.copy2(src, dest)
+        # Copy workload .cpp file
+        dest = self.tmp_root / f"{setup.name}__{workload.stem}.cpp"
+        shutil.copy2(workload.filepath, dest)
+        workload.copypath = dest
+        # Copy headers and sources (except program.h/program.cpp)
+        include_dir = setup.path / "include"
+        src_dir = setup.path / "src"
+        if include_dir.exists():
+            for hdr in include_dir.glob("*.h"):
+                if hdr.name == "program.h":
+                    continue
+                dest = self.tmp_root / hdr.name
+                shutil.copy2(hdr, dest)
+        if src_dir.exists():
+            for src in src_dir.glob("*.*"):
+                if src.suffix in {".c", ".cpp", ".cc", ".C"} and src.name != "program.cpp":
+                    dest = self.tmp_root / src.name
+                    shutil.copy2(src, dest)
         # Create measure macros header
         macros_header = self.tmp_root / MEASURE_HEADER
         macros_header.write_text(MEASURE_HEADER_CONTENT, encoding="utf-8")
-        return copies
 
-    def prepare_workloads(self, copies: Dict[str, str]) -> List[str]:
-        functions: List[str] = []
-        for name, path in copies.items():
-            text = path.read_text(encoding="utf-8")
-            # Check if main function exists
-            if re.search(r"\bint\s+main\s*\(", text):
-                log_error(f"{path}: contains 'main()' definition. Workloads must not define 'main()'.")
-            # Check if sim function exists
-            if not re.search(rf"\bvoid\s+{re.escape(name)}\s*\(", text):
-                log_error(f"{path}: does not contain 'void {name}()' definition. Workload must define 'void {name}()'.")
-            functions.append(name)
-            # Check annotation counts
-            start_count = text.count(START_ANNOT)
-            end_count = text.count(END_ANNOT)
-            if start_count != 1 or end_count != 1:
-                log_error(f"{path}: does not contain '{START_ANNOT}' and '{END_ANNOT}' annotations exactly once.")
-            # Create safe identifier for C
-            safe_identifier = re.sub(r"\W", "_", path.stem)  # only word chars and underscore
-            text = text.replace(START_ANNOT, f"BEGIN_CYCLE_MEASURE({safe_identifier})")
-            text = text.replace(END_ANNOT, f"END_CYCLE_MEASURE({safe_identifier})")
-            # Add include line if not present
-            if MEASURE_HEADER not in text:
-                text = f'#include "{MEASURE_HEADER}"' + "\n" + text
-            # Write back
-            path.write_text(text, encoding="utf-8")
-        return functions
+    def prepare_workload(self, workload: WorkloadEntry):
+        text = workload.copypath.read_text(encoding="utf-8")
+        # Check if main function exists
+        if re.search(r"\bint\s+main\s*\(", text):
+            log_error(f"{workload.filepath}: contains 'main()' definition. Workloads must not define 'main()'.")
+        # Check if sim function exists
+        if not re.search(rf"\bvoid\s+{re.escape(workload.stem)}\s*\(", text):
+            log_error(f"{workload.filepath}: does not contain 'void {workload.stem}()' definition. Workload must define 'void {workload.stem}()'.")
+        # Check annotation counts
+        start_count = text.count(START_ANNOT)
+        end_count = text.count(END_ANNOT)
+        if start_count != 1 or end_count != 1:
+            log_error(f"{workload.filepath}: does not contain '{START_ANNOT}' and '{END_ANNOT}' annotations exactly once.")
+        # Create safe identifier for C
+        safe_identifier = re.sub(r"\W", "_", workload.stem)  # only word chars and underscore
+        text = text.replace(START_ANNOT, f"BEGIN_CYCLE_MEASURE({safe_identifier})")
+        text = text.replace(END_ANNOT, f"END_CYCLE_MEASURE({safe_identifier})")
+        # Add include line if not present
+        if MEASURE_HEADER not in text:
+            text = f'#include "{MEASURE_HEADER}"' + "\n" + text
+        # Write back
+        workload.copypath.write_text(text, encoding="utf-8")
 
-    def create_wrapper(self, functions: List[str]) -> Path:
+    def create_wrapper(self, workload: WorkloadEntry):
         wrapper_lines = []
-        calls = []
-        # Add function declarations
-        for func_name in functions:
-            wrapper_lines.append(f"extern void {func_name}();")
-            calls.append(func_name)
+        wrapper_lines.append(f"extern void {workload.stem}();")
         wrapper_lines.append("int main() {")
-        for c in calls:
-            wrapper_lines.append(f"    {c}();")
+        wrapper_lines.append(f"    {workload.stem}();")
         wrapper_lines.append("    return 0;")
         wrapper_lines.append("}")
         wrapper_path = self.tmp_root / "wrapper.cpp"
         wrapper_path.write_text("\n".join(wrapper_lines), encoding="utf-8")
-        return wrapper_path
 
-    def compile_tmp(self):
+    def compile_tmp(self) -> Path:
         # Find all .c and .cpp in tmp
         files = []
         for ext in ("*.cpp", "*.c"):
@@ -207,44 +204,22 @@ class CycleManager:
             log_error(f"Compilation failed:\n{proc.stderr}")
         return self.tmp_root / "cycle_estimation"
 
-    def parse_spike(self, binary_path: Path) -> Dict[str, int]:
+    def parse_spike(self, binary_path: Path) -> int:
         cmd = ["spike", "pk", str(binary_path)]
         proc = subprocess.run(cmd, cwd=str(self.tmp_root), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         output = (proc.stdout or "") + "\n" + (proc.stderr or "")
         if proc.returncode != 0:
             log_error(f"Spike simulation failed:\n{proc.stderr}")
         # Parse lines like: <identifier>: <N> cycles
-        pattern = re.compile(r'^\s*([A-Za-z_]\w*)\s*:\s*(\d+)\s*cycles\s*$', re.MULTILINE)
-        matches = pattern.findall(output)
-        results: Dict[str, int] = {}
-        for name, cycles in matches:
-            results[name] = int(cycles)
-        if not results:
-            # Store full output to help debugging
-            debug_out = self.tmp_root / "spike_output.txt"
-            debug_out.write_text(output, encoding="utf-8")
-            log_error(f"No measurements parsed from Spike output. See {debug_out}.")
-        return results
-
-    def update_yamls(self, updates: Dict[Setup, List[WorkloadEntry]], results: Dict[str, int]):
-        for setup_path, workloads in updates.items():
-            setup = next(s for s in self.setups if s.path == setup_path)
-            yaml_data = self.load_yaml(setup.workloads_yaml)
-            if "workloads" not in yaml_data:
-                yaml_data["workloads"] = {}
-            for w in workloads:
-                ident = f"{setup.path.name}__{w.name}"
-                safe_ident = re.sub(r'\W', '_', ident)
-                cycles_val = results.get(safe_ident)
-                if cycles_val is None:
-                    log_warn(f"No measurement for {safe_ident}. Skipping update.")
-                    continue
-                # Write/update YAML
-                yaml_data["workloads"].setdefault(w.name, {})
-                yaml_data["workloads"][w.name]["cycles_count"] = int(cycles_val)
-                yaml_data["workloads"][w.name]["source_hash"] = w.source_hash
-            # Write YAML back
-            self.write_yaml(setup.workloads_yaml, yaml_data)
+        pattern = re.compile(r'^\s*[A-Za-z_]\w*\s*:\s*(\d+)\s*cycles\s*$', re.MULTILINE)
+        match = pattern.search(output)
+        if match:
+            return int(match.group(1))
+        # Store full output to help debugging
+        debug_out = self.tmp_root / "spike_output.txt"
+        debug_out.write_text(output, encoding="utf-8")
+        log_error(f"No measurements parsed from Spike output. See {debug_out}.")
+        return None
 
     def run(self):
         self.scan_setups()
@@ -252,12 +227,16 @@ class CycleManager:
         if not updates:
             log_info("All workloads up-to-date.")
             return
-        copies = self.prepare_tmp(updates)
-        functions = self.prepare_workloads(copies)
-        self.create_wrapper(functions)
-        binary = self.compile_tmp()
-        results = self.parse_spike(binary)
-        self.update_yamls(updates, results)
+        for setup_path, workloads in updates.items():
+            setup = next(s for s in self.setups if s.path == setup_path)
+            for workload in workloads:
+                log_info(f"Updating cycle estimation for '{workload.filepath}'...")
+                self.prepare_tmp(setup, workload)
+                self.prepare_workload(workload)
+                self.create_wrapper(workload)
+                binary = self.compile_tmp()
+                value = self.parse_spike(binary)
+                self.update_yaml(setup, workload, value)
 
 def main():
     for tool in ["riscv64-unknown-elf-gcc", "spike"]:

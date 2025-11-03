@@ -25,7 +25,7 @@ void inline print_matrix(const int *matrix, int rows, int cols,
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core, const CyclesDB &cycles) {
+       {[](Core &core) {
           const unsigned MATRIX_ROWS = 10;
           const unsigned MATRIX_COLS = 10;
 
@@ -54,7 +54,7 @@ CoreCodeMap *get_program_code() {
 
           delete[] data;
         },
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -82,8 +82,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -108,13 +108,13 @@ CoreCodeMap *get_program_code() {
           for (int i = 0; i < rows * cols; ++i)
             matrix[i] += 1;
 
+          core.wait_cycles("add");
+
           print_matrix(matrix, rows, cols, "Add");
 
           // Write to Chiplet2 RAM
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
-
-          core.wait_cycles(2243);
 
           auto reqw =
               Core::WriteRequest(0, write_buf, len).set_dest(2).skip_cache();
@@ -126,8 +126,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -152,13 +152,13 @@ CoreCodeMap *get_program_code() {
           for (int i = 0; i < rows * cols; ++i)
             matrix[i] *= 2;
 
+          core.wait_cycles("multiply");
+
           print_matrix(matrix, rows, cols, "Multiply");
 
           // write to Chiplet2 RAM
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
-
-          core.wait_cycles(2243);
 
           auto reqw =
               Core::WriteRequest(0, write_buf, len).set_dest(3).skip_cache();
@@ -170,8 +170,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet2", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -201,13 +201,13 @@ CoreCodeMap *get_program_code() {
           for (int i = 0; i < rows * cols; ++i)
             matrix[i] = temp[i];
 
+          core.wait_cycles("transpose");
+
           print_matrix(matrix, rows, cols, "Transpose");
 
           // Write to Chiplet3 RAM
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
-
-          core.wait_cycles(5516);
 
           auto reqw =
               Core::WriteRequest(0, write_buf, len).set_dest(4).skip_cache();
@@ -219,8 +219,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet3", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -245,13 +245,13 @@ CoreCodeMap *get_program_code() {
           for (int i = 0; i < rows * cols; ++i)
             matrix[i] -= 5;
 
+          core.wait_cycles("subtract");
+
           print_matrix(matrix, rows, cols, "Subtract");
 
           // Write to FPGA RAM
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
-
-          core.wait_cycles(2243);
 
           auto reqw =
               Core::WriteRequest(0, write_buf, len).set_dest(0).skip_cache();

@@ -1,6 +1,5 @@
 #include "modules/interconnects/SPI.h"
 
-#include "ARM/TLM/arm_axi4_payload.h"
 #include "logging.h"
 
 #include "common/Router.h"
@@ -17,6 +16,8 @@ SPI::SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
              ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &SPI::nb_transport_bw_axi,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
+  stats.register_utilization(this->name());
+
   if (dma_engine)
     dma_vm_id = dma_engine->register_virtual_initiator(this);
 
@@ -63,14 +64,28 @@ SPI::~SPI() {
   delete[] irq_sockets;
 }
 
+void SPI::end_of_simulation() {
+  for (size_t id = 0; id < connections.size(); ++id) {
+    ChipletConnectionConfig connection = connections[id];
+    InterconnectType interconnect = connection.type;
+    YAML::Node config = connection.config;
+
+    stats.set_value(this->name(),
+                    "transmission_size_bits_link" + std::to_string(id),
+                    axi_width);
+    stats.set_value(this->name(), "efficiency_pJ_bit_link" + std::to_string(id),
+                    config["efficiency"].as<double>());
+  }
+}
+
 void SPI::bind_clock(sc_clock &sysclk) { clk.bind(sysclk); }
 
 void SPI::clk_posedge() {
   clear_axi_states();
 
   // Bidirectional arbitration logic:
-  // 1. If an AXI beat can be transmitted on the bus, send it first.
-  // 2. Otherwise, arbitrate in the following priority order:
+  // 1. If an AXI beat can be transmitted to the bus, send it.
+  // 2. For AXI beats not the bus, arbitrate in the following order:
   //    - Link transfers (beats that must be forwarded)
   //    - Incoming AXI beats in this order: R, B, AW, AR, W
 
@@ -261,9 +276,13 @@ tlm_sync_enum SPI::nb_transport_fw_link(int id,
 
     // Drop bad transfers
     if (transfer.success) {
-
       sc_spawn([this, id, &transaction, delay]() {
+        stats.set_active(this->name());
         wait(delay);
+        stats.set_idle(this->name());
+        stats.increment_counter(this->name(), "transmission_count_in_link" +
+                                                  std::to_string(id));
+
         ARM::AXI::Payload *payload =
             reinterpret_cast<ARM::AXI::Payload *>(transaction.get_data_ptr());
         links_queue.push_back({id, payload});
@@ -285,6 +304,7 @@ tlm_sync_enum SPI::nb_transport_bw_link(int id,
                                         tlm_phase &phase, sc_time &delay) {
   switch (phase) {
   case BEGIN_RESP:
+    stats.set_idle(this->name());
     active_transfer = false;
     delete &transaction;
 
@@ -425,11 +445,11 @@ void SPI::send_axi_beats() {
     r_state = REQ;
     LinkRequest link_req = r_queue_out.front();
     ARM::AXI::Payload *payload = link_req.payload;
+    register_beat_count(*payload);
     ARM::AXI::Phase phase =
         (get_beat_count(*payload) + 1 == payload->get_beat_count())
             ? ARM::AXI::R_VALID_LAST
             : ARM::AXI::R_VALID;
-    register_beat_count(*payload);
     active_links[link_req.link_id] = false;
     tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
     if (reply == TLM_UPDATED) {
@@ -474,9 +494,16 @@ bool SPI::send_link_request(ARM::AXI::Payload &payload) {
   tlm_sync_enum reply =
       links_out[link_id]->nb_transport_fw(*transaction, phase, delay);
 
-  if (reply == TLM_UPDATED)
+  if (reply == TLM_UPDATED) {
+    stats.set_active(this->name());
+    stats.increment_counter(this->name(), "transmission_count_out_link" +
+                                              std::to_string(link_id));
+    stats.update_accum(this->name(),
+                       "transmission_duration_out_us_link" +
+                           std::to_string(link_id),
+                       delay.to_seconds() * 1e6);
     return true;
-  else
+  } else
     return false;
 }
 

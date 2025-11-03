@@ -8,7 +8,10 @@ AXIBus::AXIBus(sc_module_name name, unsigned int chiplet_id,
                YAML::Node config)
     : sc_module(name), chiplet_id(chiplet_id),
       axi_width(config["axi"]["width"].as<unsigned>()),
+      clk_cycle(config["axi"]["clk_cycle"].as<unsigned>(), SC_NS),
       beat_data(new uint8_t[axi_width >> 3]) {
+  stats.register_utilization(this->name(), clk_cycle);
+
   mgr_tsockets.reserve(num_managers);
   for (unsigned i = 0; i < num_managers; ++i) {
     std::ostringstream name;
@@ -55,6 +58,8 @@ tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
   if (log_level <= LogLevel::DEBUG)
     print_payload(payload, prev_phase, reply, phase);
 
+  stats.add_active_time(this->name(), clk_cycle);
+
   return reply;
 }
 
@@ -76,6 +81,8 @@ tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
 
   if (log_level <= LogLevel::DEBUG)
     print_payload(payload, prev_phase, reply, phase);
+
+  stats.add_active_time(this->name(), clk_cycle);
 
   return reply;
 }

@@ -1,4 +1,6 @@
 use_dma: true
 clk_cycle: 10 # ns
+ddr: false
 # SPI, Dual-SPI, Quad-SPI, Octal-SPI
 num_lanes: 1
+efficiency: 10.0 # pJ/bit

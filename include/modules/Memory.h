@@ -7,17 +7,21 @@
 #include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
+#include "common/Statistics.h"
 
 using namespace sc_core;
 using namespace tlm;
 
 SC_MODULE(Memory) {
 private:
+  void end_of_simulation() override;
+
   // -------------------------------------------------------
   // Config
   // -------------------------------------------------------
   const unsigned axi_width;
   const unsigned size;
+  const sc_time clk_cycle;
 
 public:
   // -------------------------------------------------------
@@ -36,6 +40,8 @@ private:
   // -------------------------------------------------------
   // Internal Declarations
   // -------------------------------------------------------
+  StatManager &stats = StatManager::instance();
+
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState b_state = CLEAR;
@@ -62,8 +68,8 @@ private:
   };
 
   std::vector<uint8_t> mem;
+  std::vector<uint8_t> mem_bitmap;
   MemoryState mem_state = MemoryState::Idle;
-  std::vector<bool> write_flags;
   std::map<uint32_t, unsigned> allocated_ranges;
   uint32_t offchip_base_address;
   uint32_t active_addr = 0;

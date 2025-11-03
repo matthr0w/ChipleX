@@ -1,5 +1,7 @@
 #pragma once
 
+#include "logging.h"
+
 #include "modules/Memory.h"
 #include "modules/chiplets/ChipletBase.h"
 #include "modules/interconnects/InterconnectBase.h"
@@ -26,13 +28,13 @@ struct MemoryChiplet : ChipletBase {
                "Parameter Error: AXI size must be a multiple of 8");
 
     // Memory
-    memory.clk.bind(system_clk);
+    memory.clk.bind(clocks.get("axi"));
 
     // Interconnect
     InterconnectManager manager(chiplet_id, sysconf.chiplets[chiplet_name],
                                 sysconf.interconnect, 0, nullptr);
     interconnect = manager.create_interconnect();
-    interconnect->bind_clock(system_clk);
+    interconnect->bind_clock(clocks.get("axi"));
     interconnect->axi_in_port->bind(dummy_axi_isocket);
     interconnect->axi_out_port->bind(memory.tsocket);
   }

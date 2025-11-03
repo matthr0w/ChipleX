@@ -12,7 +12,7 @@ struct DataHeader {
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core, const CyclesDB &cycles) {
+       {[](Core &core) {
           std::string str =
               "Hello, World! This is a test string for the LZ4 "
               "compression algorithm. Hello, World! This is a test "
@@ -33,7 +33,7 @@ CoreCodeMap *get_program_code() {
 
           delete[] write_buf;
         },
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -54,8 +54,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -96,7 +96,7 @@ CoreCodeMap *get_program_code() {
           std::memcpy(packet + sizeof(DataHeader), compressed_data,
                       compressed_data_size);
 
-          core.wait_cycles(76936);
+          core.wait_cycles("compress");
 
           // Write to Chiplet1 RAM
           auto reqw = Core::WriteRequest(0, packet, total_size)
@@ -111,8 +111,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           auto addr = irq->get_address();
           auto len = irq->get_data_length();
 
@@ -147,7 +147,7 @@ CoreCodeMap *get_program_code() {
                      << compressed_size << " | Decompressed size: " << result);
           }
 
-          core.wait_cycles(11445);
+          core.wait_cycles("decompress");
 
           // Write back to FPGA RAM
           auto reqw =

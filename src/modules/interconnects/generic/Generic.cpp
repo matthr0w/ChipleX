@@ -34,6 +34,9 @@ GenericInterconnect::GenericInterconnect(sc_module_name name,
              "Parameter Error: Flit size must be at least " << min_flit_size
                                                             << " bytes");
 
+  stats.register_utilization(this->name());
+  stats.register_usage(this->name(), "staging_buffer_usage");
+
   if (dma_engine)
     dma_vm_id = dma_engine->register_virtual_initiator(this);
 
@@ -102,6 +105,27 @@ GenericInterconnect::~GenericInterconnect() {
   delete[] irq_sockets;
 }
 
+void GenericInterconnect::end_of_simulation() {
+  stats.set_value(this->name(), "staging_buffer_size_bytes",
+                  staging_buffer_size);
+  stats.set_value(this->name(), "flit_size_bytes", flit_size);
+  stats.set_value(this->name(), "overhead_size_bytes", overhead_size);
+
+  for (size_t id = 0; id < connections.size(); ++id) {
+    ChipletConnectionConfig connection = connections[id];
+    InterconnectType interconnect = connection.type;
+    YAML::Node config = connection.config;
+
+    stats.set_value(this->name(),
+                    "link_buffer_size_bytes_link" + std::to_string(id),
+                    config["phy"]["link_buffer_size"].as<unsigned>());
+    stats.set_value(this->name(), "bandwidth_GB_s_link" + std::to_string(id),
+                    config["phy"]["bandwidth"].as<double>());
+    stats.set_value(this->name(), "efficiency_pJ_bit_link" + std::to_string(id),
+                    config["phy"]["efficiency"].as<double>());
+  }
+}
+
 void GenericInterconnect::bind_clock(sc_clock &clk) {
   axi_clk.bind(clk);
   protocol_clk.bind(clk);
@@ -162,12 +186,17 @@ void GenericInterconnect::protocol_clk_posedge() {
         write_flit_to_buffer(tx_buffers[tx_idx].data() + tail, flit,
                              flit_payload_bytes, flit_padding_bytes);
         tx_ptrs[tx_idx] += flit_size;
+        stats.update_usage(this->name(),
+                           "tx_buffer_usage_link" + std::to_string(tx_idx),
+                           tx_ptrs[tx_idx]);
 
         // Consume from staging buffer
         std::memmove(staging_buffer.data(),
                      staging_buffer.data() + flit_payload_bytes,
                      staging_buffer_ptr - flit_payload_bytes);
         staging_buffer_ptr -= flit_payload_bytes;
+        stats.update_usage(this->name(), "staging_buffer_usage",
+                           staging_buffer_ptr);
 
         // Reset if done
         if (flush_staging_buffer && staging_buffer_ptr == 0)
@@ -218,10 +247,18 @@ void GenericInterconnect::phy_clk_posedge() {
     sc_time delay = SC_ZERO_TIME;
     tlm_sync_enum reply = phy_out[tx_idx]->nb_transport_fw(*flit, phase, delay);
 
-    if (reply == TLM_UPDATED)
+    if (reply == TLM_UPDATED) {
+      stats.set_active(this->name());
+      stats.increment_counter(this->name(), "transmission_count_out_link" +
+                                                std::to_string(tx_idx));
+      stats.update_accum(this->name(),
+                         "transmission_duration_out_us_link" +
+                             std::to_string(tx_idx),
+                         delay.to_seconds() * 1e6);
       phy_active_tx[tx_idx] = true;
-    else
+    } else {
       delete flit;
+    }
   }
 
   // Receive into Rx buffers
@@ -237,6 +274,9 @@ void GenericInterconnect::phy_clk_posedge() {
       std::memcpy(&rx_buffers[rx_idx][tail],
                   request.transaction->get_data_ptr(), flit_size);
       rx_ptrs[rx_idx] += flit_size;
+      stats.update_usage(this->name(),
+                         "rx_buffer_usage_link" + std::to_string(rx_idx),
+                         rx_ptrs[rx_idx]);
 
       tlm_phase phase = BEGIN_RESP;
       sc_time delay = SC_ZERO_TIME;
@@ -310,10 +350,13 @@ GenericInterconnect::nb_transport_fw_phy(int id,
 
     // Drop bad transfers
     if (transfer.success) {
-      tlm_generic_payload *tptr = &transaction;
-      sc_spawn([this, id, tptr, delay]() {
+      sc_spawn([this, id, &transaction, delay]() {
+        stats.set_active(this->name());
         wait(delay);
-        phy_queue.push_back({id, tptr});
+        stats.set_idle(this->name());
+        stats.increment_counter(this->name(), "transmission_count_in_link" +
+                                                  std::to_string(id));
+        phy_queue.push_back({id, &transaction});
       });
     }
 
@@ -334,7 +377,10 @@ GenericInterconnect::nb_transport_bw_phy(int id,
     std::memmove(tx_buffers[id].data(), tx_buffers[id].data() + flit_size,
                  tx_ptrs[id] - flit_size);
     tx_ptrs[id] -= flit_size;
+    stats.update_usage(
+        this->name(), "tx_buffer_usage_link" + std::to_string(id), tx_ptrs[id]);
 
+    stats.set_idle(this->name());
     phy_active_tx[id] = false;
     delete &transaction;
 
@@ -419,6 +465,8 @@ void GenericInterconnect::handle_axi_channels() {
       std::memcpy(&staging_buffer[staging_buffer_ptr], &address,
                   sizeof(uint32_t));
       staging_buffer_ptr += sizeof(uint32_t);
+      stats.update_usage(this->name(), "staging_buffer_usage",
+                         staging_buffer_ptr);
     }
 
     // Respond on AXI port
@@ -444,6 +492,8 @@ void GenericInterconnect::handle_axi_channels() {
                               &staging_buffer[staging_buffer_ptr]);
       axi_transaction.beat_idx += 1;
       staging_buffer_ptr += beat_bytes;
+      stats.update_usage(this->name(), "staging_buffer_usage",
+                         staging_buffer_ptr);
     }
 
     // Respond on AXI port
@@ -477,6 +527,8 @@ void GenericInterconnect::handle_axi_channels() {
       std::memcpy(&staging_buffer[staging_buffer_ptr], &resp,
                   sizeof(ARM::AXI4::RespEnum));
       staging_buffer_ptr += sizeof(ARM::AXI4::RespEnum);
+      stats.update_usage(this->name(), "staging_buffer_usage",
+                         staging_buffer_ptr);
     }
 
     // Respond on AXI port
@@ -507,6 +559,8 @@ void GenericInterconnect::handle_axi_channels() {
       std::memcpy(&staging_buffer[staging_buffer_ptr], &address,
                   sizeof(uint32_t));
       staging_buffer_ptr += sizeof(uint32_t);
+      stats.update_usage(this->name(), "staging_buffer_usage",
+                         staging_buffer_ptr);
     }
 
     // Respond on AXI port
@@ -537,6 +591,8 @@ void GenericInterconnect::handle_axi_channels() {
                              &staging_buffer[staging_buffer_ptr]);
       axi_transaction.beat_idx += 1;
       staging_buffer_ptr += beat_bytes;
+      stats.update_usage(this->name(), "staging_buffer_usage",
+                         staging_buffer_ptr);
     }
 
     // Respond on AXI port
@@ -693,11 +749,17 @@ void GenericInterconnect::forward_flit(unsigned rx_idx, uint8_t dest_id) {
     std::memcpy(&tx_buffers[tx_idx][tail], rx_buffers[rx_idx].data(),
                 flit_size);
     tx_ptrs[tx_idx] += flit_size;
+    stats.update_usage(this->name(),
+                       "tx_buffer_usage_link" + std::to_string(tx_idx),
+                       tx_ptrs[tx_idx]);
     // Consume from Rx buffer
     std::memmove(rx_buffers[rx_idx].data(),
                  rx_buffers[rx_idx].data() + flit_size,
                  rx_ptrs[rx_idx] - flit_size);
     rx_ptrs[rx_idx] -= flit_size;
+    stats.update_usage(this->name(),
+                       "rx_buffer_usage_link" + std::to_string(rx_idx),
+                       rx_ptrs[rx_idx]);
   }
 }
 
@@ -722,6 +784,9 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
                    rx_buffers[rx_idx].data() + flit_size,
                    rx_ptrs[rx_idx] - flit_size);
       rx_ptrs[rx_idx] -= flit_size;
+      stats.update_usage(this->name(),
+                           "rx_buffer_usage_link" + std::to_string(rx_idx),
+                           rx_ptrs[rx_idx]);
     }
     break;
   }
@@ -747,6 +812,9 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
                      rx_buffers[rx_idx].data() + flit_size,
                      rx_ptrs[rx_idx] - flit_size);
         rx_ptrs[rx_idx] -= flit_size;
+        stats.update_usage(this->name(),
+                           "rx_buffer_usage_link" + std::to_string(rx_idx),
+                           rx_ptrs[rx_idx]);
       }
     }
     break;
@@ -766,6 +834,9 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
                    rx_buffers[rx_idx].data() + flit_size,
                    rx_ptrs[rx_idx] - flit_size);
       rx_ptrs[rx_idx] -= flit_size;
+      stats.update_usage(this->name(),
+                           "rx_buffer_usage_link" + std::to_string(rx_idx),
+                           rx_ptrs[rx_idx]);
     }
     break;
   }
@@ -784,6 +855,9 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
                    rx_buffers[rx_idx].data() + flit_size,
                    rx_ptrs[rx_idx] - flit_size);
       rx_ptrs[rx_idx] -= flit_size;
+      stats.update_usage(this->name(),
+                           "rx_buffer_usage_link" + std::to_string(rx_idx),
+                           rx_ptrs[rx_idx]);
     }
     break;
   }
@@ -809,6 +883,9 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
                      rx_buffers[rx_idx].data() + flit_size,
                      rx_ptrs[rx_idx] - flit_size);
         rx_ptrs[rx_idx] -= flit_size;
+        stats.update_usage(this->name(),
+                           "rx_buffer_usage_link" + std::to_string(rx_idx),
+                           rx_ptrs[rx_idx]);
       }
     }
     break;

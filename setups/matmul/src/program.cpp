@@ -15,12 +15,12 @@ const int matrixB[MATRIX_SIZE][MATRIX_SIZE] = {
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core, const CyclesDB &cycles) {
+       {[](Core &core) {
           const int data_size_per_chiplet =
               ROW_SIZE + MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE;
           auto *data = new unsigned char[data_size_per_chiplet * 4];
 
-          Core::RequestHandle *handle = nullptr;
+          std::shared_ptr<Core::RequestHandle> handle = nullptr;
           for (int chiplet = 0; chiplet < 4; ++chiplet) {
             unsigned char *chunk = data + chiplet * data_size_per_chiplet;
 
@@ -41,7 +41,7 @@ CoreCodeMap *get_program_code() {
 
           delete[] data;
         },
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+        [](Core &core, tlm_generic_payload *irq) {
           static unsigned interrupt_count = 0;
 
           // Save result in static variable
@@ -82,8 +82,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           uint32_t address = irq->get_address();
           int data_size = irq->get_data_length();
 
@@ -105,7 +105,7 @@ CoreCodeMap *get_program_code() {
           auto *result = new unsigned char[ROW_SIZE];
           memcpy(result, C_row, ROW_SIZE);
 
-          core.wait_cycles(758);
+          core.wait_cycles("matmul");
 
           auto reqw = Core::WriteRequest(0, result, ROW_SIZE)
                           .set_addr(0x0)
@@ -119,8 +119,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet1", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           uint32_t address = irq->get_address();
           int data_size = irq->get_data_length();
 
@@ -142,7 +142,7 @@ CoreCodeMap *get_program_code() {
           auto *result = new unsigned char[ROW_SIZE];
           memcpy(result, C_row, ROW_SIZE);
 
-          core.wait_cycles(758);
+          core.wait_cycles("matmul");
 
           auto reqw = Core::WriteRequest(0, result, ROW_SIZE)
                           .set_addr(0x1000)
@@ -156,8 +156,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet2", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           uint32_t address = irq->get_address();
           int data_size = irq->get_data_length();
 
@@ -179,7 +179,7 @@ CoreCodeMap *get_program_code() {
           auto *result = new unsigned char[ROW_SIZE];
           memcpy(result, C_row, ROW_SIZE);
 
-          core.wait_cycles(758);
+          core.wait_cycles("matmul");
 
           auto reqw = Core::WriteRequest(0, result, ROW_SIZE)
                           .set_addr(0x2000)
@@ -193,8 +193,8 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet3", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           uint32_t address = irq->get_address();
           int data_size = irq->get_data_length();
 
@@ -216,7 +216,7 @@ CoreCodeMap *get_program_code() {
           auto *result = new unsigned char[ROW_SIZE];
           memcpy(result, C_row, ROW_SIZE);
 
-          core.wait_cycles(758);
+          core.wait_cycles("matmul");
 
           auto reqw = Core::WriteRequest(0, result, ROW_SIZE)
                           .set_addr(0x3000)

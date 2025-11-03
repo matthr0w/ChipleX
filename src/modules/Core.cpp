@@ -8,6 +8,8 @@ Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
       irq_delay(config["cores"]["irq_delay"].as<unsigned>(), SC_NS),
       isocket("isocket", *this, &Core::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4,
               axi_width) {
+  stats.register_utilization(this->name(), clk_cycle);
+
   irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
 
   MAX_INCR_BURST_SIZE = std::min(256 * axi_width / 8, 4096u);
@@ -28,7 +30,7 @@ Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
 
 void Core::core_thread() {
   if (thread_fn)
-    thread_fn(*this, cycles);
+    thread_fn(*this);
 }
 
 void Core::interrupt_thread() {
@@ -40,14 +42,18 @@ void Core::interrupt_thread() {
       irq_queue.pop_front();
 
       if (interrupt_fn)
-        interrupt_fn(*this, cycles, transaction);
+        interrupt_fn(*this, transaction);
 
       delete transaction;
     }
   }
 }
 
-void Core::wait_cycles(unsigned count) { wait(count * clk_cycle); }
+void Core::wait_cycles(const std::string &name) {
+  stats.set_active(this->name());
+  wait(cycles.get(name), SC_NS);
+  stats.set_idle(this->name());
+}
 
 void Core::clk_posedge() {
   if (aw_state == ACK) {
@@ -120,7 +126,7 @@ void Core::clk_negedge() {
 }
 
 // -------------------------------------------------------
-// Transport functions
+// Transport Functions
 // -------------------------------------------------------
 tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
                                         tlm_phase &phase,
@@ -141,7 +147,7 @@ tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
 
 tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
                                     ARM::AXI::Phase &phase) {
-  Core::RequestHandle *h = request_handles.find(&payload)->second;
+  std::shared_ptr<RequestHandle> h = request_handles.find(&payload)->second;
 
   switch (phase) {
   case ARM::AXI::AR_READY:
@@ -153,6 +159,11 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
   case ARM::AXI::R_VALID_LAST:
     request_handles.erase(&payload);
     h->notify(SC_ZERO_TIME);
+    stats.increment_counter(this->name(), "transaction_count");
+    stats.update_accum(this->name(), "transaction_total_latency_us",
+                       (sc_time_stamp() - h->time_stamp).to_seconds() * 1e6);
+    stats.update_minmax(this->name(), "transaction_latency_us",
+                        (sc_time_stamp() - h->time_stamp).to_seconds() * 1e6);
     phase = ARM::AXI::R_READY;
     return TLM_UPDATED;
   case ARM::AXI::AW_READY:
@@ -164,6 +175,11 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
   case ARM::AXI::B_VALID:
     request_handles.erase(&payload);
     h->notify(SC_ZERO_TIME);
+    stats.increment_counter(this->name(), "transaction_count");
+    stats.update_accum(this->name(), "transaction_total_latency_us",
+                       (sc_time_stamp() - h->time_stamp).to_seconds() * 1e6);
+    stats.update_minmax(this->name(), "transaction_latency_us",
+                        (sc_time_stamp() - h->time_stamp).to_seconds() * 1e6);
     phase = ARM::AXI::B_READY;
     return TLM_UPDATED;
   default:
@@ -173,14 +189,14 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
 }
 
 // -------------------------------------------------------
-// AXI methods
+// AXI Methods
 // -------------------------------------------------------
-Core::RequestHandle *
+std::shared_ptr<Core::RequestHandle>
 Core::read_internal(uint32_t request_id, uint8_t destination_id,
                     uint32_t address, bool fixed_address, unsigned char *data,
                     unsigned int data_length, ARM::AXI::Burst burst,
                     bool is_volatile) {
-  auto *handle = new RequestHandle();
+  auto handle = std::make_shared<RequestHandle>();
 
   unsigned axi_bytes = axi_width / 8;
   unsigned beats = (data_length + axi_bytes - 1) / axi_bytes;
@@ -205,6 +221,7 @@ Core::read_internal(uint32_t request_id, uint8_t destination_id,
 
   handle->payload = payload;
   handle->data = data;
+  handle->time_stamp = sc_time_stamp();
   request_handles[payload] = handle;
 
   ar_queue.push_back(payload);
@@ -214,7 +231,7 @@ Core::read_internal(uint32_t request_id, uint8_t destination_id,
   return handle;
 }
 
-Core::RequestHandle *Core::read(const ReadRequest &req) {
+std::shared_ptr<Core::RequestHandle> Core::read(const ReadRequest &req) {
   switch (req.burst) {
   case ARM::AXI::BURST_FIXED:
     if (req.data_length > MAX_FIXED_BURST_SIZE) {
@@ -256,12 +273,12 @@ Core::RequestHandle *Core::read(const ReadRequest &req) {
                        is_volatile);
 }
 
-Core::RequestHandle *
+std::shared_ptr<Core::RequestHandle>
 Core::write_internal(uint32_t request_id, uint8_t destination_id,
                      uint32_t address, bool fixed_address, unsigned char *data,
                      unsigned int data_length, ARM::AXI::Burst burst,
                      bool is_volatile) {
-  auto *handle = new RequestHandle();
+  auto handle = std::make_shared<RequestHandle>();
 
   unsigned axi_bytes = axi_width / 8;
   unsigned beats = (data_length + axi_bytes - 1) / axi_bytes;
@@ -288,6 +305,7 @@ Core::write_internal(uint32_t request_id, uint8_t destination_id,
 
   handle->payload = payload;
   handle->data = data;
+  handle->time_stamp = sc_time_stamp();
   request_handles[payload] = handle;
 
   aw_queue.push_back(payload);
@@ -297,7 +315,7 @@ Core::write_internal(uint32_t request_id, uint8_t destination_id,
   return handle;
 }
 
-Core::RequestHandle *Core::write(const WriteRequest &req) {
+std::shared_ptr<Core::RequestHandle> Core::write(const WriteRequest &req) {
   switch (req.burst) {
   case ARM::AXI::BURST_FIXED:
     if (req.data_length > MAX_FIXED_BURST_SIZE) {

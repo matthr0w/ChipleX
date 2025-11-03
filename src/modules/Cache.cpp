@@ -9,6 +9,7 @@ Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
       cache_block_size(config["cache"]["block_size"].as<unsigned>()),
       cache_store_buffer_size(
           config["cache"]["store_buffer_size"].as<unsigned>()),
+      clk_cycle(config["cache"]["clk_cycle"].as<unsigned>(), SC_NS),
       beat_data(new uint8_t[axi_width >> 3]),
       tsocket("tsocket", *this, &Cache::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
@@ -18,6 +19,8 @@ Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
   LOG_ASSERT(
       cache_size % cache_block_size == 0,
       "Parameter Error: Cache size must be a multiple of cache block size");
+
+  stats.register_utilization(this->name(), clk_cycle);
 
   num_lines = cache_size / cache_block_size;
   cache_lines.resize(num_lines);
@@ -44,6 +47,15 @@ Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
 
 Cache::~Cache() { delete[] beat_data; }
 
+void Cache::end_of_simulation() {
+  double hit_rate =
+      num_accesses > 0 ? double(100) * num_hits / num_accesses : 0;
+  double miss_rate =
+      num_accesses > 0 ? double(100) * num_misses / num_accesses : 0;
+  stats.set_value(this->name(), "hit_rate", hit_rate);
+  stats.set_value(this->name(), "miss_rate", miss_rate);
+}
+
 void Cache::clk_posedge() {
   if (aw_state == ACK) {
     aw_state = CLEAR;
@@ -65,7 +77,7 @@ void Cache::clk_posedge() {
     ar_queue_out.pop_front();
   }
 
-  /* WRITE REQUEST */
+  // Write request
   if (!b_outgoing && !aw_queue_in.empty()) {
     b_outgoing = aw_queue_in.front();
     aw_queue_in.pop_front();
@@ -139,13 +151,14 @@ void Cache::clk_posedge() {
       ARM::AXI::Phase phase = ARM::AXI::W_READY;
       tsocket.nb_transport_bw(*b_outgoing, phase);
 
-      if (w_beat_count_in >= b_outgoing->get_beat_count()) {
+      if (w_beat_count_in >= b_outgoing->get_beat_count())
         b_beat_ready = true;
-      }
     }
+
+    stats.mark_active_cycle(this->name(), 0.5);
   }
 
-  /* READ REQUEST */
+  // Read request
   if (!r_outgoing && !ar_queue_in.empty()) {
     r_outgoing = ar_queue_in.front();
     ar_queue_in.pop_front();
@@ -209,18 +222,23 @@ void Cache::clk_posedge() {
       remaining -= copy_len;
     }
 
-    if (r_beat_ready) {
+    if (r_beat_ready)
       r_outgoing->read_in_beat(beat_data);
-    }
+
+    stats.mark_active_cycle(this->name(), 0.5);
   }
 }
 
 void Cache::clk_negedge() {
-  if (!cache_line_requests.empty())
+  if (!cache_line_requests.empty()) {
     enqueue_cacheline_read();
+    stats.mark_active_cycle(this->name(), 0.5);
+  }
 
-  if (store_buffer_head != store_buffer_tail)
+  if (store_buffer_head != store_buffer_tail) {
     enqueue_storebuffer_write();
+    stats.mark_active_cycle(this->name(), 0.5);
+  }
 
   // AW channel
   if (aw_state == CLEAR && !aw_queue_out.empty()) {
@@ -299,6 +317,8 @@ void Cache::clk_negedge() {
       b_beat_ready = false;
     }
   }
+
+  stats.end_cycle(this->name());
 }
 
 // -------------------------------------------------------
@@ -306,7 +326,7 @@ void Cache::clk_negedge() {
 // -------------------------------------------------------
 tlm_sync_enum Cache::nb_transport_fw(ARM::AXI::Payload &payload,
                                      ARM::AXI::Phase &phase) {
-  /* Skip cache if AXI signal not set */
+  // Skip cache if AXI signal not set
   if (payload.cache != ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA)
     return isocket.nb_transport_fw(payload, phase);
 
@@ -338,11 +358,11 @@ tlm_sync_enum Cache::nb_transport_fw(ARM::AXI::Payload &payload,
 
 tlm_sync_enum Cache::nb_transport_bw(ARM::AXI::Payload &payload,
                                      ARM::AXI::Phase &phase) {
-  /* Skip cache if AXI signal not set */
+  // Skip cache if AXI signal not set
   if (payload.cache != ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA)
     return tsocket.nb_transport_bw(payload, phase);
 
-  /* Handle cache line requests and store buffer writes */
+  // Handle cache line requests and store buffer writes
   switch (phase) {
   case ARM::AXI::AR_READY:
     ar_state = ACK;

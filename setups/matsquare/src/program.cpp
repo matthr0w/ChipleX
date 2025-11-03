@@ -30,6 +30,8 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2,
   result[2] = A[2] * B[0] + A[3] * B[2];
   result[3] = A[2] * B[1] + A[3] * B[3];
 
+  core.wait_cycles("matmul");
+
   auto *data = new unsigned char[4 * sizeof(int)];
   std::memcpy(data, result, 4 * sizeof(int));
 
@@ -48,7 +50,7 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2,
 CoreCodeMap *get_program_code() {
   static CoreCodeMap code = {
       {{"fpga", 0},
-       {[](Core &core, const CyclesDB &cycles) {
+       {[](Core &core) {
           int matrix[4] = {1, 2, 3, 4};
           auto *data = new unsigned char[sizeof(matrix)];
           memcpy(data, matrix, sizeof(matrix));
@@ -63,7 +65,7 @@ CoreCodeMap *get_program_code() {
 
           delete[] data;
         },
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+        [](Core &core, tlm_generic_payload *irq) {
           auto *data = new unsigned char[4 * sizeof(int)];
 
           auto reqr = Core::ReadRequest(0, irq->get_address(),
@@ -85,21 +87,16 @@ CoreCodeMap *get_program_code() {
         }}},
 
       {{"chiplet0", 0},
-       {[](Core &core, const CyclesDB &cycles) {},
-        [](Core &core, const CyclesDB &cycles, tlm_generic_payload *irq) {
+       {[](Core &core) {},
+        [](Core &core, tlm_generic_payload *irq) {
           uint32_t matrix_addr = irq->get_address();
 
           matrix_multiply(core, matrix_addr, matrix_addr,
-                          0x1000); // A^2 = A * A
-          core.wait_cycles(58);
+                          0x1000);                            // A^2 = A * A
           matrix_multiply(core, 0x1000, matrix_addr, 0x2000); // A^3 = A^2 * A
-          core.wait_cycles(58);
           matrix_multiply(core, 0x2000, matrix_addr, 0x3000); // A^4 = A^3 * A
-          core.wait_cycles(58);
           matrix_multiply(core, 0x3000, matrix_addr, 0x4000); // A^5 = A^4 * A
-          core.wait_cycles(58);
           matrix_multiply(core, 0x4000, matrix_addr, 0x5000); // A^6 = A^5 * A
-          core.wait_cycles(58);
 
           auto *data = new unsigned char[4 * sizeof(int)];
           auto reqr = Core::ReadRequest(4, 0x5000,

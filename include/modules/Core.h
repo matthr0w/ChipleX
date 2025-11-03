@@ -10,6 +10,7 @@
 #include "logging.h"
 
 #include "ARM/TLM/arm_axi4.h"
+#include "common/Statistics.h"
 #include "setup/Types.h"
 
 using namespace sc_core;
@@ -46,11 +47,17 @@ public:
   void core_thread();
   void interrupt_thread();
 
-  std::function<void(Core &, const CyclesDB &)> thread_fn;
-  std::function<void(Core &, const CyclesDB &, tlm_generic_payload *)>
-      interrupt_fn;
+  std::function<void(Core &)> thread_fn;
+  std::function<void(Core &, tlm_generic_payload *)> interrupt_fn;
 
-  void wait_cycles(unsigned count);
+  // -------------------------------------------------------
+  // Program API
+  // -------------------------------------------------------
+  unsigned MAX_INCR_BURST_SIZE = 0;
+  unsigned MAX_FIXED_BURST_SIZE = 0;
+  unsigned MAX_WRAP_BURST_SIZE = 0;
+
+  void wait_cycles(const std::string &name);
 
   // -------------------------------------------------------
   // AXI Request Types
@@ -120,6 +127,7 @@ public:
     unsigned char *data;
 
     bool completed = false;
+    sc_time time_stamp;
     sc_event done;
 
     RequestHandle() : payload(nullptr) {}
@@ -137,14 +145,29 @@ public:
     }
   };
 
-  unsigned MAX_INCR_BURST_SIZE = 0;
-  unsigned MAX_FIXED_BURST_SIZE = 0;
-  unsigned MAX_WRAP_BURST_SIZE = 0;
+  // -------------------------------------------------------
+  // AXI API
+  // -------------------------------------------------------
+private:
+  std::shared_ptr<RequestHandle> read_internal(
+      uint32_t request_id, uint8_t destination_id, uint32_t address,
+      bool fixed_address, unsigned char *data, unsigned data_length,
+      ARM::AXI::Burst burst, bool is_volatile);
+  std::shared_ptr<RequestHandle> write_internal(
+      uint32_t request_id, uint8_t destination_id, uint32_t address,
+      bool fixed_address, unsigned char *data, unsigned data_length,
+      ARM::AXI::Burst burst, bool is_volatile);
+
+public:
+  std::shared_ptr<RequestHandle> read(const ReadRequest &req);
+  std::shared_ptr<RequestHandle> write(const WriteRequest &req);
 
 private:
   // -------------------------------------------------------
   // Internal Declarations
   // -------------------------------------------------------
+  StatManager &stats = StatManager::instance();
+
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState aw_state = CLEAR;
@@ -157,7 +180,8 @@ private:
 
   unsigned w_beat_count = 0;
 
-  std::unordered_map<ARM::AXI::Payload *, RequestHandle *> request_handles;
+  std::unordered_map<ARM::AXI::Payload *, std::shared_ptr<RequestHandle>>
+      request_handles;
 
   std::deque<tlm_generic_payload *> irq_queue;
 
@@ -197,23 +221,4 @@ private:
 
   tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);
-
-  // -------------------------------------------------------
-  // AXI API
-  // -------------------------------------------------------
-private:
-  RequestHandle *read_internal(uint32_t request_id, uint8_t destination_id,
-                               uint32_t address, bool fixed_address,
-                               unsigned char *data, unsigned data_length,
-                               ARM::AXI::Burst burst, bool is_volatile);
-
-  RequestHandle *write_internal(uint32_t request_id, uint8_t destination_id,
-                                uint32_t address, bool fixed_address,
-                                unsigned char *data, unsigned data_length,
-                                ARM::AXI::Burst burst, bool is_volatile);
-
-public:
-  RequestHandle *read(const ReadRequest &req);
-
-  RequestHandle *write(const WriteRequest &req);
 };

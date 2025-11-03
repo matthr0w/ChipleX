@@ -5,10 +5,13 @@
 Memory::Memory(sc_module_name name, YAML::Node config)
     : sc_module(name), axi_width(config["axi"]["width"].as<unsigned>()),
       size(config["ram"]["size"].as<unsigned>()),
+      clk_cycle(config["ram"]["clk_cycle"].as<unsigned>(), SC_NS),
       tsocket("tsocket", *this, &Memory::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
-      mem(size * 1024, 0), write_flags(mem.size(), false),
+      mem(size * 1024, 0), mem_bitmap((mem.size() + 7) / 8, 0),
       offchip_base_address(size * 1024 / 2) {
+  stats.register_utilization(this->name(), clk_cycle);
+
   SC_METHOD(clk_posedge);
   sensitive << clk.pos();
   dont_initialize();
@@ -18,12 +21,21 @@ Memory::Memory(sc_module_name name, YAML::Node config)
   dont_initialize();
 }
 
+void Memory::end_of_simulation() {
+  size_t used_bytes = 0;
+  for (uint8_t byte : mem_bitmap)
+    used_bytes += __builtin_popcount(byte);
+  stats.set_value(this->name(), "size_bytes", size * 1024);
+  stats.set_value(this->name(), "used_bytes", used_bytes);
+}
+
 void Memory::clk_posedge() {
   if (b_state == ACK) {
     b_state = CLEAR;
     b_outgoing->unref();
     b_outgoing = nullptr;
     mem_state = MemoryState::Idle;
+    stats.set_idle(this->name());
   }
 
   if (r_state == ACK) {
@@ -33,14 +45,18 @@ void Memory::clk_posedge() {
       r_outgoing->unref();
       r_outgoing = nullptr;
       mem_state = MemoryState::Idle;
+      stats.set_idle(this->name());
     }
   }
 
   // Controller
-  if (!aw_queue.empty() && mem_state == MemoryState::Idle)
+  if (!aw_queue.empty() && mem_state == MemoryState::Idle) {
     mem_state = MemoryState::WriteSet;
-  else if (!ar_queue.empty() && mem_state == MemoryState::Idle)
+    stats.set_active(this->name());
+  } else if (!ar_queue.empty() && mem_state == MemoryState::Idle) {
     mem_state = MemoryState::ReadSet;
+    stats.set_active(this->name());
+  }
 
   switch (mem_state) {
   case MemoryState::WriteSet: {
@@ -67,6 +83,9 @@ void Memory::clk_posedge() {
         const uint32_t a =
             set_beat_address(active_addr, i, beat_bytes, beats, burst);
         std::memcpy(&mem[a], &buffer[i * beat_bytes], beat_bytes);
+        // Mark bytes as used
+        for (unsigned b = 0; b < beat_bytes; ++b)
+          mem_bitmap[(a + b) / 8] |= (1 << ((a + b) % 8));
       }
 
       mem_state = MemoryState::WriteResponse;
