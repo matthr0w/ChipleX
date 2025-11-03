@@ -100,10 +100,10 @@ void StatUtilization::dump(std::ostream &os) const {
     else
       idle_ev += (now - last_change);
 
-    active_total = active_ev + active_time_manual;
+    active_total = std::min(active_ev + active_time_manual, now);
     idle_total = idle_ev + idle_time_manual;
   } else {
-    active_total = active_time_manual;
+    active_total = std::min(active_time_manual, now);
     sc_time idle_est = now - active_total - idle_time_manual;
     if (idle_est < SC_ZERO_TIME)
       idle_est = SC_ZERO_TIME;
