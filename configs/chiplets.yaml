@@ -1,6 +1,4 @@
 single-core:
-  system:
-    clk_cycle: 5 # ns
   cores:
     num: 1
     clk_cycle: 1 # ns
@@ -18,8 +16,6 @@ single-core:
     clk_cycle: 5 # ns
 
 dual-core:
-  system:
-    clk_cycle: 5 # ns
   cores:
     num: 2
     clk_cycle: 1 # ns
@@ -37,8 +33,6 @@ dual-core:
     clk_cycle: 5 # ns
 
 quad-core:
-  system:
-    clk_cycle: 5 # ns
   cores:
     num: 4
     clk_cycle: 1 # ns
@@ -56,8 +50,6 @@ quad-core:
     clk_cycle: 5 # ns
 
 memory:
-  system:
-    clk_cycle: 5 # ns
   ram:
     size: 512 # KB
     clk_cycle: 3 # ns

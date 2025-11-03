@@ -16,9 +16,7 @@ SPI::SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
              ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &SPI::nb_transport_bw_axi,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
-  stats.register_utilization(
-      this->name(),
-      sc_time(interconnect_config.config["clk_cycle"].as<unsigned>(), SC_NS));
+  stats.register_utilization(this->name());
 
   if (dma_engine)
     dma_vm_id = dma_engine->register_virtual_initiator(this);
@@ -72,11 +70,11 @@ void SPI::end_of_simulation() {
     InterconnectType interconnect = connection.type;
     YAML::Node config = connection.config;
 
-    stats.set_value(this->name(), "efficiency_pJ_bit_link" + std::to_string(id),
-                    config["efficiency"].as<double>());
     stats.set_value(this->name(),
                     "transmission_size_bits_link" + std::to_string(id),
                     axi_width);
+    stats.set_value(this->name(), "efficiency_pJ_bit_link" + std::to_string(id),
+                    config["efficiency"].as<double>());
   }
 }
 
@@ -278,12 +276,13 @@ tlm_sync_enum SPI::nb_transport_fw_link(int id,
 
     // Drop bad transfers
     if (transfer.success) {
-      stats.increment_counter(this->name(), "transmission_count_in_link" +
-                                                std::to_string(id));
       sc_spawn([this, id, &transaction, delay]() {
         stats.set_active(this->name());
         wait(delay);
         stats.set_idle(this->name());
+        stats.increment_counter(this->name(), "transmission_count_in_link" +
+                                                  std::to_string(id));
+
         ARM::AXI::Payload *payload =
             reinterpret_cast<ARM::AXI::Payload *>(transaction.get_data_ptr());
         links_queue.push_back({id, payload});

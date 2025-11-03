@@ -10,6 +10,8 @@ SLDataLinkLayer::SLDataLinkLayer(sc_module_name name, unsigned chiplet_id,
     : sc_module(name), chiplet_id(chiplet_id),
       num_links(chiplet_config.connections.size()),
       axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()) {
+  stats.register_utilization(this->name());
+
   data_in_tsockets =
       new simple_target_socket_tagged<SLDataLinkLayer>[num_links];
   data_out_isockets =
@@ -52,6 +54,13 @@ void SLDataLinkLayer::clk_posedge() {
           *transaction, phase, delay);
 
       if (reply == TLM_UPDATED) {
+        stats.set_active(this->name());
+        stats.increment_counter(this->name(), "transmission_count_out_link" +
+                                                  std::to_string(link_id));
+        stats.update_accum(this->name(),
+                           "transmission_duration_out_us_link" +
+                               std::to_string(link_id),
+                           delay.to_seconds() * 1e6);
         stream_fifo_out->read();
         data_out_ongoing = true;
       }
@@ -72,7 +81,12 @@ tlm_sync_enum SLDataLinkLayer::nb_transport_fw(int id,
       return TLM_ACCEPTED;
     tlm_generic_payload *tptr = &transaction;
     sc_spawn([this, id, tptr, delay]() {
+      stats.set_active(this->name());
       wait(delay);
+      stats.set_idle(this->name());
+      stats.increment_counter(this->name(), "transmission_count_in_link" +
+                                                std::to_string(id));
+
       Payload_t *payload = unpack_payload(*tptr);
       payload->link_id = id;
       stream_fifo_in->write(payload);
@@ -94,10 +108,12 @@ tlm_sync_enum SLDataLinkLayer::nb_transport_bw(int id,
                                                sc_time &delay) {
   switch (phase) {
   case BEGIN_RESP:
+    stats.set_idle(this->name());
     data_out_ongoing = false;
-    phase = END_RESP;
     delete[] transaction.get_data_ptr();
     delete &transaction;
+
+    phase = END_RESP;
     return TLM_UPDATED;
   }
 

@@ -113,7 +113,8 @@ public:
   void register_accum(const std::string &module, const std::string &name);
   void register_minmax(const std::string &module, const std::string &name);
   void register_usage(const std::string &module, const std::string &name);
-  void register_utilization(const std::string &module, const sc_time clk_cycle);
+  void register_utilization(const std::string &module,
+                            const sc_time clk_cycle = sc_time(0, SC_NS));
 
   void set_value(const std::string &module, const std::string &name,
                  double value);
