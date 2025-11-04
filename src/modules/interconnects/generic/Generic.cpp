@@ -86,15 +86,15 @@ GenericInterconnect::GenericInterconnect(sc_module_name name,
   flit_header_bytes = overhead_size + Flit::header_size();
   flit_data_bytes = flit_size - flit_header_bytes;
 
-  SC_METHOD(axi_clk_posedge);
-  sensitive << axi_clk.pos();
-  dont_initialize();
-
-  SC_METHOD(protocol_clk_posedge);
+  SC_METHOD(clk_posedge_axi);
   sensitive << protocol_clk.pos();
   dont_initialize();
 
-  SC_METHOD(phy_clk_posedge);
+  SC_METHOD(clk_posedge_protocol);
+  sensitive << protocol_clk.pos();
+  dont_initialize();
+
+  SC_METHOD(clk_posedge_phy);
   sensitive << phy_clk.pos();
   dont_initialize();
 }
@@ -126,19 +126,18 @@ void GenericInterconnect::end_of_simulation() {
   }
 }
 
-void GenericInterconnect::bind_clock(sc_clock &clk) {
-  axi_clk.bind(clk);
-  protocol_clk.bind(clk);
-  phy_clk.bind(clk);
+void GenericInterconnect::bind_clocks(Clocks &clocks) {
+  protocol_clk.bind(clocks.get("protocol"));
+  phy_clk.bind(clocks.get("phy"));
 }
 
-void GenericInterconnect::axi_clk_posedge() {
+void GenericInterconnect::clk_posedge_axi() {
   clear_axi_states();
   handle_axi_channels();
   send_axi_beats();
 }
 
-void GenericInterconnect::protocol_clk_posedge() {
+void GenericInterconnect::clk_posedge_protocol() {
   // Process staging buffer
   if (staging_buffer_ptr > 0) {
     size_t flit_payload_bytes = 0;
@@ -232,7 +231,7 @@ void GenericInterconnect::protocol_clk_posedge() {
   }
 }
 
-void GenericInterconnect::phy_clk_posedge() {
+void GenericInterconnect::clk_posedge_phy() {
   // Send from Tx buffers
   for (size_t tx_idx = 0; tx_idx < tx_buffers.size(); ++tx_idx) {
     if (tx_ptrs[tx_idx] < flit_size || phy_active_tx[tx_idx])
@@ -299,11 +298,18 @@ GenericInterconnect::nb_transport_fw_axi(ARM::AXI::Payload &payload,
   case ARM::AXI::W_VALID_LAST:
     w_queue_in.push_back(&payload);
     break;
+  case ARM::AXI::B_READY:
+    b_state = b_state == REQ ? ACK : CLEAR;
+    return TLM_ACCEPTED;
   case ARM::AXI::AR_VALID:
     ar_queue_in.push_back(&payload);
     break;
+  case ARM::AXI::R_READY:
+    r_state = r_state == REQ ? ACK : CLEAR;
+    return TLM_ACCEPTED;
   default:
-    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
+                           << get_axi_phase_string(phase));
   }
 
   return TLM_ACCEPTED;
@@ -330,7 +336,8 @@ GenericInterconnect::nb_transport_bw_axi(ARM::AXI::Payload &payload,
     r_queue_in.push_back(&payload);
     break;
   default:
-    SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
+                           << get_axi_phase_string(phase));
   }
 
   return TLM_ACCEPTED;
@@ -785,8 +792,8 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
                    rx_ptrs[rx_idx] - flit_size);
       rx_ptrs[rx_idx] -= flit_size;
       stats.update_usage(this->name(),
-                           "rx_buffer_usage_link" + std::to_string(rx_idx),
-                           rx_ptrs[rx_idx]);
+                         "rx_buffer_usage_link" + std::to_string(rx_idx),
+                         rx_ptrs[rx_idx]);
     }
     break;
   }
@@ -835,8 +842,8 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
                    rx_ptrs[rx_idx] - flit_size);
       rx_ptrs[rx_idx] -= flit_size;
       stats.update_usage(this->name(),
-                           "rx_buffer_usage_link" + std::to_string(rx_idx),
-                           rx_ptrs[rx_idx]);
+                         "rx_buffer_usage_link" + std::to_string(rx_idx),
+                         rx_ptrs[rx_idx]);
     }
     break;
   }
@@ -856,8 +863,8 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
                    rx_ptrs[rx_idx] - flit_size);
       rx_ptrs[rx_idx] -= flit_size;
       stats.update_usage(this->name(),
-                           "rx_buffer_usage_link" + std::to_string(rx_idx),
-                           rx_ptrs[rx_idx]);
+                         "rx_buffer_usage_link" + std::to_string(rx_idx),
+                         rx_ptrs[rx_idx]);
     }
     break;
   }

@@ -31,7 +31,7 @@ public:
   ~SerialLink();
 
   // InterconnectBase
-  void bind_clock(sc_clock & clk) override;
+  void bind_clocks(Clocks & clocks) override;
 
 private:
   SLNetworkLayer network_layer;

@@ -18,11 +18,12 @@ struct CoreChiplet : ChipletBase {
   const YAML::Node chiplet_config;
   const unsigned num_cores;
 
+  std::vector<std::unique_ptr<Core>> cores;
+  std::vector<std::unique_ptr<Cache>> caches;
+
   AXIBus axi_bus;
   DMAEngine dma_engine;
   Memory memory;
-  std::vector<std::unique_ptr<Core>> cores;
-  std::vector<std::unique_ptr<Cache>> caches;
 
   CoreChiplet(sc_module_name name, unsigned id, SystemConfig sysconf)
       : ChipletBase(name, id, sysconf),
@@ -47,9 +48,9 @@ struct CoreChiplet : ChipletBase {
                                                chiplet_config));
 
       // Bind clocks and sockets
-      cores[i]->clk.bind(clocks.get("axi"));
+      cores[i]->clk.bind(chiplet_clocks.get("cores"));
       cores[i]->isocket.bind(caches[i]->tsocket);
-      caches[i]->clk.bind(clocks.get("axi"));
+      caches[i]->clk.bind(chiplet_clocks.get("cache"));
       caches[i]->isocket.bind(*axi_bus.mgr_tsockets[i]);
 
       // Assign program code
@@ -63,12 +64,15 @@ struct CoreChiplet : ChipletBase {
       }
     }
 
+    // AXI Bus
+    axi_bus.clk.bind(chiplet_clocks.get("axi"));
+
     // Memory
-    memory.clk.bind(clocks.get("axi"));
+    memory.clk.bind(chiplet_clocks.get("ram"));
     memory.tsocket.bind(*axi_bus.sub_isockets[0]);
 
     // DMA Engine
-    dma_engine.clk.bind(clocks.get("axi"));
+    dma_engine.clk.bind(chiplet_clocks.get("axi"));
     dma_engine.isocket.bind(*axi_bus.mgr_tsockets[num_cores]);
     DMAEngine *dma_engine_ptr =
         (sysconf.interconnect.config["use_dma"] &&
@@ -81,7 +85,7 @@ struct CoreChiplet : ChipletBase {
                                 sysconf.interconnect, num_cores,
                                 dma_engine_ptr);
     interconnect = manager.create_interconnect();
-    interconnect->bind_clock(clocks.get("axi"));
+    interconnect->bind_clocks(interconnect_clocks);
     interconnect->axi_in_port->bind(*axi_bus.sub_isockets[1]);
     interconnect->axi_out_port->bind(*axi_bus.mgr_tsockets[num_cores + 1]);
     for (int i = 0; i < num_cores; ++i)

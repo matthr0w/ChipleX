@@ -1,6 +1,5 @@
 #include "modules/AXIBus.h"
 
-#include "globals.h"
 #include "logging.h"
 
 AXIBus::AXIBus(sc_module_name name, unsigned int chiplet_id,
@@ -31,60 +30,103 @@ AXIBus::AXIBus(sc_module_name name, unsigned int chiplet_id,
             name.str().c_str(), *this, i, &AXIBus::nb_transport_bw,
             ARM::TLM::PROTOCOL_AXI4, axi_width));
   }
+
+  SC_METHOD(clk_posedge);
+  sensitive << clk.pos();
+  dont_initialize();
 }
 
 AXIBus::~AXIBus() { delete[] beat_data; }
+
+void AXIBus::clk_posedge() {
+  for (auto &[key, conn] : connections) {
+    auto [mgr_id, sub_id] = key;
+
+    // Forward direction
+    if (!conn.fw_q.empty()) {
+      auto request = conn.fw_q.front();
+      conn.fw_q.pop_front();
+
+      ARM::AXI::Phase prev_phase = request.phase;
+      auto reply = sub_isockets[sub_id]->nb_transport_fw(*request.payload,
+                                                         request.phase);
+
+      if (reply == TLM_UPDATED)
+        conn.next_bw_q.push_back({request.payload, request.phase});
+
+      stats.mark_active_cycle(this->name());
+
+      print_payload(*request.payload, prev_phase, request.phase);
+    }
+
+    // Backward direction
+    if (!conn.bw_q.empty()) {
+      auto request = conn.bw_q.front();
+      conn.bw_q.pop_front();
+
+      ARM::AXI::Phase prev_phase = request.phase;
+      auto reply = mgr_tsockets[mgr_id]->nb_transport_bw(*request.payload,
+                                                         request.phase);
+
+      if (reply == TLM_UPDATED)
+        conn.next_fw_q.push_back({request.payload, request.phase});
+
+      stats.mark_active_cycle(this->name());
+
+      print_payload(*request.payload, prev_phase, request.phase);
+    }
+  }
+
+  for (auto &[key, conn] : connections) {
+    if (!conn.next_fw_q.empty()) {
+      conn.fw_q.insert(conn.fw_q.end(), conn.next_fw_q.begin(),
+                       conn.next_fw_q.end());
+      conn.next_fw_q.clear();
+    }
+    if (!conn.next_bw_q.empty()) {
+      conn.bw_q.insert(conn.bw_q.end(), conn.next_bw_q.begin(),
+                       conn.next_bw_q.end());
+      conn.next_bw_q.clear();
+    }
+  }
+
+  stats.end_cycle(this->name());
+}
 
 // -------------------------------------------------------
 // Transport Functions
 // -------------------------------------------------------
 tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
                                       ARM::AXI::Phase &phase) {
-  std::scoped_lock lock(fw_mutex);
-
   int sub_id = 0;
-  if (auto it = payloads2sub.find(&payload); it != payloads2sub.end())
+  if (auto it = payloads2sub.find(&payload); it != payloads2sub.end()) {
     sub_id = it->second;
-  else {
+  } else {
     sub_id = route_payload(payload);
     payloads2sub[&payload] = sub_id;
     payloads2mgr[&payload] = mgr_id;
   }
 
-  // Forward to subordinate
-  ARM::AXI::Phase prev_phase = phase;
-  tlm_sync_enum reply = sub_isockets[sub_id]->nb_transport_fw(payload, phase);
+  auto &conn = connections[{mgr_id, sub_id}];
+  conn.fw_q.push_back({&payload, phase});
 
-  if (log_level <= LogLevel::DEBUG)
-    print_payload(payload, prev_phase, reply, phase);
-
-  stats.add_active_time(this->name(), clk_cycle);
-
-  return reply;
+  return TLM_ACCEPTED;
 }
 
 tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
                                       ARM::AXI::Phase &phase) {
-  std::scoped_lock lock(bw_mutex);
-
   int mgr_id = 0;
-  if (auto it = payloads2mgr.find(&payload); it != payloads2mgr.end())
+  if (auto it = payloads2mgr.find(&payload); it != payloads2mgr.end()) {
     mgr_id = it->second;
-  else {
-    SC_LOG_WARN(this, "Unknown response from SUB[" << sub_id << "]");
+  } else {
+    SC_LOG_WARN(this, "Unknown backward response from SUB[" << sub_id << "]");
     return TLM_ACCEPTED;
   }
 
-  // Backward to manager
-  ARM::AXI::Phase prev_phase = phase;
-  tlm_sync_enum reply = mgr_tsockets[mgr_id]->nb_transport_bw(payload, phase);
+  auto &conn = connections[{mgr_id, sub_id}];
+  conn.bw_q.push_back({&payload, phase});
 
-  if (log_level <= LogLevel::DEBUG)
-    print_payload(payload, prev_phase, reply, phase);
-
-  stats.add_active_time(this->name(), clk_cycle);
-
-  return reply;
+  return TLM_ACCEPTED;
 }
 
 // -------------------------------------------------------
@@ -99,7 +141,7 @@ int AXIBus::route_payload(ARM::AXI::Payload &payload) {
 // Debug Functions
 // -------------------------------------------------------
 void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
-                           tlm_sync_enum reply, ARM::AXI::Phase) {
+                           ARM::AXI::Phase) {
   const char *phase_name = "?";
   bool show_addr = true;
   bool show_data = false;
@@ -108,7 +150,7 @@ void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
   bool first_beat = false;
   bool last_beat = false;
 
-  bool updated = (reply == TLM_UPDATED);
+  bool updated = false;
 
   auto it = payload_phase_map.find(&payload);
   if (it != payload_phase_map.end()) {

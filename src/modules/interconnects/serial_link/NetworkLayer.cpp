@@ -493,6 +493,9 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
     pending_write_responses.push_back(&payload);
     payload.ref();
     break;
+  case ARM::AXI::W_VALID:
+  case ARM::AXI::W_VALID_LAST:
+    break;
   case ARM::AXI::B_READY:
     b_state = b_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
@@ -505,8 +508,12 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
     pending_read_responses.push_back(&payload);
     payload.ref();
     break;
+  case ARM::AXI::R_READY:
+    r_state = r_state == REQ ? ACK : CLEAR;
+    return TLM_ACCEPTED;
   default:
-    break;
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
+                           << get_axi_phase_string(phase));
   }
 
   axi_in_trans.req_phase = phase;
@@ -536,9 +543,11 @@ tlm_sync_enum SLNetworkLayer::nb_transport_bw(ARM::AXI::Payload &payload,
   case ARM::AXI::B_VALID:
     return TLM_ACCEPTED;
   default:
-    SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
-    return TLM_ACCEPTED;
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
+                           << get_axi_phase_string(phase));
   }
+
+  return TLM_ACCEPTED;
 }
 
 // -------------------------------------------------------

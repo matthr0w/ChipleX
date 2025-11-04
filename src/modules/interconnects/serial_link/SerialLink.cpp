@@ -79,7 +79,7 @@ unsigned SerialLink::compute_fifo_depth() {
   return num_credits * payload_splits;
 }
 
-void SerialLink::bind_clock(sc_clock &clk) {
-  network_layer.clk.bind(clk);
-  datalink_layer.clk.bind(clk);
+void SerialLink::bind_clocks(Clocks &clocks) {
+  network_layer.clk.bind(clocks.get());
+  datalink_layer.clk.bind(clocks.get());
 }

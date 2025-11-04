@@ -54,7 +54,7 @@ public:
   ~SPI();
 
   // InterconnectBase
-  void bind_clock(sc_clock & clk) override;
+  void bind_clocks(Clocks & clocks) override;
   // DMAEngine
   tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload & payload,
                                     ARM::AXI::Phase & phase) override;

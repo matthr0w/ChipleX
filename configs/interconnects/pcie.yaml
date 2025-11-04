@@ -1,6 +1,7 @@
 # PCIe 6.0 x16
 use_dma: false
 protocol:
+  clk_cycle: 1 # ns
   # https://pcisig.com/blog/evolution-pci-express-specification-its-sixth-generation-third-decade-and-still-going-strong
   staging_buffer_size: 1024 # bytes
   flit_size: 256 # bytes
@@ -8,6 +9,7 @@ protocol:
   fec_delay: 3.0 # ns
   
 phy:
+  clk_cycle: 1 # ns
   link_buffer_size: 512 # bytes
   # https://pcisig.com/pci-express-6.0-specification
   bandwidth: 128.0 # GB/s

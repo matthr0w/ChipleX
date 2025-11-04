@@ -41,7 +41,6 @@ public:
   // -------------------------------------------------------
   // Signals
   // -------------------------------------------------------
-  sc_in<bool> axi_clk;
   sc_in<bool> protocol_clk;
   sc_in<bool> phy_clk;
 
@@ -63,7 +62,7 @@ public:
   ~GenericInterconnect();
 
   // InterconnectBase
-  void bind_clock(sc_clock & clk) override;
+  void bind_clocks(Clocks & clocks) override;
   // DMAEngine
   tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload & payload,
                                     ARM::AXI::Phase & phase) override;
@@ -126,9 +125,9 @@ private:
   DMAEngine *dma_engine = nullptr;
   int dma_vm_id = -1;
 
-  void axi_clk_posedge();
-  void protocol_clk_posedge();
-  void phy_clk_posedge();
+  void clk_posedge_axi();
+  void clk_posedge_protocol();
+  void clk_posedge_phy();
 
   // -------------------------------------------------------
   // Delay Model

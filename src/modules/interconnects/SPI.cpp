@@ -78,7 +78,7 @@ void SPI::end_of_simulation() {
   }
 }
 
-void SPI::bind_clock(sc_clock &sysclk) { clk.bind(sysclk); }
+void SPI::bind_clocks(Clocks &clocks) { clk.bind(clocks.get()); }
 
 void SPI::clk_posedge() {
   clear_axi_states();
@@ -147,6 +147,8 @@ void SPI::clk_posedge() {
         active_transfer = send_link_request(*req.payload);
         if (active_transfer)
           active_links[req.link_id] = false;
+        else
+          links_queue.push_front(req);
         break;
       } else {
         links_queue.push_front(req);
@@ -225,11 +227,18 @@ tlm_sync_enum SPI::nb_transport_fw_axi(ARM::AXI::Payload &payload,
   case ARM::AXI::W_VALID_LAST:
     w_queue_in.push_back(&payload);
     break;
+  case ARM::AXI::B_READY:
+    b_state = b_state == REQ ? ACK : CLEAR;
+    return TLM_ACCEPTED;
   case ARM::AXI::AR_VALID:
     ar_queue_in.push_back(&payload);
     break;
+  case ARM::AXI::R_READY:
+    r_state = r_state == REQ ? ACK : CLEAR;
+    return TLM_ACCEPTED;
   default:
-    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
+                           << get_axi_phase_string(phase));
   }
 
   return TLM_ACCEPTED;
@@ -255,7 +264,8 @@ tlm_sync_enum SPI::nb_transport_bw_axi(ARM::AXI::Payload &payload,
     r_queue_in.push_back(&payload);
     break;
   default:
-    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase");
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
+                           << get_axi_phase_string(phase));
   }
 
   return TLM_ACCEPTED;

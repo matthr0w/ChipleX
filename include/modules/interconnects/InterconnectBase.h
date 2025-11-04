@@ -6,6 +6,7 @@
 #include <tlm_utils/simple_target_socket.h>
 
 #include "ARM/TLM/arm_axi4.h"
+#include "modules/chiplets/Clocks.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -35,5 +36,5 @@ struct InterconnectBase {
     delete[] irq_ports;
   }
 
-  virtual void bind_clock(sc_clock &clk) = 0;
+  virtual void bind_clocks(Clocks &clocks) = 0;
 };

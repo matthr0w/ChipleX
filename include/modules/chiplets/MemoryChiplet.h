@@ -28,13 +28,13 @@ struct MemoryChiplet : ChipletBase {
                "Parameter Error: AXI size must be a multiple of 8");
 
     // Memory
-    memory.clk.bind(clocks.get("axi"));
+    memory.clk.bind(chiplet_clocks.get("ram"));
 
     // Interconnect
     InterconnectManager manager(chiplet_id, sysconf.chiplets[chiplet_name],
                                 sysconf.interconnect, 0, nullptr);
     interconnect = manager.create_interconnect();
-    interconnect->bind_clock(clocks.get("axi"));
+    interconnect->bind_clocks(interconnect_clocks);
     interconnect->axi_in_port->bind(dummy_axi_isocket);
     interconnect->axi_out_port->bind(memory.tsocket);
   }
