@@ -3,25 +3,31 @@
 
 struct UserSignals {
   uint8_t core = 0;
-  uint8_t source = 0;
-  uint8_t destination = 0;
+  uint8_t src_chiplet = 0;
+  uint8_t dst_chiplet = 0;
+  uint8_t src_module = 0;
+  uint8_t dst_module = 0;
   bool fixed_address = true;
 
   uint64_t encode() const {
     uint64_t val = 0;
     val |= (static_cast<uint64_t>(core) & 0xFF) << 56;
-    val |= (static_cast<uint64_t>(source) & 0xFF) << 48;
-    val |= (static_cast<uint64_t>(destination) & 0xFF) << 40;
-    val |= (static_cast<uint64_t>(fixed_address) & 0x1) << 39;
+    val |= (static_cast<uint64_t>(src_chiplet) & 0xFF) << 48;
+    val |= (static_cast<uint64_t>(dst_chiplet) & 0xFF) << 40;
+    val |= (static_cast<uint64_t>(src_module) & 0xFF) << 32;
+    val |= (static_cast<uint64_t>(dst_module) & 0xFF) << 24;
+    val |= (static_cast<uint64_t>(fixed_address) & 0x1) << 23;
     return val;
   }
 
   static UserSignals decode(uint64_t val) {
     UserSignals user;
     user.core = static_cast<uint8_t>((val >> 56) & 0xFF);
-    user.source = static_cast<uint8_t>((val >> 48) & 0xFF);
-    user.destination = static_cast<uint8_t>((val >> 40) & 0xFF);
-    user.fixed_address = ((val >> 39) & 0x1) != 0;
+    user.src_chiplet = static_cast<uint8_t>((val >> 48) & 0xFF);
+    user.dst_chiplet = static_cast<uint8_t>((val >> 40) & 0xFF);
+    user.src_module = static_cast<uint8_t>((val >> 32) & 0xFF);
+    user.dst_module = static_cast<uint8_t>((val >> 24) & 0xFF);
+    user.fixed_address = ((val >> 23) & 0x1) != 0;
     return user;
   }
 };

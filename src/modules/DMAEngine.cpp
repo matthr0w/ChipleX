@@ -4,6 +4,8 @@
 
 DMAEngine::DMAEngine(sc_module_name name, YAML::Node config)
     : sc_module(name), axi_width(config["axi"]["width"].as<unsigned>()),
+      tsocket("tsocket", *this, &DMAEngine::nb_transport_bw,
+              ARM::TLM::PROTOCOL_AXI4, axi_width),
       isocket("isocket", *this, &DMAEngine::nb_transport_bw,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
   SC_METHOD(clk_posedge);

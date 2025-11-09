@@ -41,10 +41,10 @@ CoreCodeMap *get_program_code() {
           while (offset < buffer_size) {
             size_t chunk_size = std::min(buffer_size - offset, max_size);
 
-            auto reqw =
-                Core::WriteRequest(req_id, write_buf + offset, chunk_size)
-                    .set_dest(1)
-                    .skip_cache();
+            auto reqw = Core::AxiRequest(req_id, write_buf + offset, chunk_size)
+                            .to_module("interconnect")
+                            .to_target("chiplet0")
+                            .skip_cache();
 
             handle = core.write(reqw);
             offset += chunk_size;
@@ -81,9 +81,8 @@ CoreCodeMap *get_program_code() {
           while (offset < total_len) {
             size_t chunk_size = std::min(total_len - offset, max_size);
 
-            auto reqr = Core::ReadRequest(req_id, base_addr + offset,
-                                          read_buf + offset, chunk_size)
-                            .set_dest(0)
+            auto reqr = Core::AxiRequest(req_id, read_buf + offset, chunk_size)
+                            .set_addr(base_addr + offset)
                             .skip_cache();
 
             handle = core.read(reqr);
@@ -129,9 +128,8 @@ CoreCodeMap *get_program_code() {
           while (offset < total_len) {
             size_t chunk_size = std::min(total_len - offset, max_size);
 
-            auto reqr = Core::ReadRequest(req_id, base_addr + offset,
-                                          read_buf + offset, chunk_size)
-                            .set_dest(1)
+            auto reqr = Core::AxiRequest(req_id, read_buf + offset, chunk_size)
+                            .set_addr(base_addr + offset)
                             .skip_cache();
 
             handle = core.read(reqr);
@@ -172,10 +170,10 @@ CoreCodeMap *get_program_code() {
           while (offset < new_buf_size) {
             size_t chunk_size = std::min(new_buf_size - offset, max_size);
 
-            auto reqw =
-                Core::WriteRequest(req_id, write_buf + offset, chunk_size)
-                    .set_dest(2)
-                    .skip_cache();
+            auto reqw = Core::AxiRequest(req_id, write_buf + offset, chunk_size)
+                            .to_module("interconnect")
+                            .to_target("chiplet1")
+                            .skip_cache();
 
             handle = core.write(reqw);
             offset += chunk_size;
@@ -213,9 +211,8 @@ CoreCodeMap *get_program_code() {
           while (offset < total_len) {
             size_t chunk_size = std::min(total_len - offset, max_size);
 
-            auto reqr = Core::ReadRequest(req_id, base_addr + offset,
-                                          read_buf + offset, chunk_size)
-                            .set_dest(2)
+            auto reqr = Core::AxiRequest(req_id, read_buf + offset, chunk_size)
+                            .set_addr(base_addr + offset)
                             .skip_cache();
 
             handle = core.read(reqr);
@@ -240,10 +237,10 @@ CoreCodeMap *get_program_code() {
           while (offset < total_len) {
             size_t chunk_size = std::min(total_len - offset, max_size);
 
-            auto reqw =
-                Core::WriteRequest(req_id, write_buf + offset, chunk_size)
-                    .set_dest(0)
-                    .skip_cache();
+            auto reqw = Core::AxiRequest(req_id, write_buf + offset, chunk_size)
+                            .to_module("interconnect")
+                            .to_target("fpga")
+                            .skip_cache();
 
             handle = core.write(reqw);
             offset += chunk_size;

@@ -44,7 +44,7 @@ void SLDataLinkLayer::clk_posedge() {
       sc_time delay = SC_ZERO_TIME;
       pack_payload(*transaction, *payload);
 
-      uint8_t destination_id = UserSignals::decode(payload->user).destination;
+      uint8_t destination_id = UserSignals::decode(payload->user).dst_chiplet;
       int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
       if (link_id == -1)
         SC_LOG_ERROR(this, "No valid routing path from "

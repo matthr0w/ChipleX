@@ -7,17 +7,15 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2,
   auto *buf1 = new unsigned char[4 * sizeof(int)];
   auto *buf2 = new unsigned char[4 * sizeof(int)];
 
-  auto reqr =
-      Core::ReadRequest(1, src_addr1, reinterpret_cast<unsigned char *>(buf1),
-                        4 * sizeof(int))
-          .set_dest(1)
-          .skip_cache();
+  auto reqr = Core::AxiRequest(1, reinterpret_cast<unsigned char *>(buf1),
+                               4 * sizeof(int))
+                  .set_addr(src_addr1)
+                  .skip_cache();
   auto handle = core.read(reqr);
   handle->wait();
-  reqr =
-      Core::ReadRequest(2, src_addr2, reinterpret_cast<unsigned char *>(buf2),
-                        4 * sizeof(int))
-          .set_dest(1);
+  reqr = Core::AxiRequest(2, reinterpret_cast<unsigned char *>(buf2),
+                          4 * sizeof(int))
+             .set_addr(src_addr2);
   handle = core.read(reqr);
   handle->wait();
 
@@ -35,10 +33,9 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2,
   auto *data = new unsigned char[4 * sizeof(int)];
   std::memcpy(data, result, 4 * sizeof(int));
 
-  auto reqw = Core::WriteRequest(3, reinterpret_cast<unsigned char *>(data),
-                                 4 * sizeof(int))
+  auto reqw = Core::AxiRequest(3, reinterpret_cast<unsigned char *>(data),
+                               4 * sizeof(int))
                   .set_addr(dest_addr)
-                  .set_dest(1)
                   .skip_cache();
   handle = core.write(reqw);
   handle->wait();
@@ -56,9 +53,10 @@ CoreCodeMap *get_program_code() {
           memcpy(data, matrix, sizeof(matrix));
 
           auto reqw =
-              Core::WriteRequest(0, reinterpret_cast<unsigned char *>(data),
-                                 sizeof(matrix))
-                  .set_dest(1)
+              Core::AxiRequest(0, reinterpret_cast<unsigned char *>(data),
+                               sizeof(matrix))
+                  .to_module("interconnect")
+                  .to_target("chiplet0")
                   .skip_cache();
           auto handle = core.write(reqw);
           handle->wait();
@@ -68,11 +66,11 @@ CoreCodeMap *get_program_code() {
         [](Core &core, tlm_generic_payload *irq) {
           auto *data = new unsigned char[4 * sizeof(int)];
 
-          auto reqr = Core::ReadRequest(0, irq->get_address(),
-                                        reinterpret_cast<unsigned char *>(data),
-                                        4 * sizeof(int))
-                          .set_dest(0)
-                          .skip_cache();
+          auto reqr =
+              Core::AxiRequest(0, reinterpret_cast<unsigned char *>(data),
+                               4 * sizeof(int))
+                  .set_addr(irq->get_address())
+                  .skip_cache();
           auto handle = core.read(reqr);
           handle->wait();
 
@@ -99,18 +97,19 @@ CoreCodeMap *get_program_code() {
           matrix_multiply(core, 0x4000, matrix_addr, 0x5000); // A^6 = A^5 * A
 
           auto *data = new unsigned char[4 * sizeof(int)];
-          auto reqr = Core::ReadRequest(4, 0x5000,
-                                        reinterpret_cast<unsigned char *>(data),
-                                        4 * sizeof(int))
-                          .set_dest(1)
-                          .skip_cache();
+          auto reqr =
+              Core::AxiRequest(4, reinterpret_cast<unsigned char *>(data),
+                               4 * sizeof(int))
+                  .set_addr(0x5000)
+                  .skip_cache();
           auto handle = core.read(reqr);
           handle->wait();
 
           auto reqw =
-              Core::WriteRequest(5, reinterpret_cast<unsigned char *>(data),
-                                 4 * sizeof(int))
-                  .set_dest(0)
+              Core::AxiRequest(5, reinterpret_cast<unsigned char *>(data),
+                               4 * sizeof(int))
+                  .to_module("interconnect")
+                  .to_target("fpga")
                   .skip_cache();
           handle = core.write(reqw);
           handle->wait();

@@ -62,64 +62,52 @@ public:
   // -------------------------------------------------------
   // AXI Request Types
   // -------------------------------------------------------
-  struct ReadRequest {
-    uint32_t request_id;
-    uint32_t address;
-    unsigned char *data;
-    unsigned data_length;
-
-    std::optional<uint8_t> destination_id;
-    bool is_volatile = false;
-
-    ARM::AXI::Burst burst = ARM::AXI::BURST_INCR;
-
-    ReadRequest(uint32_t id, uint32_t addr, unsigned char *buf, unsigned len)
-        : request_id(id), address(addr), data(buf), data_length(len) {}
-
-    ReadRequest &set_dest(uint8_t dest) {
-      destination_id = dest;
-      return *this;
-    }
-    ReadRequest &set_burst(ARM::AXI::Burst type) {
-      burst = type;
-      return *this;
-    }
-    ReadRequest &skip_cache(bool val = true) {
-      is_volatile = val;
-      return *this;
-    }
-  };
-
-  struct WriteRequest {
+  struct AxiRequest {
     uint32_t request_id;
     unsigned char *data;
     unsigned data_length;
 
-    std::optional<uint8_t> destination_id;
     std::optional<uint32_t> address;
-    bool is_volatile = false;
+    std::optional<std::string> dst_chiplet_name;
+    std::optional<std::string> src_module_name;
+    std::optional<std::string> dst_module_name;
 
+    bool is_volatile = false;
     ARM::AXI::Burst burst = ARM::AXI::BURST_INCR;
 
-    WriteRequest(uint32_t id, unsigned char *buf, unsigned len)
+    AxiRequest(uint32_t id, unsigned char *buf, unsigned len)
         : request_id(id), data(buf), data_length(len) {}
 
-    WriteRequest &set_dest(uint8_t dest) {
-      destination_id = dest;
-      return *this;
-    }
-    WriteRequest &set_addr(uint32_t addr) {
+    AxiRequest &set_addr(uint32_t addr) {
       address = addr;
       return *this;
     }
-    WriteRequest &set_burst(ARM::AXI::Burst type) {
+
+    AxiRequest &to_module(const std::string &module_name) {
+      src_module_name = module_name;
+      return *this;
+    }
+
+    AxiRequest &to_target(const std::string &chiplet_name,
+                          const std::string &module_name = "memory") {
+      dst_chiplet_name = chiplet_name;
+      dst_module_name = module_name;
+      return *this;
+    }
+
+    AxiRequest &set_burst(ARM::AXI::Burst type) {
       burst = type;
       return *this;
     }
-    WriteRequest &skip_cache(bool val = true) {
+
+    AxiRequest &skip_cache(bool val = true) {
       is_volatile = val;
       return *this;
     }
+
+    bool has_addr() const { return address.has_value(); }
+    bool has_src_module() const { return src_module_name.has_value(); }
+    bool has_dst_module() const { return dst_module_name.has_value(); }
   };
 
   struct RequestHandle {
@@ -150,17 +138,19 @@ public:
   // -------------------------------------------------------
 private:
   std::shared_ptr<RequestHandle> read_internal(
-      uint32_t request_id, uint8_t destination_id, uint32_t address,
-      bool fixed_address, unsigned char *data, unsigned data_length,
-      ARM::AXI::Burst burst, bool is_volatile);
+      uint32_t request_id, uint8_t dst_chiplet, uint8_t src_module,
+      uint8_t dst_module, uint32_t address, bool fixed_address,
+      unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
+      bool is_volatile);
   std::shared_ptr<RequestHandle> write_internal(
-      uint32_t request_id, uint8_t destination_id, uint32_t address,
-      bool fixed_address, unsigned char *data, unsigned data_length,
-      ARM::AXI::Burst burst, bool is_volatile);
+      uint32_t request_id, uint8_t dst_chiplet, uint8_t src_module,
+      uint8_t dst_module, uint32_t address, bool fixed_address,
+      unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
+      bool is_volatile);
 
 public:
-  std::shared_ptr<RequestHandle> read(const ReadRequest &req);
-  std::shared_ptr<RequestHandle> write(const WriteRequest &req);
+  std::shared_ptr<RequestHandle> read(const AxiRequest &req);
+  std::shared_ptr<RequestHandle> write(const AxiRequest &req);
 
 private:
   // -------------------------------------------------------

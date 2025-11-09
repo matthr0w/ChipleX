@@ -1,6 +1,5 @@
 #include "common/Router.h"
 
-#include <iostream>
 #include <queue>
 
 void Router::build_table() {

@@ -32,6 +32,7 @@ public:
   // -------------------------------------------------------
   // Sockets
   // -------------------------------------------------------
+  ARM::AXI::SimpleTargetSocket<DMAEngine> tsocket;
   ARM::AXI::SimpleInitiatorSocket<DMAEngine> isocket;
 
   DMAEngine(sc_module_name name, YAML::Node config);

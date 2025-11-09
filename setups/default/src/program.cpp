@@ -12,18 +12,20 @@ CoreCodeMap *get_program_code() {
           for (size_t i = 0; i < num_bytes; ++i)
             data[i] = static_cast<uint8_t>(i);
 
-          auto reqw = Core::WriteRequest(
+          auto reqw = Core::AxiRequest(
                           1, reinterpret_cast<unsigned char *>(data), num_bytes)
-                          .set_dest(2)
+                          .to_module("interconnect")
+                          .to_target("chiplet2")
                           .skip_cache();
 
           auto h = core.write(reqw);
 
-          auto reqr =
-              Core::ReadRequest(2, 0x0, reinterpret_cast<unsigned char *>(data),
-                                num_bytes)
-                  .set_dest(2)
-                  .skip_cache();
+          auto reqr = Core::AxiRequest(
+                          2, reinterpret_cast<unsigned char *>(data), num_bytes)
+                          .set_addr(0x0)
+                          .to_module("interconnect")
+                          .to_target("chiplet2")
+                          .skip_cache();
 
           h = core.read(reqr);
           h->wait();

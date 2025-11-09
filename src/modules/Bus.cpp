@@ -1,10 +1,9 @@
-#include "modules/AXIBus.h"
+#include "modules/Bus.h"
 
 #include "logging.h"
 
-AXIBus::AXIBus(sc_module_name name, unsigned int chiplet_id,
-               unsigned int num_managers, unsigned int num_subordinates,
-               YAML::Node config)
+Bus::Bus(sc_module_name name, unsigned chiplet_id, unsigned num_managers,
+         unsigned num_subordinates, YAML::Node config)
     : sc_module(name), chiplet_id(chiplet_id),
       axi_width(config["axi"]["width"].as<unsigned>()),
       clk_cycle(config["axi"]["clk_cycle"].as<unsigned>(), SC_NS),
@@ -16,8 +15,8 @@ AXIBus::AXIBus(sc_module_name name, unsigned int chiplet_id,
     std::ostringstream name;
     name << "tsocket" << i;
     mgr_tsockets.emplace_back(
-        std::make_unique<ARM::AXI4::SimpleTargetSocketTagged<AXIBus>>(
-            name.str().c_str(), *this, i, &AXIBus::nb_transport_fw,
+        std::make_unique<ARM::AXI4::SimpleTargetSocketTagged<Bus>>(
+            name.str().c_str(), *this, i, &Bus::nb_transport_fw,
             ARM::TLM::PROTOCOL_AXI4, axi_width));
   }
 
@@ -26,8 +25,8 @@ AXIBus::AXIBus(sc_module_name name, unsigned int chiplet_id,
     std::ostringstream name;
     name << "isocket" << i;
     sub_isockets.emplace_back(
-        std::make_unique<ARM::AXI4::SimpleInitiatorSocketTagged<AXIBus>>(
-            name.str().c_str(), *this, i, &AXIBus::nb_transport_bw,
+        std::make_unique<ARM::AXI4::SimpleInitiatorSocketTagged<Bus>>(
+            name.str().c_str(), *this, i, &Bus::nb_transport_bw,
             ARM::TLM::PROTOCOL_AXI4, axi_width));
   }
 
@@ -36,9 +35,9 @@ AXIBus::AXIBus(sc_module_name name, unsigned int chiplet_id,
   dont_initialize();
 }
 
-AXIBus::~AXIBus() { delete[] beat_data; }
+Bus::~Bus() { delete[] beat_data; }
 
-void AXIBus::clk_posedge() {
+void Bus::clk_posedge() {
   for (auto &[key, conn] : connections) {
     auto [mgr_id, sub_id] = key;
 
@@ -96,13 +95,19 @@ void AXIBus::clk_posedge() {
 // -------------------------------------------------------
 // Transport Functions
 // -------------------------------------------------------
-tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
-                                      ARM::AXI::Phase &phase) {
+tlm_sync_enum Bus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
+                                   ARM::AXI::Phase &phase) {
   int sub_id = 0;
   if (auto it = payloads2sub.find(&payload); it != payloads2sub.end()) {
     sub_id = it->second;
   } else {
-    sub_id = route_payload(payload);
+    UserSignals user = UserSignals::decode(payload.user);
+    if (user.src_chiplet == chiplet_id)
+      sub_id = user.src_module;
+    else if (user.dst_chiplet == chiplet_id)
+      sub_id = user.dst_module;
+    else
+      SC_LOG_ERROR(this, "This AXI beat should not be on this chiplet!");
     payloads2sub[&payload] = sub_id;
     payloads2mgr[&payload] = mgr_id;
   }
@@ -113,8 +118,8 @@ tlm_sync_enum AXIBus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
   return TLM_ACCEPTED;
 }
 
-tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
-                                      ARM::AXI::Phase &phase) {
+tlm_sync_enum Bus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
+                                   ARM::AXI::Phase &phase) {
   int mgr_id = 0;
   if (auto it = payloads2mgr.find(&payload); it != payloads2mgr.end()) {
     mgr_id = it->second;
@@ -130,18 +135,10 @@ tlm_sync_enum AXIBus::nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
 }
 
 // -------------------------------------------------------
-// Helper Functions
-// -------------------------------------------------------
-int AXIBus::route_payload(ARM::AXI::Payload &payload) {
-  UserSignals user = UserSignals::decode(payload.user);
-  return user.destination == chiplet_id ? 0 : 1;
-}
-
-// -------------------------------------------------------
 // Debug Functions
 // -------------------------------------------------------
-void AXIBus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
-                           ARM::AXI::Phase) {
+void Bus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
+                        ARM::AXI::Phase) {
   const char *phase_name = "?";
   bool show_addr = true;
   bool show_data = false;

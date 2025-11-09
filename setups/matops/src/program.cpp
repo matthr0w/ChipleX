@@ -45,8 +45,10 @@ CoreCodeMap *get_program_code() {
 
           print_matrix(matrix, MATRIX_ROWS, MATRIX_COLS, "Input");
 
-          auto reqw =
-              Core::WriteRequest(0, data, buffer_size).set_dest(1).skip_cache();
+          auto reqw = Core::AxiRequest(0, data, buffer_size)
+                          .to_module("interconnect")
+                          .to_target("chiplet0")
+                          .skip_cache();
 
           auto handle = core.write(reqw);
 
@@ -61,7 +63,7 @@ CoreCodeMap *get_program_code() {
           // Read from FPGA RAM
           auto *data = new unsigned char[len];
           auto reqr =
-              Core::ReadRequest(0, addr, data, len).set_dest(0).skip_cache();
+              Core::AxiRequest(0, data, len).set_addr(addr).skip_cache();
           auto handle = core.read(reqr);
           handle->wait();
 
@@ -89,9 +91,8 @@ CoreCodeMap *get_program_code() {
 
           // Read from Chiplet0 RAM
           auto *read_buf = new unsigned char[len];
-          auto reqr = Core::ReadRequest(0, addr, read_buf, len)
-                          .set_dest(1)
-                          .skip_cache();
+          auto reqr =
+              Core::AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
           auto handle = core.read(reqr);
           handle->wait();
 
@@ -116,8 +117,10 @@ CoreCodeMap *get_program_code() {
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
 
-          auto reqw =
-              Core::WriteRequest(0, write_buf, len).set_dest(2).skip_cache();
+          auto reqw = Core::AxiRequest(0, write_buf, len)
+                          .to_module("interconnect")
+                          .to_target("chiplet1")
+                          .skip_cache();
           handle = core.write(reqw);
           handle->wait();
 
@@ -133,9 +136,8 @@ CoreCodeMap *get_program_code() {
 
           // Read from Chiplet1 RAM
           auto *read_buf = new unsigned char[len];
-          auto reqr = Core::ReadRequest(0, addr, read_buf, len)
-                          .set_dest(2)
-                          .skip_cache();
+          auto reqr =
+              Core::AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
           auto handle = core.read(reqr);
           handle->wait();
 
@@ -160,8 +162,10 @@ CoreCodeMap *get_program_code() {
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
 
-          auto reqw =
-              Core::WriteRequest(0, write_buf, len).set_dest(3).skip_cache();
+          auto reqw = Core::AxiRequest(0, write_buf, len)
+                          .to_module("interconnect")
+                          .to_target("chiplet2")
+                          .skip_cache();
           handle = core.write(reqw);
           handle->wait();
 
@@ -177,9 +181,8 @@ CoreCodeMap *get_program_code() {
 
           // Read from Chiplet2 RAM
           auto *read_buf = new unsigned char[len];
-          auto reqr = Core::ReadRequest(0, addr, read_buf, len)
-                          .set_dest(3)
-                          .skip_cache();
+          auto reqr =
+              Core::AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
           auto handle = core.read(reqr);
           handle->wait();
 
@@ -209,8 +212,10 @@ CoreCodeMap *get_program_code() {
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
 
-          auto reqw =
-              Core::WriteRequest(0, write_buf, len).set_dest(4).skip_cache();
+          auto reqw = Core::AxiRequest(0, write_buf, len)
+                          .to_module("interconnect")
+                          .to_target("chiplet3")
+                          .skip_cache();
           handle = core.write(reqw);
           handle->wait();
 
@@ -226,9 +231,8 @@ CoreCodeMap *get_program_code() {
 
           // Read from Chiplet3 RAM
           auto *read_buf = new unsigned char[len];
-          auto reqr = Core::ReadRequest(0, addr, read_buf, len)
-                          .set_dest(4)
-                          .skip_cache();
+          auto reqr =
+              Core::AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
           auto handle = core.read(reqr);
           handle->wait();
 
@@ -253,8 +257,10 @@ CoreCodeMap *get_program_code() {
           auto *write_buf = new unsigned char[len];
           memcpy(write_buf, read_buf, len);
 
-          auto reqw =
-              Core::WriteRequest(0, write_buf, len).set_dest(0).skip_cache();
+          auto reqw = Core::AxiRequest(0, write_buf, len)
+                          .to_module("interconnect")
+                          .to_target("fpga")
+                          .skip_cache();
           handle = core.write(reqw);
           handle->wait();
 

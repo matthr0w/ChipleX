@@ -67,7 +67,7 @@ void SLNetworkLayer::clk_posedge() {
 
       // Flow control
       uint8_t destination_id =
-          UserSignals::decode(payload_out->user).destination;
+          UserSignals::decode(payload_out->user).dst_chiplet;
       int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
       if (link_id == -1)
         SC_LOG_ERROR(this, "No valid routing path from "
@@ -79,7 +79,7 @@ void SLNetworkLayer::clk_posedge() {
     Payload_t *payload = stream_fifo_in->peek();
     if (payload) {
       // Prioritize forwarding packets
-      uint8_t destination_id = UserSignals::decode(payload->user).destination;
+      uint8_t destination_id = UserSignals::decode(payload->user).dst_chiplet;
       int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
 
       if (link_id != -1) {
@@ -360,7 +360,7 @@ void SLNetworkLayer::sender_thread() {
     // Prioritize forwarding packets
     Payload_t *payload = stream_fifo_in->peek();
     if (payload) {
-      if (UserSignals::decode(payload->user).destination != chiplet_id) {
+      if (UserSignals::decode(payload->user).dst_chiplet != chiplet_id) {
         axis_reg_valid_in.write(false);
         axis_reg_ready_in.write(false);
         continue;
@@ -402,7 +402,7 @@ void SLNetworkLayer::sender_thread() {
       payload_out->burst = axi_out_trans.r_payload->get_burst();
       // Source becomes destination
       UserSignals user = UserSignals::decode(axi_out_trans.r_payload->user);
-      user.destination = user.source;
+      user.dst_chiplet = user.src_chiplet;
       payload_out->user = user.encode();
     } else if (b_gnt.read()) {
       payload_out->hdr = TagB;
@@ -411,14 +411,14 @@ void SLNetworkLayer::sender_thread() {
       payload_out->burst = axi_out_trans.w_payload->get_burst();
       // Source becomes destination
       UserSignals user = UserSignals::decode(axi_out_trans.w_payload->user);
-      user.destination = user.source;
+      user.dst_chiplet = user.src_chiplet;
       payload_out->user = user.encode();
     }
 
     // Credit only packets
     if (payload_out->hdr == TagIdle) {
       UserSignals user;
-      user.source = chiplet_id;
+      user.src_chiplet = chiplet_id;
       // Find the link with max credits_to_send
       unsigned link_id = 0;
       unsigned max_credits = 0;
@@ -433,11 +433,11 @@ void SLNetworkLayer::sender_thread() {
       if (destination_id == -1)
         SC_LOG_ERROR(this, "No valid routing path from "
                                << chiplet_id << " via link" << int(link_id));
-      user.destination = destination_id;
+      user.dst_chiplet = destination_id;
       payload_out->user = user.encode();
     }
 
-    uint8_t destination_id = UserSignals::decode(payload_out->user).destination;
+    uint8_t destination_id = UserSignals::decode(payload_out->user).dst_chiplet;
     int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
     if (link_id == -1)
       SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to "

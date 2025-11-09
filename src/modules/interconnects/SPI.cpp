@@ -95,7 +95,7 @@ void SPI::clk_posedge() {
     LinkRequest req = links_queue.front();
     links_queue.pop_front();
 
-    uint8_t destination_id = UserSignals::decode(req.payload->user).destination;
+    uint8_t destination_id = UserSignals::decode(req.payload->user).dst_chiplet;
 
     if (destination_id == chiplet_id) {
       link_req_out = req;
@@ -141,7 +141,7 @@ void SPI::clk_posedge() {
       links_queue.pop_front();
 
       uint8_t destination_id =
-          UserSignals::decode(req.payload->user).destination;
+          UserSignals::decode(req.payload->user).dst_chiplet;
 
       if (destination_id != chiplet_id) {
         active_transfer = send_link_request(*req.payload);
@@ -162,7 +162,7 @@ void SPI::clk_posedge() {
       ARM::AXI::Payload *payload = r_queue_in.front();
       // Source becomes destination
       UserSignals user = UserSignals::decode(payload->user);
-      user.destination = user.source;
+      user.dst_chiplet = user.src_chiplet;
       payload->user = user.encode();
       active_transfer = send_link_request(*payload);
       if (active_transfer) {
@@ -174,7 +174,7 @@ void SPI::clk_posedge() {
       ARM::AXI::Payload *payload = b_queue_in.front();
       // Source becomes destination
       UserSignals user = UserSignals::decode(payload->user);
-      user.destination = user.source;
+      user.dst_chiplet = user.src_chiplet;
       payload->user = user.encode();
       active_transfer = send_link_request(*payload);
       if (active_transfer) {
@@ -495,7 +495,7 @@ bool SPI::send_link_request(ARM::AXI::Payload &payload) {
 
   transaction->set_data_ptr(reinterpret_cast<unsigned char *>(&payload));
 
-  uint8_t destination_id = UserSignals::decode(payload.user).destination;
+  uint8_t destination_id = UserSignals::decode(payload.user).dst_chiplet;
   int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
   if (link_id == -1)
     SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to "

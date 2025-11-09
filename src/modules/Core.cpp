@@ -1,5 +1,7 @@
 #include "modules/Core.h"
 
+#include "modules/chiplets/ChipletRegistry.h"
+
 Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
            YAML::Node config, const CyclesDB &cycles)
     : sc_module(name), chiplet_id(chiplet_id), core_id(core_id),
@@ -192,8 +194,9 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
 // AXI Methods
 // -------------------------------------------------------
 std::shared_ptr<Core::RequestHandle>
-Core::read_internal(uint32_t request_id, uint8_t destination_id,
-                    uint32_t address, bool fixed_address, unsigned char *data,
+Core::read_internal(uint32_t request_id, uint8_t dst_chiplet,
+                    uint8_t src_module, uint8_t dst_module, uint32_t address,
+                    bool fixed_address, unsigned char *data,
                     unsigned int data_length, ARM::AXI::Burst burst,
                     bool is_volatile) {
   auto handle = std::make_shared<RequestHandle>();
@@ -208,8 +211,10 @@ Core::read_internal(uint32_t request_id, uint8_t destination_id,
 
   UserSignals user;
   user.core = core_id;
-  user.source = chiplet_id;
-  user.destination = destination_id;
+  user.src_chiplet = chiplet_id;
+  user.dst_chiplet = dst_chiplet;
+  user.src_module = src_module;
+  user.dst_module = dst_module;
   user.fixed_address = fixed_address;
 
   payload->id = request_id;
@@ -231,51 +236,93 @@ Core::read_internal(uint32_t request_id, uint8_t destination_id,
   return handle;
 }
 
-std::shared_ptr<Core::RequestHandle> Core::read(const ReadRequest &req) {
+std::shared_ptr<Core::RequestHandle> Core::read(const AxiRequest &req) {
+  uint32_t max_burst = 0;
   switch (req.burst) {
   case ARM::AXI::BURST_FIXED:
-    if (req.data_length > MAX_FIXED_BURST_SIZE) {
-      std::ostringstream message;
-      message << "AXI Burst Error: Requested data length (" << req.data_length
-              << " bytes) exceeds maximum allowed fixed burst size ("
-              << MAX_FIXED_BURST_SIZE << " bytes)";
-      SC_LOG_ERROR(this, message.str().c_str());
-    }
+    max_burst = MAX_FIXED_BURST_SIZE;
     break;
   case ARM::AXI::BURST_INCR:
-    if (req.data_length > MAX_INCR_BURST_SIZE) {
-      std::ostringstream message;
-      message << "AXI Burst Error: Requested data length (" << req.data_length
-              << " bytes) exceeds maximum allowed incremental burst size ("
-              << MAX_INCR_BURST_SIZE << " bytes)";
-      SC_LOG_ERROR(this, message.str().c_str());
-    }
+    max_burst = MAX_INCR_BURST_SIZE;
     break;
   case ARM::AXI::BURST_WRAP:
-    if (req.data_length > MAX_WRAP_BURST_SIZE) {
-      std::ostringstream message;
-      message << "AXI Burst Error: Requested data length (" << req.data_length
-              << " bytes) exceeds maximum allowed wrap burst size ("
-              << MAX_WRAP_BURST_SIZE << " bytes)";
-      SC_LOG_ERROR(this, message.str().c_str());
-    }
+    max_burst = MAX_WRAP_BURST_SIZE;
     break;
   default:
-    SC_LOG_ERROR(this, "AXI Burst Error: Unknown burst type");
+    SC_LOG_ERROR(this, "AXI Request Error: Unknown burst type");
   }
 
-  uint8_t destination_id = req.destination_id.value_or(chiplet_id);
-  bool fixed_address = true;
-  bool is_volatile = req.is_volatile || (destination_id != chiplet_id);
+  SC_LOG_ASSERT(this, req.data_length <= max_burst,
+                "AXI Request Error: Requested data length ("
+                    << req.data_length
+                    << " bytes) exceeds maximum allowed burst size ("
+                    << max_burst << " bytes)");
 
-  return read_internal(req.request_id, destination_id, req.address,
-                       fixed_address, req.data, req.data_length, req.burst,
-                       is_volatile);
+  auto src_chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
+  std::string src_chiplet_name = src_chiplet_desc->chiplet_name;
+  std::string dst_chiplet_name =
+      req.dst_chiplet_name.value_or(src_chiplet_name);
+  std::string src_module_name = req.src_module_name.value_or("memory");
+  std::string dst_module_name = req.dst_module_name.value_or("memory");
+
+  auto dst_chiplet_desc = ChipletRegistry::instance().get(dst_chiplet_name);
+
+  SC_LOG_ASSERT(this, dst_chiplet_desc,
+                "AXI Request Error: Chiplet " << dst_chiplet_name
+                                              << " does not exist");
+
+  uint8_t dst_chiplet_id = dst_chiplet_desc->chiplet_id;
+
+  auto *src_module =
+      ChipletRegistry::instance().get_module(chiplet_id, src_module_name);
+
+  auto *dst_module =
+      ChipletRegistry::instance().get_module(dst_chiplet_id, dst_module_name);
+
+  SC_LOG_ASSERT(this, src_module,
+                "AXI Request Error: Module " << src_module_name
+                                             << " does not exist on "
+                                             << src_chiplet_name);
+
+  SC_LOG_ASSERT(this, dst_module,
+                "AXI Request Error: Module " << dst_module_name
+                                             << " does not exist on "
+                                             << dst_chiplet_name);
+
+  SC_LOG_ASSERT(this, src_module->is_subordinate(),
+                "AXI Request Error: Module " << src_module_name
+                                             << " is not an AXI subordinate");
+
+  SC_LOG_ASSERT(this, dst_module->is_subordinate(),
+                "AXI Request Error: Module " << dst_module_name
+                                             << " is not an AXI subordinate");
+
+  if (dst_chiplet_id == chiplet_id)
+    SC_LOG_ASSERT(
+        this, !src_module->is_interconnect(),
+        "AXI Request Error: On-chip requests must not be forwarded to "
+        "an interconnect");
+  else
+    SC_LOG_ASSERT(this, src_module->is_interconnect(),
+                  "AXI Request Error: Off-chip requests must be forwarded to "
+                  "an interconnect");
+
+  SC_LOG_ASSERT(this, req.has_addr(),
+                "AXI Request Error: Read requests require an address");
+
+  uint32_t address = req.address.value();
+  bool fixed_address = true;
+  bool is_volatile = req.is_volatile || (dst_chiplet_id != chiplet_id);
+
+  return read_internal(req.request_id, dst_chiplet_id, src_module->id,
+                       dst_module->id, address, fixed_address, req.data,
+                       req.data_length, req.burst, is_volatile);
 }
 
 std::shared_ptr<Core::RequestHandle>
-Core::write_internal(uint32_t request_id, uint8_t destination_id,
-                     uint32_t address, bool fixed_address, unsigned char *data,
+Core::write_internal(uint32_t request_id, uint8_t dst_chiplet,
+                     uint8_t src_module, uint8_t dst_module, uint32_t address,
+                     bool fixed_address, unsigned char *data,
                      unsigned int data_length, ARM::AXI::Burst burst,
                      bool is_volatile) {
   auto handle = std::make_shared<RequestHandle>();
@@ -290,8 +337,10 @@ Core::write_internal(uint32_t request_id, uint8_t destination_id,
 
   UserSignals user;
   user.core = core_id;
-  user.source = chiplet_id;
-  user.destination = destination_id;
+  user.src_chiplet = chiplet_id;
+  user.dst_chiplet = dst_chiplet;
+  user.src_module = src_module;
+  user.dst_module = dst_module;
   user.fixed_address = fixed_address;
 
   payload->id = request_id;
@@ -315,45 +364,83 @@ Core::write_internal(uint32_t request_id, uint8_t destination_id,
   return handle;
 }
 
-std::shared_ptr<Core::RequestHandle> Core::write(const WriteRequest &req) {
+std::shared_ptr<Core::RequestHandle> Core::write(const AxiRequest &req) {
+  uint32_t max_burst = 0;
   switch (req.burst) {
   case ARM::AXI::BURST_FIXED:
-    if (req.data_length > MAX_FIXED_BURST_SIZE) {
-      std::ostringstream message;
-      message << "AXI Burst Error: Requested data length (" << req.data_length
-              << " bytes) exceeds maximum allowed fixed burst size ("
-              << MAX_FIXED_BURST_SIZE << " bytes)";
-      SC_LOG_ERROR(this, message.str().c_str());
-    }
+    max_burst = MAX_FIXED_BURST_SIZE;
     break;
   case ARM::AXI::BURST_INCR:
-    if (req.data_length > MAX_INCR_BURST_SIZE) {
-      std::ostringstream message;
-      message << "AXI Burst Error: Requested data length (" << req.data_length
-              << " bytes) exceeds maximum allowed incremental burst size ("
-              << MAX_INCR_BURST_SIZE << " bytes)";
-      SC_LOG_ERROR(this, message.str().c_str());
-    }
+    max_burst = MAX_INCR_BURST_SIZE;
     break;
   case ARM::AXI::BURST_WRAP:
-    if (req.data_length > MAX_WRAP_BURST_SIZE) {
-      std::ostringstream message;
-      message << "AXI Burst Error: Requested data length (" << req.data_length
-              << " bytes) exceeds maximum allowed wrap burst size ("
-              << MAX_WRAP_BURST_SIZE << " bytes)";
-      SC_LOG_ERROR(this, message.str().c_str());
-    }
+    max_burst = MAX_WRAP_BURST_SIZE;
     break;
   default:
-    SC_LOG_ERROR(this, "AXI Burst Error: Unknown burst type");
+    SC_LOG_ERROR(this, "AXI Request Error: Unknown burst type");
   }
 
-  uint8_t destination_id = req.destination_id.value_or(chiplet_id);
+  SC_LOG_ASSERT(this, req.data_length <= max_burst,
+                "AXI Request Error: Requested data length ("
+                    << req.data_length
+                    << " bytes) exceeds maximum allowed burst size ("
+                    << max_burst << " bytes)");
+
+  auto src_chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
+  std::string src_chiplet_name = src_chiplet_desc->chiplet_name;
+  std::string dst_chiplet_name =
+      req.dst_chiplet_name.value_or(src_chiplet_name);
+  std::string src_module_name = req.src_module_name.value_or("memory");
+  std::string dst_module_name = req.dst_module_name.value_or("memory");
+
+  auto dst_chiplet_desc = ChipletRegistry::instance().get(dst_chiplet_name);
+
+  SC_LOG_ASSERT(this, dst_chiplet_desc,
+                "AXI Request Error: Chiplet " << dst_chiplet_name
+                                              << " does not exist");
+
+  uint8_t dst_chiplet_id = dst_chiplet_desc->chiplet_id;
+
+  auto *src_module =
+      ChipletRegistry::instance().get_module(chiplet_id, src_module_name);
+
+  auto *dst_module =
+      ChipletRegistry::instance().get_module(dst_chiplet_id, dst_module_name);
+
+  SC_LOG_ASSERT(this, src_module,
+                "AXI Request Error: Module " << src_module_name
+                                             << " does not exist on "
+                                             << src_chiplet_name);
+
+  SC_LOG_ASSERT(this, dst_module,
+                "AXI Request Error: Module " << dst_module_name
+                                             << " does not exist on "
+                                             << dst_chiplet_name);
+
+  SC_LOG_ASSERT(this, src_module->is_subordinate(),
+                "AXI Request Error: Module " << src_module_name
+                                             << " is not an AXI subordinate");
+
+  SC_LOG_ASSERT(this, dst_module->is_subordinate(),
+                "AXI Request Error: Module " << dst_module_name
+                                             << " is not an AXI subordinate");
+
+  if (dst_chiplet_id == chiplet_id)
+    SC_LOG_ASSERT(
+        this, !src_module->is_interconnect(),
+        "AXI Request Error: On-chip requests must not be forwarded to "
+        "an interconnect");
+  else
+    SC_LOG_ASSERT(this, src_module->is_interconnect(),
+                  "AXI Request Error: Off-chip requests must be forwarded to "
+                  "an interconnect");
+
   uint32_t address = req.address.value_or(0x0);
   bool fixed_address = req.address.has_value();
   bool is_volatile =
-      req.is_volatile || (destination_id != chiplet_id) || !fixed_address;
+      req.is_volatile || (dst_chiplet_id != chiplet_id) || !fixed_address;
 
-  return write_internal(req.request_id, destination_id, address, fixed_address,
-                        req.data, req.data_length, req.burst, is_volatile);
+  return write_internal(req.request_id, dst_chiplet_id, src_module->id,
+                        dst_module->id, address, fixed_address, req.data,
+                        req.data_length, req.burst, is_volatile);
 }

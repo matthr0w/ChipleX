@@ -196,38 +196,26 @@ void Memory::set_active_address(ARM::AXI::Payload &payload) {
 
   const UserSignals user = UserSignals::decode(payload.user);
 
-  bool is_onchip = user.destination == user.source;
+  bool is_onchip = user.dst_chiplet == user.src_chiplet;
 
   bool read_op = payload.get_command() == ARM::AXI::COMMAND_READ;
   bool write_op = payload.get_command() == ARM::AXI::COMMAND_WRITE;
 
-  if (is_onchip) {
-    if (read_op) {
-      // On-chip read transaction
-      // Free allocated address range on read
-      deallocate_dynamic_address(address, data_size);
-      active_addr = address;
-    } else if (write_op && user.fixed_address) {
-      // On-chip fixed write transaction
-      allocated_ranges[address] = data_size;
-      active_addr = address;
-    } else if (write_op && !user.fixed_address) {
-      // On-chip dynamic write transaction
-      active_addr = allocate_dynamic_address(true, data_size);
-    }
-  } else {
-    if (read_op) {
-      // Off-chip read transaction
-      // Free allocated address range on read
-      deallocate_dynamic_address(address + offchip_base_address, data_size);
-      active_addr = address + offchip_base_address;
-    } else if (write_op && user.fixed_address) {
-      // Off-chip fixed write transaction
-      allocated_ranges[address + offchip_base_address] = data_size;
-      active_addr = address + offchip_base_address;
-    } else if (write_op && !user.fixed_address) {
-      // Off-chip dynamic write transaction
-      active_addr = allocate_dynamic_address(false, data_size);
+  uint32_t base_addr = is_onchip ? 0 : offchip_base_address;
+  uint32_t target_addr = address + base_addr;
+
+  if (read_op) {
+    // Read transaction (on-chip or off-chip)
+    deallocate_dynamic_address(target_addr, data_size);
+    active_addr = target_addr;
+  } else if (write_op) {
+    if (user.fixed_address) {
+      // Fixed write transaction
+      allocated_ranges[target_addr] = data_size;
+      active_addr = target_addr;
+    } else {
+      // Dynamic write transaction
+      active_addr = allocate_dynamic_address(is_onchip, data_size);
     }
   }
 

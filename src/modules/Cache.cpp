@@ -2,6 +2,8 @@
 
 #include "logging.h"
 
+#include "modules/chiplets/ChipletRegistry.h"
+
 Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
     : sc_module(name), chiplet_id(chiplet_id),
       axi_width(config["axi"]["width"].as<unsigned>()),
@@ -428,8 +430,10 @@ void Cache::enqueue_cacheline_read() {
       ARM::AXI::COMMAND_READ, clr.address, size, len, ARM::AXI::BURST_INCR);
 
   UserSignals user;
-  user.source = chiplet_id;
-  user.destination = chiplet_id;
+  user.src_chiplet = chiplet_id;
+  user.dst_chiplet = chiplet_id;
+  user.src_module =
+      ChipletRegistry::instance().get_module(chiplet_id, "memory")->id;
   user.fixed_address = true;
 
   payload->user = user.encode();
@@ -474,8 +478,10 @@ void Cache::enqueue_storebuffer_write() {
   payload->write_in(sbe.data.data());
 
   UserSignals user;
-  user.source = chiplet_id;
-  user.destination = chiplet_id;
+  user.src_chiplet = chiplet_id;
+  user.dst_chiplet = chiplet_id;
+  user.src_module =
+      ChipletRegistry::instance().get_module(chiplet_id, "memory")->id;
   user.fixed_address = true;
 
   payload->user = user.encode();

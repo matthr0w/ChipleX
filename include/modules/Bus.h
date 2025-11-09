@@ -11,7 +11,7 @@
 using namespace sc_core;
 using namespace tlm;
 
-SC_MODULE(AXIBus) {
+SC_MODULE(Bus) {
 private:
   // -------------------------------------------------------
   // Config
@@ -29,14 +29,14 @@ public:
   // -------------------------------------------------------
   // Sockets
   // -------------------------------------------------------
-  std::vector<std::unique_ptr<ARM::AXI4::SimpleTargetSocketTagged<AXIBus>>>
+  std::vector<std::unique_ptr<ARM::AXI4::SimpleTargetSocketTagged<Bus>>>
       mgr_tsockets;
-  std::vector<std::unique_ptr<ARM::AXI4::SimpleInitiatorSocketTagged<AXIBus>>>
+  std::vector<std::unique_ptr<ARM::AXI4::SimpleInitiatorSocketTagged<Bus>>>
       sub_isockets;
 
-  AXIBus(sc_module_name name, unsigned chiplet_id, unsigned num_managers,
-         unsigned num_subordinates, YAML::Node config);
-  ~AXIBus();
+  Bus(sc_module_name name, unsigned chiplet_id, unsigned num_managers,
+      unsigned num_subordinates, YAML::Node config);
+  ~Bus();
 
 private:
   // -------------------------------------------------------
@@ -76,11 +76,6 @@ private:
 
   tlm_sync_enum nb_transport_bw(int sub_id, ARM::AXI::Payload &payload,
                                 ARM::AXI::Phase &phase);
-
-  // -------------------------------------------------------
-  // Helper Functions
-  // -------------------------------------------------------
-  int route_payload(ARM::AXI::Payload & payload);
 
   // -------------------------------------------------------
   // Debug Functions

@@ -171,7 +171,7 @@ void GenericInterconnect::clk_posedge_protocol() {
 
       // Determine Tx buffer
       uint8_t destination_id =
-          UserSignals::decode(axi_transaction.payload->user).destination;
+          UserSignals::decode(axi_transaction.payload->user).dst_chiplet;
       const unsigned tx_idx =
           Router::instance().get_link_id(chiplet_id, destination_id);
       if (tx_idx == -1)
@@ -221,8 +221,8 @@ void GenericInterconnect::clk_posedge_protocol() {
     UserSignals user = UserSignals::decode(flit.user);
 
     // Forward flit if not for this chiplet
-    if (user.destination != chiplet_id) {
-      forward_flit(rx_idx, user.destination);
+    if (user.dst_chiplet != chiplet_id) {
+      forward_flit(rx_idx, user.dst_chiplet);
       continue;
     }
 
@@ -463,7 +463,7 @@ void GenericInterconnect::handle_axi_channels() {
 
     // Save payload for response
     UserSignals user = UserSignals::decode(payload->user);
-    PayloadKey key = {payload->id, user.core, user.source};
+    PayloadKey key = {payload->id, user.core, user.src_chiplet};
     subordinate_payloads[key] = payload;
 
     // Write address to staging buffer
@@ -524,7 +524,7 @@ void GenericInterconnect::handle_axi_channels() {
 
     // Source becomes destination
     UserSignals user = UserSignals::decode(axi_transaction.payload->user);
-    user.destination = user.source;
+    user.dst_chiplet = user.src_chiplet;
     axi_transaction.payload->user = user.encode();
 
     // Write response to staging buffer
@@ -557,7 +557,7 @@ void GenericInterconnect::handle_axi_channels() {
 
     // Save payload for response
     UserSignals user = UserSignals::decode(payload->user);
-    PayloadKey key = {payload->id, user.core, user.source};
+    PayloadKey key = {payload->id, user.core, user.src_chiplet};
     subordinate_payloads[key] = payload;
 
     // Write address to staging buffer
@@ -588,7 +588,7 @@ void GenericInterconnect::handle_axi_channels() {
 
     // Source becomes destination
     UserSignals user = UserSignals::decode(axi_transaction.payload->user);
-    user.destination = user.source;
+    user.dst_chiplet = user.src_chiplet;
     axi_transaction.payload->user = user.encode();
 
     // Write data to staging buffer
@@ -782,7 +782,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
     payload->user = flit.user;
     // Save payload for later beats
     UserSignals user = UserSignals::decode(payload->user);
-    PayloadKey key = {payload->id, user.core, user.source};
+    PayloadKey key = {payload->id, user.core, user.src_chiplet};
     manager_payloads[key] = payload;
     if (aw_state == CLEAR) {
       aw_queue_out.push_back(payload);
@@ -800,7 +800,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
   case W: {
     ARM::AXI::Payload *payload = nullptr;
     UserSignals user = UserSignals::decode(flit.user);
-    auto it = manager_payloads.find({flit.id, user.core, user.source});
+    auto it = manager_payloads.find({flit.id, user.core, user.src_chiplet});
     if (it != manager_payloads.end())
       payload = it->second;
     else
@@ -829,7 +829,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
   case B: {
     ARM::AXI::Payload *payload = nullptr;
     UserSignals user = UserSignals::decode(flit.user);
-    auto it = subordinate_payloads.find({flit.id, user.core, user.source});
+    auto it = subordinate_payloads.find({flit.id, user.core, user.src_chiplet});
     if (it != subordinate_payloads.end())
       payload = it->second;
     else
@@ -871,7 +871,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
   case R: {
     ARM::AXI::Payload *payload = nullptr;
     UserSignals user = UserSignals::decode(flit.user);
-    auto it = subordinate_payloads.find({flit.id, user.core, user.source});
+    auto it = subordinate_payloads.find({flit.id, user.core, user.src_chiplet});
     if (it != subordinate_payloads.end())
       payload = it->second;
     else
@@ -924,7 +924,7 @@ void GenericInterconnect::erase_payload(
         &payload_map,
     ARM::AXI::Payload *payload) {
   UserSignals user = UserSignals::decode(payload->user);
-  PayloadKey key = {payload->id, user.core, user.source};
+  PayloadKey key = {payload->id, user.core, user.src_chiplet};
 
   auto it = payload_map.find(key);
   if (it != payload_map.end()) {
