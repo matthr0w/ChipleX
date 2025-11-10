@@ -382,9 +382,10 @@ void SPI::send_axi_beats() {
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
     register_beat_count(*payload);
     active_links[link_req.link_id] = false;
-    if (dma_vm_id != -1) {
-      send_dma_request(*payload, ARM::AXI4::CHANNEL_AW);
-    } else {
+    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_AW)) {
+      aw_state = CLEAR;
+      active_links[link_req.link_id] = true;
+    } else if (dma_vm_id == -1) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
@@ -404,9 +405,10 @@ void SPI::send_axi_beats() {
             ? ARM::AXI::W_VALID_LAST
             : ARM::AXI::W_VALID;
     active_links[link_req.link_id] = false;
-    if (dma_vm_id != -1) {
-      send_dma_request(*payload, ARM::AXI4::CHANNEL_W);
-    } else {
+    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_W)) {
+      w_state = CLEAR;
+      active_links[link_req.link_id] = true;
+    } else if (dma_vm_id == -1) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
@@ -438,9 +440,10 @@ void SPI::send_axi_beats() {
     ARM::AXI::Payload *payload = link_req.payload;
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
     active_links[link_req.link_id] = false;
-    if (dma_vm_id != -1) {
-      send_dma_request(*payload, ARM::AXI4::CHANNEL_AR);
-    } else {
+    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_AR)) {
+      ar_state = CLEAR;
+      active_links[link_req.link_id] = true;
+    } else if (dma_vm_id == -1) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,

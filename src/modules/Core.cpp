@@ -1,5 +1,6 @@
 #include "modules/Core.h"
 
+#include "modules/DMAEngine.h"
 #include "modules/chiplets/ChipletRegistry.h"
 
 Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
@@ -194,16 +195,16 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
 // AXI Methods
 // -------------------------------------------------------
 std::shared_ptr<Core::RequestHandle>
-Core::read_internal(uint32_t request_id, uint8_t dst_chiplet,
-                    uint8_t src_module, uint8_t dst_module, uint32_t address,
+Core::read_internal(uint32_t request_id, uint8_t src_module,
+                    uint8_t dst_chiplet, uint8_t dst_module, uint32_t address,
                     bool fixed_address, unsigned char *data,
-                    unsigned int data_length, ARM::AXI::Burst burst,
+                    unsigned data_length, ARM::AXI::Burst burst,
                     bool is_volatile) {
   auto handle = std::make_shared<RequestHandle>();
 
   unsigned axi_bytes = axi_width / 8;
   unsigned beats = (data_length + axi_bytes - 1) / axi_bytes;
-  uint8_t len = beats - 1;
+  uint8_t len = (beats > 0) ? (beats - 1) : 0;
   ARM::AXI::Size size = get_axi_size(axi_width);
 
   ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
@@ -212,8 +213,8 @@ Core::read_internal(uint32_t request_id, uint8_t dst_chiplet,
   UserSignals user;
   user.core = core_id;
   user.src_chiplet = chiplet_id;
-  user.dst_chiplet = dst_chiplet;
   user.src_module = src_module;
+  user.dst_chiplet = dst_chiplet;
   user.dst_module = dst_module;
   user.fixed_address = fixed_address;
 
@@ -258,8 +259,8 @@ std::shared_ptr<Core::RequestHandle> Core::read(const AxiRequest &req) {
                     << " bytes) exceeds maximum allowed burst size ("
                     << max_burst << " bytes)");
 
-  auto src_chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
-  std::string src_chiplet_name = src_chiplet_desc->chiplet_name;
+  auto chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
+  std::string src_chiplet_name = chiplet_desc->chiplet_name;
   std::string dst_chiplet_name =
       req.dst_chiplet_name.value_or(src_chiplet_name);
   std::string src_module_name = req.src_module_name.value_or("memory");
@@ -307,29 +308,29 @@ std::shared_ptr<Core::RequestHandle> Core::read(const AxiRequest &req) {
                   "AXI Request Error: Off-chip requests must be forwarded to "
                   "an interconnect");
 
-  SC_LOG_ASSERT(this, req.has_addr(),
+  SC_LOG_ASSERT(this, req.address.has_value(),
                 "AXI Request Error: Read requests require an address");
 
   uint32_t address = req.address.value();
   bool fixed_address = true;
   bool is_volatile = req.is_volatile || (dst_chiplet_id != chiplet_id);
 
-  return read_internal(req.request_id, dst_chiplet_id, src_module->id,
+  return read_internal(req.request_id, src_module->id, dst_chiplet_id,
                        dst_module->id, address, fixed_address, req.data,
                        req.data_length, req.burst, is_volatile);
 }
 
 std::shared_ptr<Core::RequestHandle>
-Core::write_internal(uint32_t request_id, uint8_t dst_chiplet,
-                     uint8_t src_module, uint8_t dst_module, uint32_t address,
+Core::write_internal(uint32_t request_id, uint8_t src_module,
+                     uint8_t dst_chiplet, uint8_t dst_module, uint32_t address,
                      bool fixed_address, unsigned char *data,
-                     unsigned int data_length, ARM::AXI::Burst burst,
+                     unsigned data_length, ARM::AXI::Burst burst,
                      bool is_volatile) {
   auto handle = std::make_shared<RequestHandle>();
 
   unsigned axi_bytes = axi_width / 8;
   unsigned beats = (data_length + axi_bytes - 1) / axi_bytes;
-  uint8_t len = beats - 1;
+  uint8_t len = (beats > 0) ? (beats - 1) : 0;
   ARM::AXI::Size size = get_axi_size(axi_width);
 
   ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
@@ -338,8 +339,8 @@ Core::write_internal(uint32_t request_id, uint8_t dst_chiplet,
   UserSignals user;
   user.core = core_id;
   user.src_chiplet = chiplet_id;
-  user.dst_chiplet = dst_chiplet;
   user.src_module = src_module;
+  user.dst_chiplet = dst_chiplet;
   user.dst_module = dst_module;
   user.fixed_address = fixed_address;
 
@@ -386,8 +387,8 @@ std::shared_ptr<Core::RequestHandle> Core::write(const AxiRequest &req) {
                     << " bytes) exceeds maximum allowed burst size ("
                     << max_burst << " bytes)");
 
-  auto src_chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
-  std::string src_chiplet_name = src_chiplet_desc->chiplet_name;
+  auto chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
+  std::string src_chiplet_name = chiplet_desc->chiplet_name;
   std::string dst_chiplet_name =
       req.dst_chiplet_name.value_or(src_chiplet_name);
   std::string src_module_name = req.src_module_name.value_or("memory");
@@ -440,7 +441,151 @@ std::shared_ptr<Core::RequestHandle> Core::write(const AxiRequest &req) {
   bool is_volatile =
       req.is_volatile || (dst_chiplet_id != chiplet_id) || !fixed_address;
 
-  return write_internal(req.request_id, dst_chiplet_id, src_module->id,
+  return write_internal(req.request_id, src_module->id, dst_chiplet_id,
                         dst_module->id, address, fixed_address, req.data,
                         req.data_length, req.burst, is_volatile);
+}
+
+std::shared_ptr<Core::RequestHandle>
+Core::dma_internal(uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
+                   uint8_t dst_module, uint8_t target_module,
+                   uint32_t request_addr, uint32_t target_addr,
+                   unsigned data_length, ARM::AXI::Burst burst,
+                   bool is_volatile) {
+  DMARequest req = {};
+
+  req.request_id = request_id;
+  req.core_id = core_id;
+
+  // Read data from
+  req.src_chiplet = chiplet_id;
+  req.src_module = src_module;
+  req.dst_chiplet = dst_chiplet;
+  req.dst_module = dst_module;
+  req.request_addr = request_addr;
+
+  // Write data to
+  req.target_module = target_module;
+  req.target_addr = target_addr;
+
+  req.data_length = data_length;
+  req.burst = burst;
+  req.is_volatile = is_volatile;
+
+  auto chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
+  auto dma_engine = chiplet_desc->get("dma_engine");
+
+  SC_LOG_ASSERT(this, dma_engine,
+                "AXI DMA Request Error: Chiplet "
+                    << chiplet_desc->chiplet_name
+                    << " does not have a DMA engine");
+
+  return write_internal(request_id, dma_engine->id, chiplet_id, dma_engine->id,
+                        0, true, reinterpret_cast<unsigned char *>(&req),
+                        sizeof(req), ARM::AXI::BURST_INCR, true);
+}
+
+std::shared_ptr<Core::RequestHandle> Core::dma(const AxiDMARequest &req) {
+  SC_LOG_ASSERT(this, req.dst_chiplet_name.has_value(),
+                "AXI DMA Request Error: Fetch chiplet not set. Did you call "
+                "from() method?");
+  SC_LOG_ASSERT(this, req.dst_module_name.has_value(),
+                "AXI DMA Request Error: Fetch module not set. Did you call "
+                "from() method?");
+  SC_LOG_ASSERT(this, req.request_addr.has_value(),
+                "AXI DMA Request Error: Fetch address not set. Did you call "
+                "from() method?");
+  SC_LOG_ASSERT(this, req.target_module_name.has_value(),
+                "AXI DMA Request Error: Target module not set. Did you call "
+                "to() method?");
+  SC_LOG_ASSERT(this, req.target_addr.has_value(),
+                "AXI DMA Request Error: Target address not set. Did you call "
+                "to() method?");
+
+  uint32_t max_burst = 0;
+  switch (req.burst) {
+  case ARM::AXI::BURST_FIXED:
+    max_burst = MAX_FIXED_BURST_SIZE;
+    break;
+  case ARM::AXI::BURST_INCR:
+    max_burst = MAX_INCR_BURST_SIZE;
+    break;
+  case ARM::AXI::BURST_WRAP:
+    max_burst = MAX_WRAP_BURST_SIZE;
+    break;
+  default:
+    SC_LOG_ERROR(this, "AXI DMA Request Error: Unknown burst type");
+  }
+
+  SC_LOG_ASSERT(this, req.data_length <= max_burst,
+                "AXI DMA Request Error: Requested data length ("
+                    << req.data_length
+                    << " bytes) exceeds maximum allowed burst size ("
+                    << max_burst << " bytes)");
+
+  auto chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
+  std::string src_chiplet_name = chiplet_desc->chiplet_name;
+  std::string dst_chiplet_name = req.dst_chiplet_name.value();
+  std::string dst_module_name = req.dst_module_name.value();
+
+  auto dst_chiplet_desc = ChipletRegistry::instance().get(dst_chiplet_name);
+
+  SC_LOG_ASSERT(this, dst_chiplet_desc,
+                "AXI Request Error: Chiplet " << dst_chiplet_name
+                                              << " does not exist");
+
+  uint8_t dst_chiplet_id = dst_chiplet_desc->chiplet_id;
+
+  if (dst_chiplet_id != chiplet_id)
+    SC_LOG_ASSERT(this, req.src_module_name.has_value(),
+                  "AXI DMA Request Error: Via module not set. Did you call "
+                  "via() method?");
+
+  std::string src_module_name = req.src_module_name.value();
+  std::string target_module_name = req.target_module_name.value();
+
+  auto *src_module =
+      ChipletRegistry::instance().get_module(chiplet_id, src_module_name);
+
+  auto *dst_module =
+      ChipletRegistry::instance().get_module(dst_chiplet_id, dst_module_name);
+
+  auto *target_module = ChipletRegistry::instance().get_module(
+      dst_chiplet_id, target_module_name);
+
+  SC_LOG_ASSERT(this, src_module,
+                "AXI DMA Request Error: Module " << src_module_name
+                                                 << " does not exist on "
+                                                 << src_chiplet_name);
+
+  SC_LOG_ASSERT(this, dst_module,
+                "AXI DMA Request Error: Module " << dst_module_name
+                                                 << " does not exist on "
+                                                 << dst_chiplet_name);
+
+  SC_LOG_ASSERT(this, src_module->is_subordinate(),
+                "AXI DMA Request Error: Module "
+                    << src_module_name << " is not an AXI subordinate");
+
+  SC_LOG_ASSERT(this, dst_module->is_subordinate(),
+                "AXI DMA Request Error: Module "
+                    << dst_module_name << " is not an AXI subordinate");
+
+  if (dst_chiplet_id == chiplet_id)
+    SC_LOG_ASSERT(
+        this, !src_module->is_interconnect(),
+        "AXI DMA Request Error: On-chip requests must not be forwarded to "
+        "an interconnect");
+  else
+    SC_LOG_ASSERT(
+        this, src_module->is_interconnect(),
+        "AXI DMA Request Error: Off-chip requests must be forwarded to "
+        "an interconnect");
+
+  bool is_volatile = req.is_volatile || (dst_chiplet_id != chiplet_id);
+
+  return dma_internal(req.request_id, src_module->id, dst_chiplet_id,
+                      dst_module->id, target_module->id,
+                      req.request_addr.value(), req.target_addr.value(),
+                      req.data_length, req.burst, is_volatile);
 }

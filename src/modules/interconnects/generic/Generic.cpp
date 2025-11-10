@@ -619,9 +619,9 @@ void GenericInterconnect::send_axi_beats() {
     aw_state = REQ;
     ARM::AXI::Payload *payload = aw_queue_out.front();
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
-    if (dma_vm_id != -1) {
-      send_dma_request(*payload, ARM::AXI4::CHANNEL_AW);
-    } else {
+    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_AW)) {
+      aw_state = CLEAR;
+    } else if (dma_vm_id == -1) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
@@ -638,9 +638,9 @@ void GenericInterconnect::send_axi_beats() {
     ARM::AXI::Phase phase = (w_beat_count + 1 == payload->get_beat_count())
                                 ? ARM::AXI::W_VALID_LAST
                                 : ARM::AXI::W_VALID;
-    if (dma_vm_id != -1) {
-      send_dma_request(*payload, ARM::AXI4::CHANNEL_W);
-    } else {
+    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_W)) {
+      w_state = CLEAR;
+    } else if (dma_vm_id == -1) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
@@ -668,9 +668,9 @@ void GenericInterconnect::send_axi_beats() {
     ar_state = REQ;
     ARM::AXI::Payload *payload = ar_queue_out.front();
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
-    if (dma_vm_id != -1) {
-      send_dma_request(*payload, ARM::AXI4::CHANNEL_AR);
-    } else {
+    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_AR)) {
+      ar_state = CLEAR;
+    } else if (dma_vm_id == -1) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,

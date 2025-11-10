@@ -68,8 +68,8 @@ public:
     unsigned data_length;
 
     std::optional<uint32_t> address;
-    std::optional<std::string> dst_chiplet_name;
     std::optional<std::string> src_module_name;
+    std::optional<std::string> dst_chiplet_name;
     std::optional<std::string> dst_module_name;
 
     bool is_volatile = false;
@@ -104,10 +104,54 @@ public:
       is_volatile = val;
       return *this;
     }
+  };
 
-    bool has_addr() const { return address.has_value(); }
-    bool has_src_module() const { return src_module_name.has_value(); }
-    bool has_dst_module() const { return dst_module_name.has_value(); }
+  struct AxiDMARequest {
+    uint32_t request_id;
+    unsigned data_length;
+
+    std::optional<std::string> src_module_name;
+    std::optional<std::string> dst_chiplet_name;
+    std::optional<std::string> dst_module_name;
+    std::optional<std::string> target_module_name;
+    std::optional<uint32_t> request_addr;
+    std::optional<uint32_t> target_addr;
+
+    bool is_volatile = false;
+    ARM::AXI::Burst burst = ARM::AXI::BURST_INCR;
+
+    AxiDMARequest(uint32_t id, unsigned len)
+        : request_id(id), data_length(len) {}
+
+    AxiDMARequest &via(const std::string &module_name) {
+      src_module_name = module_name;
+      return *this;
+    }
+
+    AxiDMARequest &from(const std::string &chiplet_name,
+                        const std::string &module_name,
+                        const uint32_t address) {
+      dst_chiplet_name = chiplet_name;
+      dst_module_name = module_name;
+      request_addr = address;
+      return *this;
+    }
+
+    AxiDMARequest &to(const std::string &module_name, const uint32_t address) {
+      target_module_name = module_name;
+      target_addr = address;
+      return *this;
+    }
+
+    AxiDMARequest &set_burst(ARM::AXI::Burst type) {
+      burst = type;
+      return *this;
+    }
+
+    AxiDMARequest &skip_cache(bool val = true) {
+      is_volatile = val;
+      return *this;
+    }
   };
 
   struct RequestHandle {
@@ -138,19 +182,25 @@ public:
   // -------------------------------------------------------
 private:
   std::shared_ptr<RequestHandle> read_internal(
-      uint32_t request_id, uint8_t dst_chiplet, uint8_t src_module,
+      uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
       uint8_t dst_module, uint32_t address, bool fixed_address,
       unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
       bool is_volatile);
   std::shared_ptr<RequestHandle> write_internal(
-      uint32_t request_id, uint8_t dst_chiplet, uint8_t src_module,
+      uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
       uint8_t dst_module, uint32_t address, bool fixed_address,
       unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
+      bool is_volatile);
+  std::shared_ptr<RequestHandle> dma_internal(
+      uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
+      uint8_t dst_module, uint8_t target_module, uint32_t request_addr,
+      uint32_t target_addr, unsigned data_length, ARM::AXI::Burst burst,
       bool is_volatile);
 
 public:
   std::shared_ptr<RequestHandle> read(const AxiRequest &req);
   std::shared_ptr<RequestHandle> write(const AxiRequest &req);
+  std::shared_ptr<RequestHandle> dma(const AxiDMARequest &req);
 
 private:
   // -------------------------------------------------------

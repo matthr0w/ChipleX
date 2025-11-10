@@ -20,7 +20,7 @@ using namespace tlm;
 using namespace tlm_utils;
 
 SC_MODULE(GenericInterconnect), public InterconnectBase,
-    public VirtualAXIInitiatorIF {
+    public DMAForwardInterface {
 private:
   void end_of_simulation() override;
 

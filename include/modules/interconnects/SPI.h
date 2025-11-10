@@ -18,7 +18,7 @@ using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
 
-SC_MODULE(SPI), public InterconnectBase, public VirtualAXIInitiatorIF {
+SC_MODULE(SPI), public InterconnectBase, public DMAForwardInterface {
 private:
   void end_of_simulation() override;
 
