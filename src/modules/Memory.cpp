@@ -4,8 +4,8 @@
 
 Memory::Memory(sc_module_name name, YAML::Node config)
     : sc_module(name), axi_width(config["axi"]["width"].as<unsigned>()),
-      size(config["ram"]["size"].as<unsigned>()),
-      clk_cycle(config["ram"]["clk_cycle"].as<unsigned>(), SC_NS),
+      size(config["memory"]["size"].as<unsigned>()),
+      clk_cycle(config["memory"]["clk_cycle"].as<unsigned>(), SC_NS),
       tsocket("tsocket", *this, &Memory::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       mem(size * 1024, 0), mem_bitmap((mem.size() + 7) / 8, 0),

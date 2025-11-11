@@ -50,7 +50,7 @@ struct MemoryChiplet : ChipletBase {
                "Parameter Error: AXI size must be a multiple of 8");
 
     // Memory
-    memory.clk.bind(chiplet_clocks.get("ram"));
+    memory.clk.bind(chiplet_clocks.get("memory"));
 
     // Interconnect
     InterconnectManager manager(chiplet_id, sysconf.chiplets[chiplet_name],

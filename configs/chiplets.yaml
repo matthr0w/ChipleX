@@ -4,14 +4,16 @@ single-core:
     clk_cycle: 1 # ns
     irq_lines: 2
     irq_delay: 2 # ns
-  cache:
+  caches:
     size: 256 # bytes
     block_size: 32 # bytes
     store_buffer_size: 4 # entries
     clk_cycle: 1 # ns
-  ram:
+  memory:
     size: 512 # KB
     clk_cycle: 3 # ns
+  dma_engine:
+    clk_cycle: 5 # ns
   axi:
     width: 32 # bits
     clk_cycle: 5 # ns
@@ -22,14 +24,16 @@ dual-core:
     clk_cycle: 1 # ns
     irq_lines: 2
     irq_delay: 2 # ns
-  cache:
+  caches:
     size: 256 # bytes
     block_size: 32 # bytes
     store_buffer_size: 4 # entries
     clk_cycle: 1 # ns
-  ram:
+  memory:
     size: 512 # KB
     clk_cycle: 3 # ns
+  dma_engine:
+    clk_cycle: 5 # ns
   axi:
     width: 32 # bits
     clk_cycle: 5 # ns
@@ -40,14 +44,16 @@ quad-core:
     clk_cycle: 1 # ns
     irq_lines: 2
     irq_delay: 2 # ns
-  cache:
+  caches:
     size: 256 # bytes
     block_size: 32 # bytes
     store_buffer_size: 4 # entries
     clk_cycle: 1 # ns
-  ram:
+  memory:
     size: 512 # KB
     clk_cycle: 3 # ns
+  dma_engine:
+    clk_cycle: 5 # ns
   axi:
     width: 32 # bits
     clk_cycle: 5 # ns
@@ -55,7 +61,7 @@ quad-core:
 memory:
   cores:
     num: 0
-  ram:
+  memory:
     size: 512 # KB
     clk_cycle: 3 # ns
   axi:

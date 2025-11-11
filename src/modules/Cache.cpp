@@ -7,11 +7,11 @@
 Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
     : sc_module(name), chiplet_id(chiplet_id),
       axi_width(config["axi"]["width"].as<unsigned>()),
-      cache_size(config["cache"]["size"].as<unsigned>()),
-      cache_block_size(config["cache"]["block_size"].as<unsigned>()),
+      cache_size(config["caches"]["size"].as<unsigned>()),
+      cache_block_size(config["caches"]["block_size"].as<unsigned>()),
       cache_store_buffer_size(
-          config["cache"]["store_buffer_size"].as<unsigned>()),
-      clk_cycle(config["cache"]["clk_cycle"].as<unsigned>(), SC_NS),
+          config["caches"]["store_buffer_size"].as<unsigned>()),
+      clk_cycle(config["caches"]["clk_cycle"].as<unsigned>(), SC_NS),
       beat_data(new uint8_t[axi_width >> 3]),
       tsocket("tsocket", *this, &Cache::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),

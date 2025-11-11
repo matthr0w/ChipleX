@@ -8,6 +8,7 @@
 #include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
+#include "common/Statistics.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -47,6 +48,7 @@ private:
   // -------------------------------------------------------
   const unsigned num_cores;
   const unsigned axi_width;
+  const sc_time clk_cycle;
 
 public:
   // -------------------------------------------------------
@@ -69,6 +71,8 @@ private:
   // -------------------------------------------------------
   // Internal Declarations
   // -------------------------------------------------------
+  StatManager &stats = StatManager::instance();
+
   enum ChannelState { CLEAR, REQ, ACK };
 
   ChannelState aw_state = CLEAR;

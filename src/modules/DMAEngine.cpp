@@ -7,11 +7,14 @@
 DMAEngine::DMAEngine(sc_module_name name, YAML::Node config)
     : sc_module(name), num_cores(config["cores"]["num"].as<unsigned>()),
       axi_width(config["axi"]["width"].as<unsigned>()),
+      clk_cycle(config["dma_engine"]["clk_cycle"].as<unsigned>(), SC_NS),
       tsocket("tsocket", *this, &DMAEngine::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       isocket("isocket", *this, &DMAEngine::nb_transport_bw,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
   irq_sockets = new simple_initiator_socket_tagged<DMAEngine>[num_cores];
+
+  stats.register_utilization(this->name(), clk_cycle);
 
   SC_METHOD(clk_posedge);
   sensitive << clk.pos();
@@ -24,6 +27,9 @@ DMAEngine::DMAEngine(sc_module_name name, YAML::Node config)
 
 DMAEngine::~DMAEngine() { delete[] irq_sockets; }
 
+// -------------------------------------------------------
+// API
+// -------------------------------------------------------
 int DMAEngine::register_virtual_initiator(DMAForwardInterface *owner) {
   int vm_id = static_cast<int>(owners.size());
   owners.push_back(owner);
@@ -136,6 +142,7 @@ void DMAEngine::clk_negedge() {
       if (vm_id != internal_vm_id)
         owners[vm_id]->nb_transport_bw_axi(*payload, phase);
     }
+    stats.mark_active_cycle(this->name());
   }
 
   // W channel
@@ -155,6 +162,7 @@ void DMAEngine::clk_negedge() {
       if (vm_id != internal_vm_id)
         owners[vm_id]->nb_transport_bw_axi(*payload, phase);
     }
+    stats.mark_active_cycle(this->name());
   }
 
   // B channel
@@ -167,6 +175,7 @@ void DMAEngine::clk_negedge() {
                     "AXI TLM Protocol: Unexpected phase");
       b_state = ACK;
     }
+    stats.mark_active_cycle(this->name());
   }
 
   // AR channel
@@ -184,7 +193,10 @@ void DMAEngine::clk_negedge() {
       if (vm_id != internal_vm_id)
         owners[vm_id]->nb_transport_bw_axi(*payload, phase);
     }
+    stats.mark_active_cycle(this->name());
   }
+
+  stats.end_cycle(this->name());
 }
 
 // -------------------------------------------------------

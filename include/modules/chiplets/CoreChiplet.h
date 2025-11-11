@@ -95,7 +95,7 @@ struct CoreChiplet : ChipletBase {
       // Bind clocks and sockets
       cores[i]->clk.bind(chiplet_clocks.get("cores"));
       cores[i]->isocket.bind(caches[i]->tsocket);
-      caches[i]->clk.bind(chiplet_clocks.get("cache"));
+      caches[i]->clk.bind(chiplet_clocks.get("caches"));
       caches[i]->isocket.bind(*bus.mgr_tsockets[i]);
 
       // Assign program code
@@ -113,11 +113,11 @@ struct CoreChiplet : ChipletBase {
     bus.clk.bind(chiplet_clocks.get("axi"));
 
     // Memory
-    memory.clk.bind(chiplet_clocks.get("ram"));
+    memory.clk.bind(chiplet_clocks.get("memory"));
     memory.tsocket.bind(*bus.sub_isockets[0]);
 
     // DMA Engine
-    dma_engine.clk.bind(chiplet_clocks.get("axi"));
+    dma_engine.clk.bind(chiplet_clocks.get("dma_engine"));
     dma_engine.tsocket.bind(*bus.sub_isockets[1]);
     dma_engine.isocket.bind(*bus.mgr_tsockets[num_cores]);
     DMAEngine *dma_engine_ptr =
