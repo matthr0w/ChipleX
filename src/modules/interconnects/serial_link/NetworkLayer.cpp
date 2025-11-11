@@ -701,17 +701,25 @@ void SLNetworkLayer::send_irq(ARM::AXI::Payload &payload) {
   if (num_cores == 0)
     return;
 
+  UserSignals user = UserSignals::decode(payload.user);
+
+  auto *irq = new IRQ();
+  irq->request_id = payload.id;
+  irq->target_module = user.dst_module;
+  irq->target_address = payload.get_address();
+  irq->burst = payload.get_burst();
+  irq->data_length = payload.get_data_length();
+
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
 
-  tlm_generic_payload *irq = new tlm_generic_payload;
-
-  irq->set_command(TLM_READ_COMMAND);
-  irq->set_address(payload.get_address());
-  irq->set_data_length(payload.get_data_length());
+  tlm_generic_payload *transaction = new tlm_generic_payload;
+  transaction->set_data_ptr(reinterpret_cast<unsigned char *>(irq));
+  transaction->set_data_length(sizeof(IRQ));
+  transaction->set_command(TLM_WRITE_COMMAND);
 
   SC_LOG_DEBUG(this, "Sending IRQ to Core0");
-  irq_sockets[0]->nb_transport_fw(*irq, phase, delay);
+  irq_sockets[0]->nb_transport_fw(*transaction, phase, delay);
 }
 
 void SLNetworkLayer::increment_credits(int link_id, unsigned credit) {

@@ -55,10 +55,9 @@ public:
 
   simple_initiator_socket_tagged<GenericInterconnect> *irq_sockets;
 
-  GenericInterconnect(sc_module_name name, unsigned chiplet_id,
-                      ChipletConfig chiplet_config,
-                      InterconnectConfig interconnect_config,
-                      unsigned num_cores, DMAEngine *dma_engine);
+  GenericInterconnect(
+      sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
+      InterconnectConfig interconnect_config, DMAEngine *dma_engine);
   ~GenericInterconnect();
 
   // InterconnectBase

@@ -2,6 +2,7 @@ single-core:
   cores:
     num: 1
     clk_cycle: 1 # ns
+    irq_lines: 2
     irq_delay: 2 # ns
   cache:
     size: 256 # bytes
@@ -19,6 +20,7 @@ dual-core:
   cores:
     num: 2
     clk_cycle: 1 # ns
+    irq_lines: 2
     irq_delay: 2 # ns
   cache:
     size: 256 # bytes
@@ -36,6 +38,7 @@ quad-core:
   cores:
     num: 4
     clk_cycle: 1 # ns
+    irq_lines: 2
     irq_delay: 2 # ns
   cache:
     size: 256 # bytes
@@ -50,6 +53,8 @@ quad-core:
     clk_cycle: 5 # ns
 
 memory:
+  cores:
+    num: 0
   ram:
     size: 512 # KB
     clk_cycle: 3 # ns

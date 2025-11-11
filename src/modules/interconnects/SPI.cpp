@@ -5,10 +5,11 @@
 #include "common/Router.h"
 
 SPI::SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
-         InterconnectConfig interconnect_config, unsigned num_cores,
-         DMAEngine *dma_engine)
-    : InterconnectBase(num_cores, chiplet_config.connections.size()),
-      sc_module(name), chiplet_id(chiplet_id), num_cores(num_cores),
+         InterconnectConfig interconnect_config, DMAEngine *dma_engine)
+    : InterconnectBase(chiplet_config.config["cores"]["num"].as<unsigned>(),
+                       chiplet_config.connections.size()),
+      sc_module(name), chiplet_id(chiplet_id),
+      num_cores(chiplet_config.config["cores"]["num"].as<unsigned>()),
       num_links(chiplet_config.connections.size()),
       axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
       connections(chiplet_config.connections), dma_engine(dma_engine),
@@ -343,7 +344,8 @@ void SPI::clear_axi_states() {
     increment_beat_count(*payload);
     if (get_beat_count(*payload) == payload->get_beat_count()) {
       unregister_beat_count(*payload);
-      send_irq(*payload);
+      if (dma_vm_id == -1)
+        send_irq(*payload);
     }
     w_queue_out.pop_front();
   }
@@ -477,17 +479,25 @@ void SPI::send_irq(ARM::AXI::Payload &payload) {
   if (num_cores == 0)
     return;
 
+  UserSignals user = UserSignals::decode(payload.user);
+
+  auto *irq = new IRQ();
+  irq->request_id = payload.id;
+  irq->target_module = user.dst_module;
+  irq->target_address = payload.get_address();
+  irq->burst = payload.get_burst();
+  irq->data_length = payload.get_data_length();
+
   tlm_phase phase = BEGIN_REQ;
   sc_time delay = SC_ZERO_TIME;
 
-  tlm_generic_payload *irq = new tlm_generic_payload;
-
-  irq->set_command(TLM_READ_COMMAND);
-  irq->set_address(payload.get_address());
-  irq->set_data_length(payload.get_data_length());
+  tlm_generic_payload *transaction = new tlm_generic_payload;
+  transaction->set_data_ptr(reinterpret_cast<unsigned char *>(irq));
+  transaction->set_data_length(sizeof(IRQ));
+  transaction->set_command(TLM_WRITE_COMMAND);
 
   SC_LOG_DEBUG(this, "Sending IRQ to Core0");
-  irq_sockets[0]->nb_transport_fw(*irq, phase, delay);
+  irq_sockets[0]->nb_transport_fw(*transaction, phase, delay);
 }
 
 bool SPI::send_link_request(ARM::AXI::Payload &payload) {

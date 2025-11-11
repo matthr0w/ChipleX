@@ -8,6 +8,8 @@
 #include <vector>
 #include <yaml-cpp/yaml.h>
 
+#include "common/IRQ.h"
+
 using namespace tlm;
 
 class Core;
@@ -155,9 +157,8 @@ struct CyclesDB {
   }
 };
 
-using CoreFunctions =
-    std::pair<std::function<void(Core &)>,
-              std::function<void(Core &, tlm_generic_payload *)>>;
+using CoreFunctions = std::pair<std::function<void(Core &)>,
+                                std::function<void(Core &, const IRQ &)>>;
 using CoreKey = std::pair<std::string, int>;
 using CoreCodeMap = std::map<CoreKey, CoreFunctions>;
 

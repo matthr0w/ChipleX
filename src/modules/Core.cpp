@@ -13,7 +13,11 @@ Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
               axi_width) {
   stats.register_utilization(this->name(), clk_cycle);
 
-  irq_socket.register_nb_transport_fw(this, &Core::nb_transport_fw_irq);
+  unsigned num_irq_lines = config["cores"]["irq_lines"].as<unsigned>();
+  irq_sockets = new simple_target_socket_tagged<Core>[num_irq_lines];
+  for (unsigned i = 0; i < num_irq_lines; ++i)
+    irq_sockets[i].register_nb_transport_fw(this, &Core::nb_transport_fw_irq,
+                                            i);
 
   MAX_INCR_BURST_SIZE = std::min(256 * axi_width / 8, 4096u);
   MAX_FIXED_BURST_SIZE = 16 * axi_width / 8;
@@ -31,6 +35,8 @@ Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
   SC_THREAD(interrupt_thread);
 }
 
+Core::~Core() { delete[] irq_sockets; }
+
 void Core::core_thread() {
   if (thread_fn)
     thread_fn(*this);
@@ -44,9 +50,12 @@ void Core::interrupt_thread() {
       tlm_generic_payload *transaction = irq_queue.front();
       irq_queue.pop_front();
 
-      if (interrupt_fn)
-        interrupt_fn(*this, transaction);
+      auto *irq = reinterpret_cast<IRQ *>(transaction->get_data_ptr());
 
+      if (interrupt_fn)
+        interrupt_fn(*this, *irq);
+
+      delete irq;
       delete transaction;
     }
   }
@@ -131,7 +140,8 @@ void Core::clk_negedge() {
 // -------------------------------------------------------
 // Transport Functions
 // -------------------------------------------------------
-tlm_sync_enum Core::nb_transport_fw_irq(tlm_generic_payload &transaction,
+tlm_sync_enum Core::nb_transport_fw_irq(int id,
+                                        tlm_generic_payload &transaction,
                                         tlm_phase &phase,
                                         sc_core::sc_time &delay) {
   switch (phase) {

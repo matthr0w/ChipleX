@@ -41,14 +41,14 @@ CoreCodeMap *get_program_code() {
 
           delete[] data;
         },
-        [](Core &core, tlm_generic_payload *irq) {
+        [](Core &core, const IRQ &irq) {
           static unsigned interrupt_count = 0;
 
           // Save result in static variable
           static int resultC[MATRIX_SIZE][MATRIX_SIZE];
 
-          uint32_t address = irq->get_address();
-          unsigned int data_size = irq->get_data_length();
+          uint32_t address = irq.target_address;
+          unsigned int data_size = irq.data_length;
 
           int chiplet_id = (address - 0x40000) / 0x1000;
 
@@ -83,9 +83,9 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet0", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          uint32_t address = irq->get_address();
-          int data_size = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          uint32_t address = irq.target_address;
+          int data_size = irq.data_length;
 
           auto *data = new unsigned char[data_size];
           auto reqr = Core::AxiRequest(0, data, data_size)
@@ -121,9 +121,9 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet1", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          uint32_t address = irq->get_address();
-          int data_size = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          uint32_t address = irq.target_address;
+          int data_size = irq.data_length;
 
           auto *data = new unsigned char[data_size];
           auto reqr = Core::AxiRequest(0, data, data_size)
@@ -159,9 +159,9 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet2", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          uint32_t address = irq->get_address();
-          int data_size = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          uint32_t address = irq.target_address;
+          int data_size = irq.data_length;
 
           auto *data = new unsigned char[data_size];
           auto reqr = Core::AxiRequest(0, data, data_size)
@@ -197,9 +197,9 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet3", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          uint32_t address = irq->get_address();
-          int data_size = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          uint32_t address = irq.target_address;
+          int data_size = irq.data_length;
 
           auto *data = new unsigned char[data_size];
           auto reqr = Core::AxiRequest(0, data, data_size)

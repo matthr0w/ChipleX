@@ -2,11 +2,12 @@
 
 SerialLink::SerialLink(sc_module_name name, unsigned chiplet_id,
                        ChipletConfig chiplet_config,
-                       InterconnectConfig interconnect_config,
-                       unsigned num_cores)
-    : InterconnectBase(num_cores, chiplet_config.connections.size()),
+                       InterconnectConfig interconnect_config)
+    : InterconnectBase(chiplet_config.config["cores"]["num"].as<unsigned>(),
+                       chiplet_config.connections.size()),
       sc_module(name), chiplet_config(chiplet_config),
-      interconnect_config(interconnect_config), num_cores(num_cores),
+      interconnect_config(interconnect_config),
+      num_cores(chiplet_config.config["cores"]["num"].as<unsigned>()),
       num_links(chiplet_config.connections.size()),
       network_layer("network_layer", chiplet_id, chiplet_config,
                     interconnect_config, num_cores),

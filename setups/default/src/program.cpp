@@ -44,6 +44,6 @@ CoreCodeMap *get_program_code() {
 
           sc_stop();
         },
-        [](Core &core, tlm_generic_payload *irq) {}}}};
+        [](Core &core, const IRQ &irq) {}}}};
   return &code;
 }

@@ -10,6 +10,7 @@
 #include "logging.h"
 
 #include "ARM/TLM/arm_axi4.h"
+#include "common/IRQ.h"
 #include "common/Statistics.h"
 #include "setup/Types.h"
 
@@ -39,16 +40,17 @@ public:
   // Sockets
   // -------------------------------------------------------
   ARM::AXI::SimpleInitiatorSocket<Core> isocket;
-  simple_target_socket<Core> irq_socket;
+  simple_target_socket_tagged<Core> *irq_sockets;
 
   Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
        YAML::Node config, const CyclesDB &cycles);
+  ~Core();
 
   void core_thread();
   void interrupt_thread();
 
   std::function<void(Core &)> thread_fn;
-  std::function<void(Core &, tlm_generic_payload *)> interrupt_fn;
+  std::function<void(Core &, const IRQ &)> interrupt_fn;
 
   // -------------------------------------------------------
   // Program API
@@ -256,8 +258,8 @@ private:
   // -------------------------------------------------------
   // Transport Functions
   // -------------------------------------------------------
-  tlm_sync_enum nb_transport_fw_irq(tlm_generic_payload & payload,
-                                    tlm_phase & phase, sc_time & delay);
+  tlm_sync_enum nb_transport_fw_irq(int id, tlm_generic_payload &payload,
+                                    tlm_phase &phase, sc_time &delay);
 
   tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload,
                                 ARM::AXI::Phase & phase);

@@ -56,9 +56,9 @@ CoreCodeMap *get_program_code() {
 
           delete[] data;
         },
-        [](Core &core, tlm_generic_payload *irq) {
-          auto addr = irq->get_address();
-          auto len = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          auto addr = irq.target_address;
+          auto len = irq.data_length;
 
           // Read from FPGA RAM
           auto *data = new unsigned char[len];
@@ -85,9 +85,9 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet0", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          auto addr = irq->get_address();
-          auto len = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          auto addr = irq.target_address;
+          auto len = irq.data_length;
 
           // Read from Chiplet0 RAM
           auto *read_buf = new unsigned char[len];
@@ -130,9 +130,9 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet1", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          auto addr = irq->get_address();
-          auto len = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          auto addr = irq.target_address;
+          auto len = irq.data_length;
 
           // Read from Chiplet1 RAM
           auto *read_buf = new unsigned char[len];
@@ -175,9 +175,9 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet2", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          auto addr = irq->get_address();
-          auto len = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          auto addr = irq.target_address;
+          auto len = irq.data_length;
 
           // Read from Chiplet2 RAM
           auto *read_buf = new unsigned char[len];
@@ -225,9 +225,9 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet3", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          auto addr = irq->get_address();
-          auto len = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          auto addr = irq.target_address;
+          auto len = irq.data_length;
 
           // Read from Chiplet3 RAM
           auto *read_buf = new unsigned char[len];

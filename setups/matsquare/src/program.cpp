@@ -63,13 +63,13 @@ CoreCodeMap *get_program_code() {
 
           delete[] data;
         },
-        [](Core &core, tlm_generic_payload *irq) {
+        [](Core &core, const IRQ &irq) {
           auto *data = new unsigned char[4 * sizeof(int)];
 
           auto reqr =
               Core::AxiRequest(0, reinterpret_cast<unsigned char *>(data),
                                4 * sizeof(int))
-                  .set_addr(irq->get_address())
+                  .set_addr(irq.target_address)
                   .skip_cache();
           auto handle = core.read(reqr);
           handle->wait();
@@ -86,8 +86,8 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet0", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          uint32_t matrix_addr = irq->get_address();
+        [](Core &core, const IRQ &irq) {
+          uint32_t matrix_addr = irq.target_address;
 
           matrix_multiply(core, matrix_addr, matrix_addr,
                           0x1000);                            // A^2 = A * A

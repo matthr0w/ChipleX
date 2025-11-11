@@ -34,9 +34,9 @@ CoreCodeMap *get_program_code() {
 
           delete[] write_buf;
         },
-        [](Core &core, tlm_generic_payload *irq) {
-          auto addr = irq->get_address();
-          auto len = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          auto addr = irq.target_address;
+          auto len = irq.data_length;
 
           // Read from FPGA RAM
           auto *read_buf = new unsigned char[len];
@@ -55,9 +55,9 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet0", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          auto addr = irq->get_address();
-          auto len = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          auto addr = irq.target_address;
+          auto len = irq.data_length;
 
           // Read from Chiplet0 RAM
           auto *read_buf = new unsigned char[len];
@@ -112,9 +112,9 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet1", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
-          auto addr = irq->get_address();
-          auto len = irq->get_data_length();
+        [](Core &core, const IRQ &irq) {
+          auto addr = irq.target_address;
+          auto len = irq.data_length;
 
           // Read from Chiplet1 RAM
           auto *read_buf = new unsigned char[len];

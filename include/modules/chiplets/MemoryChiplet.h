@@ -54,7 +54,7 @@ struct MemoryChiplet : ChipletBase {
 
     // Interconnect
     InterconnectManager manager(chiplet_id, sysconf.chiplets[chiplet_name],
-                                sysconf.interconnect, 0, nullptr);
+                                sysconf.interconnect, nullptr);
     interconnect = manager.create_interconnect();
     interconnect->bind_clocks(interconnect_clocks);
     interconnect->axi_in_port->bind(dummy_axi_isocket);

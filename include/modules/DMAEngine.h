@@ -3,12 +3,15 @@
 #include <deque>
 #include <systemc>
 #include <tlm>
+#include <tlm_utils/simple_initiator_socket.h>
+#include <tlm_utils/simple_target_socket.h>
 #include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
 
 using namespace sc_core;
 using namespace tlm;
+using namespace tlm_utils;
 
 struct DMARequest {
   uint32_t request_id; // Request ID
@@ -42,6 +45,7 @@ private:
   // -------------------------------------------------------
   // Config
   // -------------------------------------------------------
+  const unsigned num_cores;
   const unsigned axi_width;
 
 public:
@@ -56,7 +60,10 @@ public:
   ARM::AXI::SimpleTargetSocket<DMAEngine> tsocket;
   ARM::AXI::SimpleInitiatorSocket<DMAEngine> isocket;
 
+  simple_initiator_socket_tagged<DMAEngine> *irq_sockets;
+
   DMAEngine(sc_module_name name, YAML::Node config);
+  ~DMAEngine();
 
 private:
   // -------------------------------------------------------
@@ -112,6 +119,8 @@ private:
   // -------------------------------------------------------
   ARM::AXI::Payload *issue_fetch_read(const DMARequest &req);
   ARM::AXI::Payload *issue_fetch_write(const DMARequest &req);
+
+  void send_irq(ARM::AXI::Payload & payload, unsigned core_id);
 
 public:
   // -------------------------------------------------------

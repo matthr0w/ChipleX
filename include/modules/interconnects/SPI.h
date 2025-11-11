@@ -49,8 +49,7 @@ public:
   simple_initiator_socket_tagged<SPI> *irq_sockets;
 
   SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
-      InterconnectConfig interconnect_config, unsigned num_cores,
-      DMAEngine *dma_engine);
+      InterconnectConfig interconnect_config, DMAEngine *dma_engine);
   ~SPI();
 
   // InterconnectBase

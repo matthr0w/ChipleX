@@ -128,13 +128,16 @@ struct CoreChiplet : ChipletBase {
 
     // Interconnect
     InterconnectManager manager(chiplet_id, sysconf.chiplets[chiplet_name],
-                                sysconf.interconnect, num_cores,
-                                dma_engine_ptr);
+                                sysconf.interconnect, dma_engine_ptr);
     interconnect = manager.create_interconnect();
     interconnect->bind_clocks(interconnect_clocks);
     interconnect->axi_in_port->bind(*bus.sub_isockets[2]);
     interconnect->axi_out_port->bind(*bus.mgr_tsockets[num_cores + 1]);
-    for (int i = 0; i < num_cores; ++i)
-      interconnect->irq_ports[i]->bind(cores[i]->irq_socket);
+
+    // Interrupt lines
+    for (int i = 0; i < num_cores; ++i) {
+      dma_engine.irq_sockets[i].bind(cores[i]->irq_sockets[0]);
+      interconnect->irq_ports[i]->bind(cores[i]->irq_sockets[1]);
+    }
   }
 };

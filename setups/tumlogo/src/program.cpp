@@ -57,15 +57,15 @@ CoreCodeMap *get_program_code() {
 
           stbi_image_free(input_img);
         },
-        [](Core &core, tlm_generic_payload *irq) {
+        [](Core &core, const IRQ &irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
 
           if (interrupt_count == 0)
-            base_addr = irq->get_address();
+            base_addr = irq.target_address;
 
-          total_len += irq->get_data_length();
+          total_len += irq.data_length;
           ++interrupt_count;
 
           if (interrupt_count != 118)
@@ -105,15 +105,15 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet0", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
+        [](Core &core, const IRQ &irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
 
           if (interrupt_count == 0)
-            base_addr = irq->get_address();
+            base_addr = irq.target_address;
 
-          total_len += irq->get_data_length();
+          total_len += irq.data_length;
           ++interrupt_count;
 
           if (interrupt_count != 193)
@@ -188,15 +188,15 @@ CoreCodeMap *get_program_code() {
 
       {{"chiplet1", 0},
        {[](Core &core) {},
-        [](Core &core, tlm_generic_payload *irq) {
+        [](Core &core, const IRQ &irq) {
           static unsigned interrupt_count = 0;
           static uint32_t base_addr = 0;
           static size_t total_len = 0;
 
           if (interrupt_count == 0)
-            base_addr = irq->get_address();
+            base_addr = irq.target_address;
 
-          total_len += irq->get_data_length();
+          total_len += irq.data_length;
           ++interrupt_count;
 
           if (interrupt_count != 118)

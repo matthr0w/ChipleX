@@ -2,12 +2,17 @@
 
 #include "logging.h"
 
+#include "common/IRQ.h"
+
 DMAEngine::DMAEngine(sc_module_name name, YAML::Node config)
-    : sc_module(name), axi_width(config["axi"]["width"].as<unsigned>()),
+    : sc_module(name), num_cores(config["cores"]["num"].as<unsigned>()),
+      axi_width(config["axi"]["width"].as<unsigned>()),
       tsocket("tsocket", *this, &DMAEngine::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       isocket("isocket", *this, &DMAEngine::nb_transport_bw,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
+  irq_sockets = new simple_initiator_socket_tagged<DMAEngine>[num_cores];
+
   SC_METHOD(clk_posedge);
   sensitive << clk.pos();
   dont_initialize();
@@ -16,6 +21,8 @@ DMAEngine::DMAEngine(sc_module_name name, YAML::Node config)
   sensitive << clk.neg();
   dont_initialize();
 }
+
+DMAEngine::~DMAEngine() { delete[] irq_sockets; }
 
 int DMAEngine::register_virtual_initiator(DMAForwardInterface *owner) {
   int vm_id = static_cast<int>(owners.size());
@@ -231,6 +238,7 @@ tlm_sync_enum DMAEngine::nb_transport_bw(ARM::AXI::Payload &payload,
 
   int vm_id = it->second;
 
+  // Fetch transfers
   if (vm_id == internal_vm_id) {
     switch (phase) {
     case ARM::AXI::R_VALID:
@@ -253,12 +261,14 @@ tlm_sync_enum DMAEngine::nb_transport_bw(ARM::AXI::Payload &payload,
     }
     case ARM::AXI::B_VALID:
       payload_owner_map.erase(it);
+      send_irq(payload, current_request.core_id);
       state = DMAEngineState::Idle;
       phase = ARM::AXI::B_READY;
       return TLM_UPDATED;
     default:
       return TLM_ACCEPTED;
     }
+    // Forward transfers
   } else {
     // Backward to virtual initiator
     ARM::AXI::Phase prev_phase = phase;
@@ -271,6 +281,7 @@ tlm_sync_enum DMAEngine::nb_transport_bw(ARM::AXI::Payload &payload,
     }
     if (is_b_valid(prev_phase)) {
       payload_owner_map.erase(it);
+      send_irq(payload, 0);
       state = DMAEngineState::Idle;
     }
 
@@ -337,4 +348,29 @@ ARM::AXI::Payload *DMAEngine::issue_fetch_write(const DMARequest &req) {
   aw_queue_out.push_back(payload);
 
   return payload;
+}
+
+void DMAEngine::send_irq(ARM::AXI::Payload &payload, unsigned core_id) {
+  if (num_cores == 0)
+    return;
+
+  UserSignals user = UserSignals::decode(payload.user);
+
+  auto *irq = new IRQ();
+  irq->request_id = payload.id;
+  irq->target_module = user.dst_module;
+  irq->target_address = payload.get_address();
+  irq->burst = payload.get_burst();
+  irq->data_length = payload.get_data_length();
+
+  tlm_phase phase = BEGIN_REQ;
+  sc_time delay = SC_ZERO_TIME;
+
+  tlm_generic_payload *transaction = new tlm_generic_payload;
+  transaction->set_data_ptr(reinterpret_cast<unsigned char *>(irq));
+  transaction->set_data_length(sizeof(IRQ));
+  transaction->set_command(TLM_WRITE_COMMAND);
+
+  SC_LOG_DEBUG(this, "Sending IRQ to Core" << core_id);
+  irq_sockets[core_id]->nb_transport_fw(*transaction, phase, delay);
 }
