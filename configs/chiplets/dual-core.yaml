@@ -1,0 +1,17 @@
+cores:
+  num: 2
+  clk_cycle: 1 # ns
+  irq_delay: 2 # ns
+caches:
+  size: 256 # bytes
+  block_size: 32 # bytes
+  store_buffer_size: 4 # entries
+  clk_cycle: 1 # ns
+memory:
+  size: 512 # KB
+  clk_cycle: 3 # ns
+dma_engine:
+  clk_cycle: 5 # ns
+axi:
+  width: 32 # bits
+  clk_cycle: 5 # ns

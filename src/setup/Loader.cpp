@@ -3,31 +3,23 @@
 #include <dlfcn.h>
 #include <filesystem>
 
-#include "globals.h"
 #include "logging.h"
 
-void SetupLoader::load_config(const std::string &system_file) {
+void SetupLoader::load_system_config(const std::string &system_file) {
   YAML::Node root = YAML::LoadFile(system_file);
 
   // Assertions
   LOG_ASSERT(root["chiplets"],
              "SetupLoader: Missing required section 'chiplets' in system "
              "description");
-  LOG_ASSERT(root["interconnect"],
-             "SetupLoader: Missing required section 'interconnect' in system "
+  LOG_ASSERT(root["connections"],
+             "SetupLoader: Missing required section 'connections' in system "
              "description");
-  LOG_ASSERT(
-      root["interconnect"]["type"],
-      "SetupLoader: Missing required key 'type' in 'interconnect' section");
-  LOG_ASSERT(root["interconnect"]["preset"] ||
-                 root["interconnect"]["connections"],
-             "SetupLoader: Missing required "
-             "section 'connections' in "
-             "'interconnect' section");
 
   // -------------------------------------------------------
   // Chiplets
   // -------------------------------------------------------
+  unsigned chiplet_id = 0;
   for (const auto &c : root["chiplets"]) {
     LOG_ASSERT(
         c["name"],
@@ -35,14 +27,18 @@ void SetupLoader::load_config(const std::string &system_file) {
     LOG_ASSERT(
         c["type"],
         "SetupLoader: Missing required key 'type' in chiplet description");
+    LOG_ASSERT(c["interconnects"], "SetupLoader: Missing required section "
+                                   "'interconnects' in chiplet description");
 
-    std::string name_str = c["name"].as<std::string>();
-    std::string type_str = c["type"].as<std::string>();
+    std::string chiplet_name = c["name"].as<std::string>();
+    std::string chiplet_type = c["type"].as<std::string>();
+    std::string chiplet_file = chiplets_path_ + chiplet_type + ".yaml";
 
-    LOG_ASSERT(chiplets_defaults_[type_str],
-               "SetupLoader: Unknown chiplet type: " + type_str);
+    LOG_ASSERT(std::filesystem::exists(chiplet_file) &&
+                   std::filesystem::is_regular_file(chiplet_file),
+               "SetupLoader: Unknown chiplet type: " + chiplet_type);
 
-    YAML::Node chiplet_config = YAML::Clone(chiplets_defaults_[type_str]);
+    YAML::Node chiplet_config = YAML::LoadFile(chiplet_file);
 
     // Merge overrides
     if (c["config"]) {
@@ -52,54 +48,56 @@ void SetupLoader::load_config(const std::string &system_file) {
       }
     }
 
-    ChipletType type(ChipletType::parse(type_str));
-    ChipletConfig chiplet{type, chiplet_config, {}};
+    ChipletType type(ChipletType::parse(chiplet_type));
+    ChipletConfig chiplet{type, chiplet_config};
 
-    sysconf_.chiplets[name_str] = chiplet;
-    sysconf_.chiplet_order.push_back(name_str);
-  }
+    // -------------------------------------------------------
+    // Interconnects
+    // -------------------------------------------------------
+    unsigned interconnect_id = 0;
+    for (const auto &ic : c["interconnects"]) {
+      LOG_ASSERT(ic["name"], "SetupLoader: Missing required key 'name' in "
+                             "interconnect description");
+      LOG_ASSERT(ic["type"], "SetupLoader: Missing required key 'type' in "
+                             "interconnect description");
 
-  // -------------------------------------------------------
-  // Interconnect
-  // -------------------------------------------------------
-  std::string type_str = root["interconnect"]["type"].as<std::string>();
-  std::string interconnect_yaml = interconnects_path_ + type_str + ".yaml";
+      std::string interconnect_name = ic["name"].as<std::string>();
+      std::string interconnect_type = ic["type"].as<std::string>();
+      std::string interconnect_file =
+          interconnects_path_ + interconnect_type + ".yaml";
 
-  LOG_ASSERT(std::filesystem::exists(interconnect_yaml) &&
-                 std::filesystem::is_regular_file(interconnect_yaml),
-             "SetupLoader: Unknown interconnect type: " + type_str);
+      LOG_ASSERT(std::filesystem::exists(interconnect_file) &&
+                     std::filesystem::is_regular_file(interconnect_file),
+                 "SetupLoader: Unknown interconnect type: " +
+                     interconnect_type);
 
-  YAML::Node interconnect_defaults = YAML::LoadFile(interconnect_yaml);
+      YAML::Node interconnect_config = YAML::LoadFile(interconnect_file);
 
-  InterconnectType type(InterconnectType::parse(type_str));
-  InterconnectConfig interconnect;
-  interconnect.type = type;
+      // Merge overrides
+      if (ic["config"]) {
+        for (auto it : ic["config"]) {
+          std::string section = it.first.as<std::string>();
+          merge_nodes(interconnect_config[section], it.second);
+        }
+      }
 
-  // Merge overrides
-  if (root["interconnect"]["config"]) {
-    for (auto kv : root["interconnect"]["config"]) {
-      std::string key = kv.first.as<std::string>();
-      merge_nodes(interconnect_defaults[key], kv.second, key);
+      InterconnectType type(InterconnectType::parse(interconnect_type));
+      InterconnectConfig interconnect{type, interconnect_config};
+      chiplet.interconnects[interconnect_name] = interconnect;
+      chiplet.interconnect_ids[interconnect_name] = interconnect_id++;
     }
+
+    sysconf_.chiplets[chiplet_name] = chiplet;
+    sysconf_.chiplet_ids[chiplet_name] = chiplet_id++;
   }
 
-  interconnect.config = YAML::Clone(interconnect_defaults);
-
-  // Build connections array
-  YAML::Node connections_node;
-  if (root["interconnect"]["preset"]) {
-    ConnectionPreset preset(ConnectionPreset::parse(
-        root["interconnect"]["preset"].as<std::string>()));
-    connections_node = generate_preset_connections(
-        preset, sysconf_.chiplets, root["interconnect"]["connections"]);
-  } else {
-    connections_node = root["interconnect"]["connections"];
-  }
-
+  // -------------------------------------------------------
+  // Connections
+  // -------------------------------------------------------
   std::set<std::pair<std::string, std::string>> unique_connections;
 
-  // Add connections to chiplets and create mapping
-  for (const auto &conn : connections_node) {
+  // Add connection configs to interconnects and create connection mappings
+  for (const auto &conn : root["connections"]) {
     LOG_ASSERT(conn["endpoints"] && conn["endpoints"].size() == 2,
                "SetupLoader: Missing required key 'endpoints' in connection "
                "description");
@@ -107,10 +105,50 @@ void SetupLoader::load_config(const std::string &system_file) {
     std::string endpoint0 = conn["endpoints"][0].as<std::string>();
     std::string endpoint1 = conn["endpoints"][1].as<std::string>();
 
-    if (sysconf_.chiplets.find(endpoint0) == sysconf_.chiplets.end() ||
-        sysconf_.chiplets.find(endpoint1) == sysconf_.chiplets.end()) {
-      LOG_WARN("SetupLoader: Invalid connection: " + endpoint0 + " <-> " +
-               endpoint1 + ". Ignoring.");
+    // Split endpoints: "chiplet.interconnect"
+    auto split_endpoint =
+        [](const std::string &endpoint) -> std::pair<std::string, std::string> {
+      auto pos = endpoint.find('.');
+      if (pos == std::string::npos) {
+        return {endpoint, ""}; // Invalid format
+      }
+      return {endpoint.substr(0, pos), endpoint.substr(pos + 1)};
+    };
+
+    auto [chiplet0_name, interconnect0_name] = split_endpoint(endpoint0);
+    auto [chiplet1_name, interconnect1_name] = split_endpoint(endpoint1);
+
+    // Check that chiplets exist
+    auto chiplet0_it = sysconf_.chiplets.find(chiplet0_name);
+    auto chiplet1_it = sysconf_.chiplets.find(chiplet1_name);
+
+    if (chiplet0_it == sysconf_.chiplets.end() ||
+        chiplet1_it == sysconf_.chiplets.end()) {
+      LOG_WARN("SetupLoader: Invalid chiplet(s) in connection: " + endpoint0 +
+               " <-> " + endpoint1 + ". Ignoring.");
+      continue;
+    }
+
+    ChipletConfig &chiplet0 = chiplet0_it->second;
+    ChipletConfig &chiplet1 = chiplet1_it->second;
+
+    // Check that interconnects exist
+    auto interconnect0_it = chiplet0.interconnects.find(interconnect0_name);
+    auto interconnect1_it = chiplet1.interconnects.find(interconnect1_name);
+
+    if (interconnect0_it == chiplet0.interconnects.end() ||
+        interconnect1_it == chiplet1.interconnects.end()) {
+      LOG_WARN("SetupLoader: Invalid interconnect(s) in connection: " +
+               endpoint0 + " <-> " + endpoint1 + ". Ignoring.");
+      continue;
+    }
+
+    InterconnectConfig &interconnect0 = interconnect0_it->second;
+    InterconnectConfig &interconnect1 = interconnect1_it->second;
+
+    if (interconnect0.type.value != interconnect1.type.value) {
+      LOG_WARN("SetupLoader: Not matching interconnect types in connection: " +
+               endpoint0 + " <-> " + endpoint1 + ". Ignoring.");
       continue;
     }
 
@@ -124,48 +162,48 @@ void SetupLoader::load_config(const std::string &system_file) {
 
     unique_connections.insert(pair_norm);
 
-    YAML::Node interconnect_config = YAML::Clone(interconnect_defaults);
+    YAML::Node connection_config = YAML::Clone(interconnect0.node);
 
     // Merge overrides
     if (conn["config"]) {
       for (auto kv : conn["config"]) {
         std::string key = kv.first.as<std::string>();
-        merge_nodes(interconnect_config[key], kv.second, key);
+        merge_nodes(connection_config[key], kv.second, key);
       }
     }
 
-    // Assign to both chiplets (bidirectional symmetry)
-    int idx0 = sysconf_.chiplets[endpoint0].connections.size();
-    sysconf_.chiplets[endpoint0].connections.push_back(
-        {type, interconnect_config,
+    // Add to both interconnects (bidirectional symmetry)
+    int link0_id = interconnect0.connections.size();
+    interconnect0.connections.push_back(
+        {connection_config,
          conn["wire_length_mm"] ? conn["wire_length_mm"].as<double>()
                                 : wire_length_mm,
          conn["ber_scalar"] ? conn["ber_scalar"].as<double>() : 1.0});
 
-    int idx1 = sysconf_.chiplets[endpoint1].connections.size();
-    sysconf_.chiplets[endpoint1].connections.push_back(
-        {type, interconnect_config,
+    int link1_id = interconnect1.connections.size();
+    interconnect1.connections.push_back(
+        {connection_config,
          conn["wire_length_mm"] ? conn["wire_length_mm"].as<double>()
                                 : wire_length_mm,
          conn["ber_scalar"] ? conn["ber_scalar"].as<double>() : 1.0});
 
     // Mapping
-    auto it0 = std::find(sysconf_.chiplet_order.begin(),
-                         sysconf_.chiplet_order.end(), endpoint0);
-    auto id0 = std::distance(sysconf_.chiplet_order.begin(), it0);
-    auto it1 = std::find(sysconf_.chiplet_order.begin(),
-                         sysconf_.chiplet_order.end(), endpoint1);
-    auto id1 = std::distance(sysconf_.chiplet_order.begin(), it1);
+    unsigned chiplet0_id = sysconf_.chiplet_ids.find(chiplet0_name)->second;
+    unsigned chiplet1_id = sysconf_.chiplet_ids.find(chiplet1_name)->second;
+    unsigned interconnect0_id =
+        chiplet0.interconnect_ids.find(interconnect0_name)->second;
+    unsigned interconnect1_id =
+        chiplet1.interconnect_ids.find(interconnect1_name)->second;
 
-    interconnect.connections.push_back(
-        {{endpoint0, static_cast<int>(id0), idx0},
-         {endpoint1, static_cast<int>(id1), idx1}});
+    sysconf_.connections.push_back(
+        {{chiplet0_name, chiplet0_id, interconnect0_name, interconnect0_id,
+          static_cast<unsigned>(link0_id)},
+         {chiplet1_name, chiplet1_id, interconnect1_name, interconnect1_id,
+          static_cast<unsigned>(link1_id)}});
   }
-
-  sysconf_.interconnect = interconnect;
 }
 
-void SetupLoader::load_cycles(const std::string &workloads_file) {
+void SetupLoader::load_cycles_db(const std::string &workloads_file) {
   if (!std::filesystem::exists(workloads_file))
     return;
 
@@ -181,7 +219,7 @@ void SetupLoader::load_cycles(const std::string &workloads_file) {
       LOG_ASSERT(node["cycles_count"],
                  "SetupLoader: Missing required key 'cycles_count' for " +
                      name);
-      sysconf_.cycles_db.cycles[name] = node["cycles_count"].as<unsigned>();
+      sysconf_.cycles.db[name] = node["cycles_count"].as<unsigned>();
     }
   } catch (const YAML::Exception &e) {
     LOG_ERROR("SetupLoader: Failed to load " + workloads_file + ": " +
@@ -189,7 +227,7 @@ void SetupLoader::load_cycles(const std::string &workloads_file) {
   }
 }
 
-void SetupLoader::load_code(const std::string &setup_lib) {
+void SetupLoader::load_lib_code(const std::string &setup_lib) {
   void *handle = dlopen(setup_lib.c_str(), RTLD_LAZY);
   LOG_ASSERT(handle,
              "SetupLoader: Failed to open " + setup_lib + ": " + dlerror());
@@ -202,124 +240,6 @@ void SetupLoader::load_code(const std::string &setup_lib) {
                  setup_lib);
 
   sysconf_.program_code = *get_code();
-}
-
-YAML::Node SetupLoader::generate_preset_connections(
-    const ConnectionPreset &preset,
-    const std::map<std::string, ChipletConfig> &chiplets,
-    const YAML::Node &overrides) {
-  YAML::Node connections_node(YAML::NodeType::Sequence);
-
-  switch (preset.type) {
-  case ConnectionPreset::Type::Mesh: {
-    int n = sysconf_.chiplet_order.size();
-    int rows = static_cast<int>(std::sqrt(n));
-    while (rows * rows < n)
-      rows++;
-    int cols = (n + rows - 1) / rows;
-
-    for (int r = 0; r < rows; ++r) {
-      for (int c = 0; c < cols; ++c) {
-        int idx = r * cols + c;
-        if (idx >= n)
-          continue;
-
-        // Right neighbor
-        if (c + 1 < cols && (idx + 1) < n) {
-          YAML::Node conn;
-          conn["endpoints"][0] = sysconf_.chiplet_order[idx];
-          conn["endpoints"][1] = sysconf_.chiplet_order[idx + 1];
-          conn["wire_length_mm"] = wire_length_mm;
-          conn["ber_scalar"] = 1.0;
-          connections_node.push_back(conn);
-        }
-        // Down neighbor
-        if (r + 1 < rows) {
-          int idx_down = (r + 1) * cols + c;
-          if (idx_down < n) {
-            YAML::Node conn;
-            conn["endpoints"][0] = sysconf_.chiplet_order[idx];
-            conn["endpoints"][1] = sysconf_.chiplet_order[idx_down];
-            conn["wire_length_mm"] = wire_length_mm;
-            conn["ber_scalar"] = 1.0;
-            connections_node.push_back(conn);
-          }
-        }
-      }
-    }
-    break;
-  }
-
-  case ConnectionPreset::Type::Ring: {
-    int n = sysconf_.chiplet_order.size();
-    for (int i = 0; i < n; i++) {
-      YAML::Node conn;
-      conn["endpoints"][0] = sysconf_.chiplet_order[i];
-      conn["endpoints"][1] = sysconf_.chiplet_order[(i + 1) % n];
-      conn["wire_length_mm"] = wire_length_mm;
-      conn["ber_scalar"] = 1.0;
-      connections_node.push_back(conn);
-    }
-    break;
-  }
-
-  case ConnectionPreset::Type::Star: {
-    int n = sysconf_.chiplet_order.size();
-    if (n > 1) {
-      const std::string &center = sysconf_.chiplet_order[0];
-      for (int i = 1; i < n; i++) {
-        YAML::Node conn;
-        conn["endpoints"][0] = center;
-        conn["endpoints"][1] = sysconf_.chiplet_order[i];
-        conn["wire_length_mm"] = wire_length_mm;
-        conn["ber_scalar"] = 1.0;
-        connections_node.push_back(conn);
-      }
-    }
-    break;
-  }
-
-  default:
-    LOG_WARN("SetupLoader: Unknown preset: " + preset.to_string() +
-             ". Ignoring.");
-  }
-
-  // Apply connection overrides
-  if (overrides) {
-    for (const auto &override_conn : overrides) {
-      std::string endpoint0 = override_conn["endpoints"][0].as<std::string>();
-      std::string endpoint1 = override_conn["endpoints"][1].as<std::string>();
-      auto norm = std::minmax(endpoint0, endpoint1);
-
-      bool matched = false;
-      for (YAML::Node preset_conn : connections_node) {
-        auto norm2 = std::minmax(preset_conn["endpoints"][0].as<std::string>(),
-                                 preset_conn["endpoints"][1].as<std::string>());
-
-        if (norm == norm2) {
-          if (override_conn["wire_length_mm"])
-            preset_conn["wire_length_mm"] = override_conn["wire_length_mm"];
-          if (override_conn["ber_scalar"])
-            preset_conn["ber_scalar"] = override_conn["ber_scalar"];
-          // Merge overrides
-          if (override_conn["config"]) {
-            for (auto kv : override_conn["config"]) {
-              std::string key = kv.first.as<std::string>();
-              preset_conn["config"][key] = kv.second;
-            }
-          }
-          matched = true;
-          break;
-        }
-      }
-
-      if (!matched)
-        LOG_WARN("SetupLoader: Invalid connection override: " + endpoint0 +
-                 " <-> " + endpoint1 + ". Ignoring.");
-    }
-  }
-
-  return connections_node;
 }
 
 void SetupLoader::merge_nodes(YAML::Node target, const YAML::Node &override,
@@ -344,4 +264,97 @@ void SetupLoader::merge_nodes(YAML::Node target, const YAML::Node &override,
                  ". Ignoring.");
     }
   }
+}
+
+void SetupLoader::dump_system_config() {
+  std::cout << "=== System Configuration ===\n";
+
+  // --- Chiplets ---
+  std::cout << "\nChiplets (" << sysconf_.chiplets.size() << "):\n";
+  for (const auto &[chiplet_name, chiplet] : sysconf_.chiplets) {
+    auto id_it = sysconf_.chiplet_ids.find(chiplet_name);
+    unsigned chiplet_id =
+        (id_it != sysconf_.chiplet_ids.end()) ? id_it->second : 0;
+
+    std::cout << "  [" << chiplet_id << "] " << chiplet_name << " ("
+              << chiplet.type.to_string() << ")\n";
+
+    // Chiplet config
+    if (chiplet.node && chiplet.node.IsDefined()) {
+      std::cout << "    Config:\n";
+      std::string dumped = YAML::Dump(chiplet.node);
+      std::istringstream iss(dumped);
+      std::string line;
+      while (std::getline(iss, line))
+        std::cout << "      " << line << "\n";
+    }
+
+    // Interconnects
+    std::cout << "    Interconnects (" << chiplet.interconnects.size()
+              << "):\n";
+    for (const auto &[iname, iconf] : chiplet.interconnects) {
+      unsigned iid = 0;
+      auto iid_it = chiplet.interconnect_ids.find(iname);
+      if (iid_it != chiplet.interconnect_ids.end())
+        iid = iid_it->second;
+
+      std::cout << "      [" << iid << "] " << iname << " ("
+                << iconf.type.to_string() << ")\n";
+
+      // Interconnect config
+      if (iconf.node && iconf.node.IsDefined()) {
+        std::cout << "        Config:\n";
+        std::string dumped = YAML::Dump(iconf.node);
+        std::istringstream iss(dumped);
+        std::string line;
+        while (std::getline(iss, line))
+          std::cout << "          " << line << "\n";
+      }
+
+      // Connections
+      std::cout << "        Connections (" << iconf.connections.size()
+                << "):\n";
+      for (size_t i = 0; i < iconf.connections.size(); ++i) {
+        const auto &conn = iconf.connections[i];
+        std::cout << "          #" << i << ": wire_length=" << conn.wire_length
+                  << ", ber_scalar=" << conn.ber_scalar << "\n";
+
+        // Connection config
+        if (conn.node && conn.node.IsDefined()) {
+          std::cout << "            Config:\n";
+          std::string dumped = YAML::Dump(conn.node);
+          std::istringstream iss(dumped);
+          std::string line;
+          while (std::getline(iss, line))
+            std::cout << "              " << line << "\n";
+        }
+      }
+    }
+  }
+
+  // --- Connections ---
+  std::cout << "\nConnections (" << sysconf_.connections.size() << "):\n";
+  for (size_t i = 0; i < sysconf_.connections.size(); ++i) {
+    const auto &c = sysconf_.connections[i];
+    std::cout << "  #" << i << ": " << c.endpoint0.chiplet_name << "."
+              << c.endpoint0.interconnect_name << "."
+              << c.endpoint0.link_id << " <-> "
+              << c.endpoint1.chiplet_name << "."
+              << c.endpoint1.interconnect_name << "."
+              << c.endpoint1.link_id << "\n";
+  }
+
+  // --- Cycles Database ---
+  std::cout << "\nCycle Database (" << sysconf_.cycles.db.size() << "):\n";
+  for (const auto &[name, cycles] : sysconf_.cycles.db)
+    std::cout << "  " << std::setw(20) << std::left << name << " : " << cycles
+              << "\n";
+
+  // --- Program Code ---
+  std::cout << "\nProgram Code Entries (" << sysconf_.program_code.size()
+            << "):\n";
+  for (const auto &[key, _] : sysconf_.program_code)
+    std::cout << "  (" << key.first << ", core " << key.second << ")\n";
+
+  std::cout << "\n=== End of System Configuration ===\n";
 }

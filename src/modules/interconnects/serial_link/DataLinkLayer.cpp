@@ -5,13 +5,12 @@
 #include "common/Router.h"
 
 SLDataLinkLayer::SLDataLinkLayer(sc_module_name name, unsigned chiplet_id,
-                                 ChipletConfig chiplet_config,
-                                 InterconnectConfig interconnect_config)
-    : sc_module(name), chiplet_id(chiplet_id),
-      num_links(chiplet_config.connections.size()),
-      axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()) {
-  stats.register_utilization(this->name());
-
+                                 unsigned interconnect_id,
+                                 InterconnectConfig interconnect_config,
+                                 unsigned num_links, unsigned num_cores,
+                                 unsigned axi_width)
+    : sc_module(name), chiplet_id(chiplet_id), interconnect_id(interconnect_id),
+      num_links(num_links), axi_width(axi_width) {
   data_in_tsockets =
       new simple_target_socket_tagged<SLDataLinkLayer>[num_links];
   data_out_isockets =
@@ -23,6 +22,8 @@ SLDataLinkLayer::SLDataLinkLayer(sc_module_name name, unsigned chiplet_id,
     data_out_isockets[i].register_nb_transport_bw(
         this, &SLDataLinkLayer::nb_transport_bw, i);
   }
+
+  stats.register_utilization(this->name());
 
   SC_METHOD(clk_posedge);
   dont_initialize();
@@ -45,7 +46,8 @@ void SLDataLinkLayer::clk_posedge() {
       pack_payload(*transaction, *payload);
 
       uint8_t destination_id = UserSignals::decode(payload->user).dst_chiplet;
-      int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
+      int link_id = Router::instance().get_link_id(chiplet_id, interconnect_id,
+                                                   destination_id);
       if (link_id == -1)
         SC_LOG_ERROR(this, "No valid routing path from "
                                << chiplet_id << " to " << int(destination_id));

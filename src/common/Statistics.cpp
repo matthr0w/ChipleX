@@ -267,14 +267,14 @@ void StatManager::end_simulation_timer() {
   time_wall_value_ =
       duration<double>(high_resolution_clock::now() - time_wall_start_)
           .count() *
-      1e6;
+      1e3;
   time_sim_value_ = (sc_time_stamp() - time_sim_start_).to_seconds() * 1e6;
 }
 
 void StatManager::dump_to_file(const std::string &filename) {
   std::ofstream ofs(filename);
   ofs << "{\n";
-  ofs << "  \"execution_time_us\": " << time_wall_value_ << ",\n";
+  ofs << "  \"execution_time_ms\": " << time_wall_value_ << ",\n";
   ofs << "  \"simulation_time_us\": " << time_sim_value_ << ",\n";
   ofs << "  \"modules\": {\n";
 

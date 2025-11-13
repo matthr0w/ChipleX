@@ -5,20 +5,15 @@
 #include "common/Router.h"
 
 SPI::SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
-         InterconnectConfig interconnect_config, DMAEngine *dma_engine)
-    : InterconnectBase(chiplet_config.config["cores"]["num"].as<unsigned>(),
-                       chiplet_config.connections.size()),
-      sc_module(name), chiplet_id(chiplet_id),
-      num_cores(chiplet_config.config["cores"]["num"].as<unsigned>()),
-      num_links(chiplet_config.connections.size()),
-      axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
-      connections(chiplet_config.connections), dma_engine(dma_engine),
+         unsigned interconnect_id, InterconnectConfig interconnect_config,
+         DMAEngine *dma_engine)
+    : InterconnectBase(chiplet_id, chiplet_config, interconnect_id,
+                       interconnect_config),
+      sc_module(name), dma_engine(dma_engine),
       axi_in("axi_in", *this, &SPI::nb_transport_fw_axi,
              ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &SPI::nb_transport_bw_axi,
               ARM::TLM::PROTOCOL_AXI4, axi_width) {
-  stats.register_utilization(this->name());
-
   if (dma_engine)
     dma_vm_id = dma_engine->register_virtual_initiator(this);
 
@@ -54,6 +49,8 @@ SPI::SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
 
   active_links.resize(num_links, false);
 
+  stats.register_utilization(this->name());
+
   SC_METHOD(clk_posedge);
   sensitive << clk.pos();
   dont_initialize();
@@ -67,9 +64,8 @@ SPI::~SPI() {
 
 void SPI::end_of_simulation() {
   for (size_t id = 0; id < connections.size(); ++id) {
-    ChipletConnectionConfig connection = connections[id];
-    InterconnectType interconnect = connection.type;
-    YAML::Node config = connection.config;
+    ConnectionConfig connection = connections[id];
+    YAML::Node config = connection.node;
 
     stats.set_value(this->name(),
                     "transmission_size_bits_link" + std::to_string(id),
@@ -509,7 +505,8 @@ bool SPI::send_link_request(ARM::AXI::Payload &payload) {
   transaction->set_data_ptr(reinterpret_cast<unsigned char *>(&payload));
 
   uint8_t destination_id = UserSignals::decode(payload.user).dst_chiplet;
-  int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
+  int link_id = Router::instance().get_link_id(chiplet_id, interconnect_id,
+                                               destination_id);
   if (link_id == -1)
     SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to "
                                                      << int(destination_id));

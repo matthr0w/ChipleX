@@ -43,7 +43,7 @@ public:
   simple_target_socket_tagged<Core> *irq_sockets;
 
   Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
-       YAML::Node config, const CyclesDB &cycles);
+       YAML::Node config, const CyclesDB &cycles, unsigned num_irqs);
   ~Core();
 
   void core_thread();

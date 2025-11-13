@@ -1,24 +1,22 @@
 #include "modules/interconnects/serial_link/SerialLink.h"
 
 SerialLink::SerialLink(sc_module_name name, unsigned chiplet_id,
-                       ChipletConfig chiplet_config,
+                       ChipletConfig chiplet_config, unsigned interconnect_id,
                        InterconnectConfig interconnect_config)
-    : InterconnectBase(chiplet_config.config["cores"]["num"].as<unsigned>(),
-                       chiplet_config.connections.size()),
-      sc_module(name), chiplet_config(chiplet_config),
-      interconnect_config(interconnect_config),
-      num_cores(chiplet_config.config["cores"]["num"].as<unsigned>()),
-      num_links(chiplet_config.connections.size()),
-      network_layer("network_layer", chiplet_id, chiplet_config,
-                    interconnect_config, num_cores),
-      datalink_layer("data_link_layer", chiplet_id, chiplet_config,
-                     interconnect_config),
+    : InterconnectBase(chiplet_id, chiplet_config, interconnect_id,
+                       interconnect_config),
+      sc_module(name),
+      network_layer("network_layer", chiplet_id, interconnect_id,
+                    interconnect_config, num_links, num_cores, axi_width),
+      datalink_layer("data_link_layer", chiplet_id, interconnect_id,
+                     interconnect_config, num_links, num_cores, axi_width),
       stream_fifo_out("stream_fifo_out", 2),
       stream_fifo_in("stream_fifo_in", compute_fifo_depth()) {
-  for (int i = 0; i < num_links; ++i) {
-    std::string name = "channel_allocater" + std::to_string(i);
+  for (unsigned link_id = 0; link_id < num_links; ++link_id) {
+    std::string name = "channel_allocater" + std::to_string(link_id);
     channel_allocaters.push_back(
-        new SLChannelAllocater(name.c_str(), i, chiplet_config));
+        new SLChannelAllocater(name.c_str(), link_id, interconnect_config,
+                               num_links, num_cores, axi_width));
   }
 
   network_layer.stream_fifo_in(stream_fifo_in);
@@ -61,18 +59,17 @@ SerialLink::~SerialLink() {
 }
 
 unsigned SerialLink::compute_fifo_depth() {
-  bool ddr = interconnect_config.config["ddr"].as<bool>();
+  bool ddr = interconnect_config.node["ddr"].as<bool>();
   unsigned num_channels =
-      interconnect_config.config["num_channels"].as<unsigned>();
-  unsigned num_lanes = interconnect_config.config["num_lanes"].as<unsigned>();
-  unsigned num_credits =
-      interconnect_config.config["num_credits"].as<unsigned>();
+      interconnect_config.node["num_channels"].as<unsigned>();
+  unsigned num_lanes = interconnect_config.node["num_lanes"].as<unsigned>();
+  unsigned num_credits = interconnect_config.node["num_credits"].as<unsigned>();
 
   unsigned bandwidth = num_channels * num_lanes * (ddr ? 2 : 1);
 
   unsigned payload_splits =
       (Payload_t::simulation_size(
-           chiplet_config.config["axi"]["width"].as<unsigned>()) *
+           chiplet_config.node["axi"]["width"].as<unsigned>()) *
            8 +
        bandwidth - 1) /
       bandwidth;

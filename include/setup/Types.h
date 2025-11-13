@@ -15,15 +15,15 @@ using namespace tlm;
 class Core;
 
 struct ChipletType {
-  enum class Type { SingleCore, DualCore, QuadCore, Memory, Undefined };
+  enum class Type { Unknown, SingleCore, DualCore, QuadCore, Memory };
 
-  Type type;
+  Type value;
 
   ChipletType() = default;
-  ChipletType(Type t) : type(t) {}
+  ChipletType(Type type) : value(type) {}
 
   std::string to_string() const {
-    switch (type) {
+    switch (value) {
     case Type::SingleCore:
       return "single-core";
     case Type::DualCore:
@@ -33,7 +33,7 @@ struct ChipletType {
     case Type::Memory:
       return "memory";
     default:
-      return "undefined";
+      return "unknown";
     }
   }
 
@@ -46,20 +46,20 @@ struct ChipletType {
       return Type::QuadCore;
     if (str == "memory")
       return Type::Memory;
-    return Type::Undefined;
+    return Type::Unknown;
   }
 };
 
 struct InterconnectType {
-  enum class Type { PCIe, UCIe, SerialLink, SPI, Undefined };
+  enum class Type { Unknown, PCIe, UCIe, SerialLink, SPI };
 
-  Type type;
+  Type value;
 
   InterconnectType() = default;
-  InterconnectType(Type t) : type(t) {}
+  InterconnectType(Type type) : value(type) {}
 
   std::string to_string() const {
-    switch (type) {
+    switch (value) {
     case Type::PCIe:
       return "pcie";
     case Type::UCIe:
@@ -69,7 +69,7 @@ struct InterconnectType {
     case Type::SPI:
       return "spi";
     default:
-      return "undefined";
+      return "unknown";
     }
   }
 
@@ -82,17 +82,17 @@ struct InterconnectType {
       return Type::SerialLink;
     if (str == "spi")
       return Type::SPI;
-    return Type::Undefined;
+    return Type::Unknown;
   }
 };
 
 struct ConnectionPreset {
-  enum class Type { Mesh, Ring, Star, Undefined };
+  enum class Type { Unknown, Mesh, Ring, Star };
 
   Type type;
 
   ConnectionPreset() = default;
-  ConnectionPreset(Type t) : type(t) {}
+  ConnectionPreset(Type type) : type(type) {}
 
   std::string to_string() const {
     switch (type) {
@@ -103,7 +103,7 @@ struct ConnectionPreset {
     case Type::Star:
       return "star";
     default:
-      return "undefined";
+      return "unknown";
     }
   }
 
@@ -114,14 +114,35 @@ struct ConnectionPreset {
       return Type::Ring;
     if (str == "star")
       return Type::Star;
-    return Type::Undefined;
+    return Type::Unknown;
   }
+};
+
+struct ConnectionConfig {
+  YAML::Node node;
+  double wire_length;
+  double ber_scalar;
+};
+
+struct InterconnectConfig {
+  InterconnectType type;
+  YAML::Node node;
+  std::vector<ConnectionConfig> connections;
+};
+
+struct ChipletConfig {
+  ChipletType type;
+  YAML::Node node;
+  std::map<std::string, InterconnectConfig> interconnects;
+  std::map<std::string, unsigned> interconnect_ids;
 };
 
 struct ConnectionEndpoint {
   std::string chiplet_name;
-  int chiplet_id;
-  int link_id;
+  unsigned chiplet_id;
+  std::string interconnect_name;
+  unsigned interconnect_id;
+  unsigned link_id;
 };
 
 struct ConnectionMapping {
@@ -129,31 +150,12 @@ struct ConnectionMapping {
   ConnectionEndpoint endpoint1;
 };
 
-struct ChipletConnectionConfig {
-  InterconnectType type;
-  YAML::Node config;
-  double wire_length;
-  double ber_scalar;
-};
-
-struct ChipletConfig {
-  ChipletType type;
-  YAML::Node config;
-  std::vector<ChipletConnectionConfig> connections;
-};
-
-struct InterconnectConfig {
-  InterconnectType type;
-  YAML::Node config;
-  std::vector<ConnectionMapping> connections;
-};
-
 struct CyclesDB {
-  std::unordered_map<std::string, unsigned> cycles;
+  std::unordered_map<std::string, unsigned> db;
 
   unsigned get(const std::string &name) const {
-    auto it = cycles.find(name);
-    return it != cycles.end() ? it->second : 0;
+    auto it = db.find(name);
+    return it != db.end() ? it->second : 0;
   }
 };
 
@@ -164,8 +166,8 @@ using CoreCodeMap = std::map<CoreKey, CoreFunctions>;
 
 struct SystemConfig {
   std::map<std::string, ChipletConfig> chiplets;
-  std::vector<std::string> chiplet_order;
-  InterconnectConfig interconnect;
+  std::map<std::string, unsigned> chiplet_ids;
+  std::vector<ConnectionMapping> connections;
   CoreCodeMap program_code;
-  CyclesDB cycles_db;
+  CyclesDB cycles;
 };

@@ -6,13 +6,13 @@
 #include "setup/Types.h"
 
 SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chiplet_id,
-                               ChipletConfig chiplet_config,
+                               unsigned interconnect_id,
                                InterconnectConfig interconnect_config,
-                               unsigned num_cores)
-    : sc_module(name), chiplet_id(chiplet_id), num_cores(num_cores),
-      num_links(chiplet_config.connections.size()),
-      axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
-      num_credits(interconnect_config.config["num_credits"].as<unsigned>()),
+                               unsigned num_links, unsigned num_cores,
+                               unsigned axi_width)
+    : sc_module(name), chiplet_id(chiplet_id), interconnect_id(interconnect_id),
+      num_links(num_links), num_cores(num_cores), axi_width(axi_width),
+      num_credits(interconnect_config.node["num_credits"].as<unsigned>()),
       force_send_thresh(num_credits - 4),
       axi_in("axi_in", *this, &SLNetworkLayer::nb_transport_fw,
              ARM::TLM::PROTOCOL_AXI4, axi_width),
@@ -68,7 +68,8 @@ void SLNetworkLayer::clk_posedge() {
       // Flow control
       uint8_t destination_id =
           UserSignals::decode(payload_out->user).dst_chiplet;
-      int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
+      int link_id = Router::instance().get_link_id(chiplet_id, interconnect_id,
+                                                   destination_id);
       if (link_id == -1)
         SC_LOG_ERROR(this, "No valid routing path from "
                                << chiplet_id << " to " << int(destination_id));
@@ -80,7 +81,8 @@ void SLNetworkLayer::clk_posedge() {
     if (payload) {
       // Prioritize forwarding packets
       uint8_t destination_id = UserSignals::decode(payload->user).dst_chiplet;
-      int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
+      int link_id = Router::instance().get_link_id(chiplet_id, interconnect_id,
+                                                   destination_id);
 
       if (link_id != -1) {
         bool is_valid =
@@ -429,7 +431,8 @@ void SLNetworkLayer::sender_thread() {
         }
       }
       // Find the connected chiplet
-      int destination_id = Router::instance().get_dest_id(chiplet_id, link_id);
+      int destination_id =
+          Router::instance().get_dest_id(chiplet_id, interconnect_id, link_id);
       if (destination_id == -1)
         SC_LOG_ERROR(this, "No valid routing path from "
                                << chiplet_id << " via link" << int(link_id));
@@ -438,7 +441,8 @@ void SLNetworkLayer::sender_thread() {
     }
 
     uint8_t destination_id = UserSignals::decode(payload_out->user).dst_chiplet;
-    int link_id = Router::instance().get_link_id(chiplet_id, destination_id);
+    int link_id = Router::instance().get_link_id(chiplet_id, interconnect_id,
+                                                 destination_id);
     if (link_id == -1)
       SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to "
                                                        << int(destination_id));

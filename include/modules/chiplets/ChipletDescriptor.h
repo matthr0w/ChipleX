@@ -4,6 +4,14 @@
 #include <string>
 #include <vector>
 
+// Module names
+const std::string BUS_MODULE_NAME = "bus";
+const std::string CACHE_MODULE_NAME = "cache";
+const std::string CORE_MODULE_NAME = "core";
+const std::string DMA_ENGINE_MODULE_NAME = "dma_engine";
+const std::string MEMORY_MODULE_NAME = "memory";
+
+// Module AXI types
 enum class AXIModuleType { NONE, BUS, INTERCONNECT, MANAGER, SUBORDINATE };
 
 struct ChipletModuleInfo {
@@ -34,9 +42,9 @@ struct ChipletDescriptor {
   std::string chiplet_name;
   std::vector<ChipletModuleInfo> modules;
 
-  const ChipletModuleInfo *get(unsigned module_id) const {
+  const ChipletModuleInfo *get(const unsigned id) const {
     for (const auto &m : modules)
-      if (m.id == module_id)
+      if (m.id == id)
         return &m;
     return nullptr;
   }

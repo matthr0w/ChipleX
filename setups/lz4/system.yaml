@@ -1,16 +1,23 @@
 chiplets:
   - name: fpga
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: serial-link
 
   - name: chiplet0
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: serial-link
 
   - name: chiplet1
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: serial-link
 
-interconnect:
-  type: ucie
-  connections:
-    - endpoints: [fpga, chiplet0]
-    - endpoints: [fpga, chiplet1]
-    - endpoints: [chiplet0, chiplet1]
+connections:
+  - endpoints: [fpga.interconnect, chiplet0.interconnect]
+  - endpoints: [fpga.interconnect, chiplet1.interconnect]
+  - endpoints: [chiplet0.interconnect, chiplet1.interconnect]

@@ -18,7 +18,9 @@ private:
   // -------------------------------------------------------
   // Config
   // -------------------------------------------------------
+  // InterconnectBase
   const unsigned chiplet_id;
+  const unsigned interconnect_id;
   const unsigned num_links;
   const unsigned axi_width;
 
@@ -41,8 +43,9 @@ public:
   simple_initiator_socket_tagged<SLDataLinkLayer> *data_out_isockets;
 
   SLDataLinkLayer(sc_module_name name, unsigned chiplet_id,
-                  ChipletConfig chiplet_config,
-                  InterconnectConfig interconnect_config);
+                  unsigned interconnect_id,
+                  InterconnectConfig interconnect_config, unsigned num_links,
+                  unsigned num_cores, unsigned axi_width);
   ~SLDataLinkLayer();
 
 private:

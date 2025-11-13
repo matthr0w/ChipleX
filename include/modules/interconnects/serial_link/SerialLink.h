@@ -15,18 +15,9 @@ using namespace tlm;
 using namespace tlm_utils;
 
 SC_MODULE(SerialLink), public InterconnectBase {
-private:
-  // -------------------------------------------------------
-  // Config
-  // -------------------------------------------------------
-  const ChipletConfig chiplet_config;
-  const InterconnectConfig interconnect_config;
-  const unsigned num_cores;
-  const unsigned num_links;
-
 public:
   SerialLink(sc_module_name name, unsigned chiplet_id,
-             ChipletConfig chiplet_config,
+             ChipletConfig chiplet_config, unsigned interconnect_id,
              InterconnectConfig interconnect_config);
   ~SerialLink();
 

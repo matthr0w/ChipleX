@@ -18,10 +18,13 @@ private:
   // -------------------------------------------------------
   // Config
   // -------------------------------------------------------
+  // InterconnectBase
   const unsigned chiplet_id;
-  const unsigned num_cores;
+  const unsigned interconnect_id;
   const unsigned num_links;
+  const unsigned num_cores;
   const unsigned axi_width;
+  // YAML
   const unsigned num_credits;
   const unsigned force_send_thresh;
 
@@ -48,8 +51,9 @@ public:
   simple_initiator_socket_tagged<SLNetworkLayer> *irq_sockets;
 
   SLNetworkLayer(sc_module_name name, unsigned chiplet_id,
-                 ChipletConfig chiplet_config,
-                 InterconnectConfig interconnect_config, unsigned num_cores);
+                 unsigned interconnect_id,
+                 InterconnectConfig interconnect_config, unsigned num_links,
+                 unsigned num_cores, unsigned axi_width);
   ~SLNetworkLayer();
 
 private:

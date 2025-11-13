@@ -7,24 +7,22 @@
 GenericInterconnect::GenericInterconnect(sc_module_name name,
                                          unsigned chiplet_id,
                                          ChipletConfig chiplet_config,
+                                         unsigned interconnect_id,
                                          InterconnectConfig interconnect_config,
                                          DMAEngine *dma_engine)
-    : InterconnectBase(chiplet_config.config["cores"]["num"].as<unsigned>(),
-                       chiplet_config.connections.size()),
-      sc_module(name), chiplet_id(chiplet_id),
-      num_cores(chiplet_config.config["cores"]["num"].as<unsigned>()),
-      num_links(chiplet_config.connections.size()),
-      axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
+    : InterconnectBase(chiplet_id, chiplet_config, interconnect_id,
+                       interconnect_config),
+      sc_module(name),
       flit_size(
-          interconnect_config.config["protocol"]["flit_size"].as<unsigned>()),
-      overhead_size(interconnect_config.config["protocol"]["overhead_size"]
-                        .as<unsigned>()),
+          interconnect_config.node["protocol"]["flit_size"].as<unsigned>()),
+      overhead_size(
+          interconnect_config.node["protocol"]["overhead_size"].as<unsigned>()),
       staging_buffer_size(
-          interconnect_config.config["protocol"]["staging_buffer_size"]
+          interconnect_config.node["protocol"]["staging_buffer_size"]
               .as<unsigned>()),
       link_buffer_size(
-          interconnect_config.config["phy"]["link_buffer_size"].as<unsigned>()),
-      connections(chiplet_config.connections), dma_engine(dma_engine),
+          interconnect_config.node["phy"]["link_buffer_size"].as<unsigned>()),
+      dma_engine(dma_engine),
       axi_in("axi_in", *this, &GenericInterconnect::nb_transport_fw_axi,
              ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &GenericInterconnect::nb_transport_bw_axi,
@@ -113,9 +111,8 @@ void GenericInterconnect::end_of_simulation() {
   stats.set_value(this->name(), "overhead_size_bytes", overhead_size);
 
   for (size_t id = 0; id < connections.size(); ++id) {
-    ChipletConnectionConfig connection = connections[id];
-    InterconnectType interconnect = connection.type;
-    YAML::Node config = connection.config;
+    ConnectionConfig connection = connections[id];
+    YAML::Node config = connection.node;
 
     stats.set_value(this->name(),
                     "link_buffer_size_bytes_link" + std::to_string(id),
@@ -173,8 +170,8 @@ void GenericInterconnect::clk_posedge_protocol() {
       // Determine Tx buffer
       uint8_t destination_id =
           UserSignals::decode(axi_transaction.payload->user).dst_chiplet;
-      const unsigned tx_idx =
-          Router::instance().get_link_id(chiplet_id, destination_id);
+      const unsigned tx_idx = Router::instance().get_link_id(
+          chiplet_id, interconnect_id, destination_id);
       if (tx_idx == -1)
         SC_LOG_ERROR(this, "No valid routing path from "
                                << chiplet_id << " to " << int(destination_id));
@@ -745,7 +742,8 @@ void GenericInterconnect::write_flit_to_buffer(uint8_t *dest, const Flit &flit,
 }
 
 void GenericInterconnect::forward_flit(unsigned rx_idx, uint8_t dest_id) {
-  const unsigned tx_idx = Router::instance().get_link_id(chiplet_id, dest_id);
+  const unsigned tx_idx =
+      Router::instance().get_link_id(chiplet_id, interconnect_id, dest_id);
   if (tx_idx == -1)
     SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to "
                                                      << int(dest_id));

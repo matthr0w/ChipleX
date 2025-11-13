@@ -1,10 +1,12 @@
 #include "modules/interconnects/serial_link/ChannelAllocator.h"
 
 SLChannelAllocater::SLChannelAllocater(sc_module_name name, unsigned link_id,
-                                       ChipletConfig chiplet_config)
+                                       InterconnectConfig interconnect_config,
+                                       unsigned num_links, unsigned num_cores,
+                                       unsigned axi_width)
     : sc_module(name), link_id(link_id),
-      axi_width(chiplet_config.config["axi"]["width"].as<unsigned>()),
-      connections(chiplet_config.connections) {
+      connections(interconnect_config.connections),
+      axi_width(axi_width) {
   data_in_tsocket.register_nb_transport_fw(
       this, &SLChannelAllocater::nb_transport_fw_data_in, 0);
   data_in_isocket.register_nb_transport_bw(

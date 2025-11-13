@@ -1,15 +1,22 @@
 chiplets:
   - name: chiplet0
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: spi
 
   - name: chiplet1
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: spi
 
   - name: chiplet2
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: spi
 
-interconnect:
-  type: spi
-  connections:
-    - endpoints: [chiplet0, chiplet1]
-    - endpoints: [chiplet1, chiplet2]
+connections:
+  - endpoints: [chiplet0.interconnect, chiplet1.interconnect]
+  - endpoints: [chiplet1.interconnect, chiplet2.interconnect]

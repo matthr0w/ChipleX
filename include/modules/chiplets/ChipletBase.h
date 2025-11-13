@@ -14,24 +14,34 @@ struct ChipletBase : sc_module {
 protected:
   const unsigned chiplet_id;
   const std::string chiplet_name;
-
-  Clocks chiplet_clocks;
-  Clocks interconnect_clocks;
-
+  const ChipletConfig chiplet_config;
   const ChipletDescriptor chiplet_desc;
 
+  // Clock databases
+  Clocks chiplet_clocks;
+  std::map<std::string, Clocks> interconnect_clocks;
+
 public:
-  ChipletBase(sc_module_name name, const ChipletDescriptor &desc,
-              SystemConfig sysconf)
-      : sc_module(name), chiplet_id(desc.chiplet_id),
-        chiplet_name(desc.chiplet_name), chiplet_desc(desc),
-        chiplet_clocks(sysconf.chiplets[chiplet_name].config),
-        interconnect_clocks(sysconf.interconnect.config) {
+  ChipletBase(sc_module_name name, unsigned id, SystemConfig sysconf,
+              const ChipletDescriptor &desc)
+      : sc_module(name), chiplet_id(id), chiplet_name(std::string(name)),
+        chiplet_config(sysconf.chiplets[chiplet_name]), chiplet_desc(desc),
+        chiplet_clocks(chiplet_config.node) {
     ChipletRegistry::instance().register_chiplet(chiplet_id, chiplet_name,
                                                  chiplet_desc);
+    for (const auto &[name, config] : chiplet_config.interconnects)
+      interconnect_clocks.emplace(name, Clocks(config.node));
   }
 
   virtual ~ChipletBase() = default;
 
-  std::unique_ptr<InterconnectBase> interconnect;
+  std::map<std::string, std::unique_ptr<InterconnectBase>> interconnects;
+
+protected:
+  Clocks &get_interconnect_clocks(const std::string &interconnect_name) {
+    auto it = interconnect_clocks.find(interconnect_name);
+    if (it != interconnect_clocks.end())
+      return it->second;
+    return chiplet_clocks;
+  }
 };

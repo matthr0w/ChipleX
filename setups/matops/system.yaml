@@ -1,24 +1,37 @@
 chiplets:
   - name: fpga
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: pcie
 
   - name: chiplet0
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: pcie
 
   - name: chiplet1
     type: single-core
-
+    interconnects:
+      - name: interconnect
+        type: pcie
+  
   - name: chiplet2
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: pcie
 
   - name: chiplet3
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: pcie
 
-interconnect:
-  type: ucie
-  connections:
-    - endpoints: [fpga, chiplet0]
-    - endpoints: [chiplet0, chiplet1]
-    - endpoints: [chiplet1, chiplet2]
-    - endpoints: [chiplet2, chiplet3]
-    - endpoints: [chiplet3, fpga]
+connections:
+  - endpoints: [fpga.interconnect, chiplet0.interconnect]
+  - endpoints: [chiplet0.interconnect, chiplet1.interconnect]
+  - endpoints: [chiplet1.interconnect, chiplet2.interconnect]
+  - endpoints: [chiplet2.interconnect, chiplet3.interconnect]
+  - endpoints: [chiplet3.interconnect, fpga.interconnect]

@@ -16,29 +16,26 @@ int sc_main(int argc, char *argv[]) {
   // Start statistics manager
   StatManager &stats = StatManager::instance();
   stats.start_simulation_timer();
-  // Initialize setup loader
+  // Load system setup
   SetupLoader setup("./configs", "./setups", sim_setup);
   SystemConfig sysconf = setup.get_config();
   // Initialize router instance
   Router::instance().init(sysconf);
 
   // Create chiplets
-  std::vector<ChipletBase *> chiplets;
-  unsigned num_chiplets = sysconf.chiplets.size();
-  chiplets.reserve(num_chiplets);
-
-  for (int i = 0; i < num_chiplets; ++i) {
-    std::string chiplet_name = sysconf.chiplet_order[i];
-    switch (sysconf.chiplets[chiplet_name].type.type) {
+  std::map<std::string, std::unique_ptr<ChipletBase>> chiplets;
+  for (const auto &[chiplet_name, chiplet] : sysconf.chiplets) {
+    auto chiplet_id = sysconf.chiplet_ids.find(chiplet_name)->second;
+    switch (sysconf.chiplets[chiplet_name].type.value) {
     case ChipletType::Type::SingleCore:
     case ChipletType::Type::DualCore:
     case ChipletType::Type::QuadCore:
-      chiplets.push_back(
-          new CoreChiplet(sysconf.chiplet_order[i].c_str(), i, sysconf));
+      chiplets[chiplet_name] = std::make_unique<CoreChiplet>(
+          chiplet_name.c_str(), chiplet_id, sysconf);
       break;
     case ChipletType::Type::Memory:
-      chiplets.push_back(
-          new MemoryChiplet(sysconf.chiplet_order[i].c_str(), i, sysconf));
+      chiplets[chiplet_name] = std::make_unique<MemoryChiplet>(
+          chiplet_name.c_str(), chiplet_id, sysconf);
       break;
     default:
       break;
@@ -46,26 +43,26 @@ int sc_main(int argc, char *argv[]) {
   }
 
   // Connect chiplets
-  for (int i = 0; i < sysconf.interconnect.connections.size(); ++i) {
-    const auto &conn = sysconf.interconnect.connections[i];
-    chiplets[conn.endpoint0.chiplet_id]
-        ->interconnect->link_out_ports[conn.endpoint0.link_id]
-        ->bind(*chiplets[conn.endpoint1.chiplet_id]
-                    ->interconnect->link_in_ports[conn.endpoint1.link_id]);
-    chiplets[conn.endpoint1.chiplet_id]
-        ->interconnect->link_out_ports[conn.endpoint1.link_id]
-        ->bind(*chiplets[conn.endpoint0.chiplet_id]
-                    ->interconnect->link_in_ports[conn.endpoint0.link_id]);
+  for (int i = 0; i < sysconf.connections.size(); ++i) {
+    const auto &conn = sysconf.connections[i];
+    chiplets[conn.endpoint0.chiplet_name]
+        ->interconnects[conn.endpoint0.interconnect_name]
+        ->link_out_ports[conn.endpoint0.link_id]
+        ->bind(*chiplets.find(conn.endpoint1.chiplet_name)
+                    ->second->interconnects[conn.endpoint1.interconnect_name]
+                    ->link_in_ports[conn.endpoint1.link_id]);
+    chiplets[conn.endpoint1.chiplet_name]
+        ->interconnects[conn.endpoint1.interconnect_name]
+        ->link_out_ports[conn.endpoint1.link_id]
+        ->bind(*chiplets.find(conn.endpoint0.chiplet_name)
+                    ->second->interconnects[conn.endpoint0.interconnect_name]
+                    ->link_in_ports[conn.endpoint0.link_id]);
   }
 
   if (sim_duration == SC_ZERO_TIME)
     sc_start();
   else
     sc_start(sim_duration);
-
-  for (auto *chiplet : chiplets)
-    delete chiplet;
-  chiplets.clear();
 
   stats.end_simulation_timer();
   stats.dump_to_file("stats.json");

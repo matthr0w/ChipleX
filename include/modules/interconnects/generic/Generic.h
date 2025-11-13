@@ -27,15 +27,10 @@ private:
   // -------------------------------------------------------
   // Config
   // -------------------------------------------------------
-  const unsigned chiplet_id;
-  const unsigned num_cores;
-  const unsigned num_links;
-  const unsigned axi_width;
   const unsigned flit_size;
   const unsigned overhead_size;
   const unsigned staging_buffer_size;
   const unsigned link_buffer_size;
-  const std::vector<ChipletConnectionConfig> connections;
 
 public:
   // -------------------------------------------------------
@@ -55,9 +50,10 @@ public:
 
   simple_initiator_socket_tagged<GenericInterconnect> *irq_sockets;
 
-  GenericInterconnect(
-      sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
-      InterconnectConfig interconnect_config, DMAEngine *dma_engine);
+  GenericInterconnect(sc_module_name name, unsigned chiplet_id,
+                      ChipletConfig chiplet_config, unsigned interconnect_id,
+                      InterconnectConfig interconnect_config,
+                      DMAEngine *dma_engine);
   ~GenericInterconnect();
 
   // InterconnectBase
@@ -144,9 +140,8 @@ private:
     DelayModel(const GenericInterconnect &m) : module(m) {}
 
     Transfer transfer_delay(int id, tlm_generic_payload &transaction) const {
-      ChipletConnectionConfig connection = module.connections[id];
-      InterconnectType interconnect = connection.type;
-      YAML::Node config = connection.config;
+      ConnectionConfig connection = module.connections[id];
+      YAML::Node config = connection.node;
 
       sc_time delay = SC_ZERO_TIME;
       sc_time flit_transfer_delay = SC_ZERO_TIME;
@@ -170,7 +165,7 @@ private:
           1.0 - std::pow(1.0 - scaled_ber, module.flit_size * 8);
 
       int max_attempts = 1;
-      switch (interconnect.type) {
+      switch (module.interconnect_type.value) {
       case InterconnectType::Type::UCIe:
         max_attempts = config["protocol"]["retries"].as<unsigned>() +
                        1; // + 1 for first try
@@ -191,7 +186,7 @@ private:
         SC_LOG_ERROR(&module,
                      "Bit error on attempt " + std::to_string(attempt + 1));
 
-        switch (interconnect.type) {
+        switch (module.interconnect_type.value) {
         case InterconnectType::Type::PCIe:
           // FEC penalty
           delay +=

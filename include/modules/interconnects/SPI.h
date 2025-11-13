@@ -22,15 +22,6 @@ SC_MODULE(SPI), public InterconnectBase, public DMAForwardInterface {
 private:
   void end_of_simulation() override;
 
-  // -------------------------------------------------------
-  // Config
-  // -------------------------------------------------------
-  const unsigned chiplet_id;
-  const unsigned num_cores;
-  const unsigned num_links;
-  const unsigned axi_width;
-  const std::vector<ChipletConnectionConfig> connections;
-
 public:
   // -------------------------------------------------------
   // Signals
@@ -49,7 +40,8 @@ public:
   simple_initiator_socket_tagged<SPI> *irq_sockets;
 
   SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
-      InterconnectConfig interconnect_config, DMAEngine *dma_engine);
+      unsigned interconnect_id, InterconnectConfig interconnect_config,
+      DMAEngine *dma_engine);
   ~SPI();
 
   // InterconnectBase
@@ -119,9 +111,8 @@ private:
     DelayModel(const SPI &m) : module(m) {}
 
     Transfer transfer_delay(int id, tlm_generic_payload &transaction) const {
-      ChipletConnectionConfig connection = module.connections[id];
-      InterconnectType interconnect = connection.type;
-      YAML::Node config = connection.config;
+      ConnectionConfig connection = module.connections[id];
+      YAML::Node config = connection.node;
 
       sc_time delay = SC_ZERO_TIME;
       sc_time beat_transfer_delay = SC_ZERO_TIME;

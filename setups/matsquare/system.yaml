@@ -1,11 +1,15 @@
 chiplets:
   - name: fpga
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: pcie
 
   - name: chiplet0
     type: single-core
+    interconnects:
+      - name: interconnect
+        type: pcie
 
-interconnect:
-  type: ucie
-  connections:
-    - endpoints: [fpga, chiplet0]
+connections:
+  - endpoints: [fpga.interconnect, chiplet0.interconnect]

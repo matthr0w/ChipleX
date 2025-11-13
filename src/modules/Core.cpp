@@ -4,7 +4,7 @@
 #include "modules/chiplets/ChipletRegistry.h"
 
 Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
-           YAML::Node config, const CyclesDB &cycles)
+           YAML::Node config, const CyclesDB &cycles, unsigned num_irqs)
     : sc_module(name), chiplet_id(chiplet_id), core_id(core_id),
       axi_width(config["axi"]["width"].as<unsigned>()), cycles(cycles),
       clk_cycle(config["cores"]["clk_cycle"].as<unsigned>(), SC_NS),
@@ -13,9 +13,8 @@ Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
               axi_width) {
   stats.register_utilization(this->name(), clk_cycle);
 
-  unsigned num_irq_lines = config["cores"]["irq_lines"].as<unsigned>();
-  irq_sockets = new simple_target_socket_tagged<Core>[num_irq_lines];
-  for (unsigned i = 0; i < num_irq_lines; ++i)
+  irq_sockets = new simple_target_socket_tagged<Core>[num_irqs];
+  for (unsigned i = 0; i < num_irqs; ++i)
     irq_sockets[i].register_nb_transport_fw(this, &Core::nb_transport_fw_irq,
                                             i);
 

@@ -21,8 +21,9 @@ private:
   // Config
   // -------------------------------------------------------
   const unsigned link_id;
+  const std::vector<ConnectionConfig> connections;
+  // InterconnectBase
   const unsigned axi_width;
-  const std::vector<ChipletConnectionConfig> connections;
 
 public:
   // -------------------------------------------------------
@@ -36,7 +37,8 @@ public:
       data_out_isocket; // tagged for InterconnectBase
 
   SLChannelAllocater(sc_module_name name, unsigned link_id,
-                     ChipletConfig chiplet_config);
+                     InterconnectConfig interconnect_config, unsigned num_links,
+                     unsigned num_cores, unsigned axi_width);
 
 private:
   // -------------------------------------------------------
@@ -55,9 +57,8 @@ private:
     DelayModel(const SLChannelAllocater &m) : module(m) {}
 
     Transfer transfer_delay(int id, tlm_generic_payload &transaction) const {
-      ChipletConnectionConfig connection = module.connections[id];
-      InterconnectType interconnect = connection.type;
-      YAML::Node config = connection.config;
+      ConnectionConfig connection = module.connections[id];
+      YAML::Node config = connection.node;
 
       sc_time delay = SC_ZERO_TIME;
       sc_time packet_transfer_delay = SC_ZERO_TIME;
