@@ -5,10 +5,10 @@
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
 #include <tlm_utils/simple_target_socket.h>
-#include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
 #include "common/Statistics.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -18,22 +18,25 @@ struct DMARequest {
   uint32_t request_id; // Request ID
   uint8_t core_id;     // Core ID
 
-  uint8_t burst;        // Burst type
-  uint8_t is_volatile;  // Cache usage
-  unsigned data_length; // Bytes to transfer
+  uint8_t burst;       // Burst type
+  uint8_t is_volatile; // Cache usage
+
+  uint32_t data_length; // Bytes to transfer
+
+  uint8_t src_chiplet; // Chiplet ID of request chiplet
 
   // Read data from
-  uint8_t src_chiplet;   // Chiplet ID of request chiplet
-  uint8_t src_module;    // Module ID on request chiplet
-  uint8_t dst_chiplet;   // Chiplet ID of target chiplet
-  uint8_t dst_module;    // Module ID on target chiplet
-  uint32_t request_addr; // Address to read from
+  uint8_t src_fetch_module; // Module ID on request chiplet for fetch
+  uint8_t fetch_chiplet;    // Chiplet ID of fetch chiplet
+  uint8_t fetch_module;     // Module ID on fetch chiplet
+  uint32_t fetch_addr;      // Address to read from
 
   // Write data to
-  uint8_t target_module; // Module ID on request chiplet
-  uint32_t target_addr;  // Address to write to
-} __attribute__((packed));
-static_assert(sizeof(DMARequest) % 8 == 0);
+  uint8_t src_target_module; // Module ID on request chiplet for target
+  uint8_t target_chiplet;    // Chiplet ID of target chiplet
+  uint8_t target_module;     // Module ID on target chiplet
+  uint32_t target_addr;      // Address to write to
+};
 
 struct DMAForwardInterface {
   virtual tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload &payload,
@@ -64,7 +67,7 @@ public:
 
   simple_initiator_socket_tagged<DMAEngine> *irq_sockets;
 
-  DMAEngine(sc_module_name name, YAML::Node config);
+  DMAEngine(sc_module_name name, ChipletConfig chiplet_config);
   ~DMAEngine();
 
 private:

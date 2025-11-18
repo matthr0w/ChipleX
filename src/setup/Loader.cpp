@@ -84,7 +84,8 @@ void SetupLoader::load_system_config(const std::string &system_file) {
       InterconnectType type(InterconnectType::parse(interconnect_type));
       InterconnectConfig interconnect{type, interconnect_config};
       chiplet.interconnects[interconnect_name] = interconnect;
-      chiplet.interconnect_ids[interconnect_name] = interconnect_id++;
+      chiplet.interconnect_ids[interconnect_name] = interconnect_id;
+      chiplet.interconnect_ids_reverse[interconnect_id++] = interconnect_name;
     }
 
     sysconf_.chiplets[chiplet_name] = chiplet;
@@ -232,14 +233,27 @@ void SetupLoader::load_lib_code(const std::string &setup_lib) {
   LOG_ASSERT(handle,
              "SetupLoader: Failed to open " + setup_lib + ": " + dlerror());
 
-  using GetCodeFn = CoreCodeMap *(*)();
+  using GetCodeFn = ModuleCodeMap *(*)();
   auto get_code =
       reinterpret_cast<GetCodeFn>(dlsym(handle, "get_program_code"));
   LOG_ASSERT(get_code,
              "SetupLoader: Failed to find symbol get_program_code in " +
                  setup_lib);
 
-  sysconf_.program_code = *get_code();
+  ModuleCodeMap code_map = *get_code();
+  for (auto &[key, funcs] : code_map) {
+    const auto &chiplet_name = key.first;
+    const auto &module_name = key.second;
+
+    auto it = sysconf_.chiplets.find(chiplet_name);
+    if (it == sysconf_.chiplets.end()) {
+      LOG_WARN("SetupLoader: Program specifies unknown chiplet "
+               << chiplet_name << ". Ignoring.");
+      continue;
+    }
+
+    it->second.module_code[module_name] = std::move(funcs);
+  }
 }
 
 void SetupLoader::merge_nodes(YAML::Node target, const YAML::Node &override,
@@ -264,97 +278,4 @@ void SetupLoader::merge_nodes(YAML::Node target, const YAML::Node &override,
                  ". Ignoring.");
     }
   }
-}
-
-void SetupLoader::dump_system_config() {
-  std::cout << "=== System Configuration ===\n";
-
-  // --- Chiplets ---
-  std::cout << "\nChiplets (" << sysconf_.chiplets.size() << "):\n";
-  for (const auto &[chiplet_name, chiplet] : sysconf_.chiplets) {
-    auto id_it = sysconf_.chiplet_ids.find(chiplet_name);
-    unsigned chiplet_id =
-        (id_it != sysconf_.chiplet_ids.end()) ? id_it->second : 0;
-
-    std::cout << "  [" << chiplet_id << "] " << chiplet_name << " ("
-              << chiplet.type.to_string() << ")\n";
-
-    // Chiplet config
-    if (chiplet.node && chiplet.node.IsDefined()) {
-      std::cout << "    Config:\n";
-      std::string dumped = YAML::Dump(chiplet.node);
-      std::istringstream iss(dumped);
-      std::string line;
-      while (std::getline(iss, line))
-        std::cout << "      " << line << "\n";
-    }
-
-    // Interconnects
-    std::cout << "    Interconnects (" << chiplet.interconnects.size()
-              << "):\n";
-    for (const auto &[iname, iconf] : chiplet.interconnects) {
-      unsigned iid = 0;
-      auto iid_it = chiplet.interconnect_ids.find(iname);
-      if (iid_it != chiplet.interconnect_ids.end())
-        iid = iid_it->second;
-
-      std::cout << "      [" << iid << "] " << iname << " ("
-                << iconf.type.to_string() << ")\n";
-
-      // Interconnect config
-      if (iconf.node && iconf.node.IsDefined()) {
-        std::cout << "        Config:\n";
-        std::string dumped = YAML::Dump(iconf.node);
-        std::istringstream iss(dumped);
-        std::string line;
-        while (std::getline(iss, line))
-          std::cout << "          " << line << "\n";
-      }
-
-      // Connections
-      std::cout << "        Connections (" << iconf.connections.size()
-                << "):\n";
-      for (size_t i = 0; i < iconf.connections.size(); ++i) {
-        const auto &conn = iconf.connections[i];
-        std::cout << "          #" << i << ": wire_length=" << conn.wire_length
-                  << ", ber_scalar=" << conn.ber_scalar << "\n";
-
-        // Connection config
-        if (conn.node && conn.node.IsDefined()) {
-          std::cout << "            Config:\n";
-          std::string dumped = YAML::Dump(conn.node);
-          std::istringstream iss(dumped);
-          std::string line;
-          while (std::getline(iss, line))
-            std::cout << "              " << line << "\n";
-        }
-      }
-    }
-  }
-
-  // --- Connections ---
-  std::cout << "\nConnections (" << sysconf_.connections.size() << "):\n";
-  for (size_t i = 0; i < sysconf_.connections.size(); ++i) {
-    const auto &c = sysconf_.connections[i];
-    std::cout << "  #" << i << ": " << c.endpoint0.chiplet_name << "."
-              << c.endpoint0.interconnect_name << "."
-              << c.endpoint0.link_id << " <-> "
-              << c.endpoint1.chiplet_name << "."
-              << c.endpoint1.interconnect_name << "."
-              << c.endpoint1.link_id << "\n";
-  }
-
-  // --- Cycles Database ---
-  std::cout << "\nCycle Database (" << sysconf_.cycles.db.size() << "):\n";
-  for (const auto &[name, cycles] : sysconf_.cycles.db)
-    std::cout << "  " << std::setw(20) << std::left << name << " : " << cycles
-              << "\n";
-
-  // --- Program Code ---
-  std::cout << "\nProgram Code Entries (" << sysconf_.program_code.size()
-            << "):\n";
-  for (const auto &[key, _] : sysconf_.program_code)
-    std::cout << "  (" << key.first << ", core " << key.second << ")\n";
-
-  std::cout << "\n=== End of System Configuration ===\n";
 }

@@ -4,14 +4,17 @@
 
 #include "modules/chiplets/ChipletRegistry.h"
 
-Cache::Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config)
+Cache::Cache(sc_module_name name, unsigned chiplet_id,
+             ChipletConfig chiplet_config)
     : sc_module(name), chiplet_id(chiplet_id),
-      axi_width(config["axi"]["width"].as<unsigned>()),
-      cache_size(config["caches"]["size"].as<unsigned>()),
-      cache_block_size(config["caches"]["block_size"].as<unsigned>()),
+      axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
+      cache_size(chiplet_config.node["caches"]["size"].as<unsigned>()),
+      cache_block_size(
+          chiplet_config.node["caches"]["block_size"].as<unsigned>()),
       cache_store_buffer_size(
-          config["caches"]["store_buffer_size"].as<unsigned>()),
-      clk_cycle(config["caches"]["clk_cycle"].as<unsigned>(), SC_NS),
+          chiplet_config.node["caches"]["store_buffer_size"].as<unsigned>()),
+      clk_cycle(chiplet_config.node["caches"]["clk_cycle"].as<unsigned>(),
+                SC_NS),
       beat_data(new uint8_t[axi_width >> 3]),
       tsocket("tsocket", *this, &Cache::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),

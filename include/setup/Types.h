@@ -3,19 +3,38 @@
 #include <functional>
 #include <map>
 #include <string>
-#include <tlm>
 #include <utility>
+#include <variant>
 #include <vector>
 #include <yaml-cpp/yaml.h>
 
 #include "common/IRQ.h"
 
-using namespace tlm;
-
 class Core;
+class HWAccel;
+
+struct CPUCode {
+  std::function<void(Core &)> main;
+  std::function<void(Core &, const IRQ &)> irq;
+};
+
+struct AccelCode {
+  std::function<void(HWAccel &, uint8_t *data, size_t size)> main;
+};
+
+using ModuleKey = std::pair<std::string, std::string>;
+using ModuleFunctions = std::variant<CPUCode, AccelCode>;
+using ModuleCodeMap = std::map<ModuleKey, ModuleFunctions>;
 
 struct ChipletType {
-  enum class Type { Unknown, SingleCore, DualCore, QuadCore, Memory };
+  enum class Type {
+    Unknown,
+    SingleCore,
+    SingleCoreHW,
+    DualCore,
+    QuadCore,
+    Memory
+  };
 
   Type value;
 
@@ -26,6 +45,8 @@ struct ChipletType {
     switch (value) {
     case Type::SingleCore:
       return "single-core";
+    case Type::SingleCoreHW:
+      return "single-core-hw";
     case Type::DualCore:
       return "dual-core";
     case Type::QuadCore:
@@ -40,6 +61,8 @@ struct ChipletType {
   static Type parse(const std::string &str) {
     if (str == "single-core")
       return Type::SingleCore;
+    if (str == "single-core-hw")
+      return Type::SingleCoreHW;
     if (str == "dual-core")
       return Type::DualCore;
     if (str == "quad-core")
@@ -135,6 +158,8 @@ struct ChipletConfig {
   YAML::Node node;
   std::map<std::string, InterconnectConfig> interconnects;
   std::map<std::string, unsigned> interconnect_ids;
+  std::map<unsigned, std::string> interconnect_ids_reverse;
+  std::map<std::string, ModuleFunctions> module_code;
 };
 
 struct ConnectionEndpoint {
@@ -159,15 +184,9 @@ struct CyclesDB {
   }
 };
 
-using CoreFunctions = std::pair<std::function<void(Core &)>,
-                                std::function<void(Core &, const IRQ &)>>;
-using CoreKey = std::pair<std::string, int>;
-using CoreCodeMap = std::map<CoreKey, CoreFunctions>;
-
 struct SystemConfig {
   std::map<std::string, ChipletConfig> chiplets;
   std::map<std::string, unsigned> chiplet_ids;
   std::vector<ConnectionMapping> connections;
-  CoreCodeMap program_code;
   CyclesDB cycles;
 };

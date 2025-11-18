@@ -4,10 +4,12 @@
 
 #include "common/IRQ.h"
 
-DMAEngine::DMAEngine(sc_module_name name, YAML::Node config)
-    : sc_module(name), num_cores(config["cores"]["num"].as<unsigned>()),
-      axi_width(config["axi"]["width"].as<unsigned>()),
-      clk_cycle(config["dma_engine"]["clk_cycle"].as<unsigned>(), SC_NS),
+DMAEngine::DMAEngine(sc_module_name name, ChipletConfig chiplet_config)
+    : sc_module(name),
+      num_cores(chiplet_config.node["cores"]["num"].as<unsigned>()),
+      axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
+      clk_cycle(chiplet_config.node["dma_engine"]["clk_cycle"].as<unsigned>(),
+                SC_NS),
       tsocket("tsocket", *this, &DMAEngine::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       isocket("isocket", *this, &DMAEngine::nb_transport_bw,
@@ -146,7 +148,7 @@ void DMAEngine::clk_negedge() {
   }
 
   // W channel
-  if (w_state == CLEAR && !w_queue_out.empty()) {
+  if (aw_state == CLEAR && w_state == CLEAR && !w_queue_out.empty()) {
     w_state = REQ;
     ARM::AXI::Payload *payload = w_queue_out.front();
     ARM::AXI::Phase phase = (w_beat_count + 1 == payload->get_beat_count())
@@ -311,14 +313,14 @@ ARM::AXI::Payload *DMAEngine::issue_fetch_read(const DMARequest &req) {
   ARM::AXI::Size size = get_axi_size(axi_width);
 
   ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
-      ARM::AXI::COMMAND_READ, req.request_addr, size, len, req.burst);
+      ARM::AXI::COMMAND_READ, req.fetch_addr, size, len, req.burst);
 
   UserSignals user;
   user.core = req.core_id;
   user.src_chiplet = req.src_chiplet;
-  user.src_module = req.src_module;
-  user.dst_chiplet = req.dst_chiplet;
-  user.dst_module = req.dst_module;
+  user.src_module = req.src_fetch_module;
+  user.dst_chiplet = req.fetch_chiplet;
+  user.dst_module = req.fetch_module;
   user.fixed_address = true;
 
   payload->id = req.request_id;
@@ -345,8 +347,8 @@ ARM::AXI::Payload *DMAEngine::issue_fetch_write(const DMARequest &req) {
   UserSignals user;
   user.core = req.core_id;
   user.src_chiplet = req.src_chiplet;
-  user.src_module = req.target_module;
-  user.dst_chiplet = req.src_chiplet;
+  user.src_module = req.src_target_module;
+  user.dst_chiplet = req.target_chiplet;
   user.dst_module = req.target_module;
   user.fixed_address = true;
 

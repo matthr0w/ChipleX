@@ -1,24 +1,21 @@
-#include "modules/Core.h"
+#include "modules/HWAccel.h"
 
 #include "modules/DMAEngine.h"
 #include "modules/chiplets/ChipletRegistry.h"
 
-Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
-           ChipletConfig chiplet_config, const CyclesDB &cycles,
-           unsigned num_irqs)
-    : sc_module(name), chiplet_id(chiplet_id), core_id(core_id),
+HWAccel::HWAccel(sc_module_name name, unsigned chiplet_id,
+                 ChipletConfig chiplet_config, const CyclesDB &cycles,
+                 DMAEngine *dma_engine)
+    : sc_module(name), chiplet_id(chiplet_id),
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
       cycles(cycles),
       clk_cycle(chiplet_config.node["cores"]["clk_cycle"].as<unsigned>(),
                 SC_NS),
-      irq_delay(chiplet_config.node["cores"]["irq_delay"].as<unsigned>(),
-                SC_NS),
-      isocket("isocket", *this, &Core::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4,
-              axi_width) {
-  irq_sockets = new simple_target_socket_tagged<Core>[num_irqs];
-  for (unsigned i = 0; i < num_irqs; ++i)
-    irq_sockets[i].register_nb_transport_fw(this, &Core::nb_transport_fw_irq,
-                                            i);
+      dma_engine(dma_engine),
+      tsocket("tsocket", *this, &HWAccel::nb_transport_fw,
+              ARM::TLM::PROTOCOL_AXI4, axi_width) {
+  if (dma_engine)
+    dma_vm_id = dma_engine->register_virtual_initiator(this);
 
   MAX_INCR_BURST_SIZE = std::min(256 * axi_width / 8, 4096u);
   MAX_FIXED_BURST_SIZE = 16 * axi_width / 8;
@@ -35,134 +32,163 @@ Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id,
   dont_initialize();
 
   SC_THREAD(main_thread);
-  SC_THREAD(interrupt_thread);
 }
 
-Core::~Core() { delete[] irq_sockets; }
-
-void Core::main_thread() {
-  if (main_fn)
-    main_fn(*this);
-}
-
-void Core::interrupt_thread() {
+void HWAccel::main_thread() {
   while (true) {
-    wait(interrupt_request);
+    wait(data_request);
 
-    while (!irq_queue.empty()) {
-      tlm_generic_payload *transaction = irq_queue.front();
-      irq_queue.pop_front();
+    while (!data_queue.empty()) {
+      ARM::AXI::Payload *transaction = data_queue.front();
+      data_queue.pop_front();
 
-      auto *irq = reinterpret_cast<IRQ *>(transaction->get_data_ptr());
+      size_t len = transaction->get_data_length();
+      uint8_t *buffer = new uint8_t[len];
 
-      if (interrupt_fn)
-        interrupt_fn(*this, *irq);
+      transaction->write_out(buffer);
 
-      delete irq;
-      delete transaction;
+      if (main_fn)
+        main_fn(*this, buffer, len);
+
+      delete[] buffer;
+      state = AccelState::Idle;
     }
   }
 }
 
-void Core::wait_cycles(const std::string &name) {
+void HWAccel::wait_cycles(const std::string &name) {
   stats.set_active(this->name());
   wait(cycles.get(name), SC_NS);
   stats.set_idle(this->name());
 }
 
-void Core::clk_posedge() {
+void HWAccel::clk_posedge() {
   if (aw_state == ACK) {
     aw_state = CLEAR;
-    w_queue.push_back(aw_queue.front());
-    aw_queue.pop_front();
+    w_queue_out.push_back(aw_queue_out.front());
+    aw_queue_out.pop_front();
   }
 
   if (w_state == ACK) {
     w_state = CLEAR;
     w_beat_count++;
-    if (w_beat_count == w_queue.front()->get_beat_count()) {
+    if (w_beat_count == w_queue_out.front()->get_beat_count()) {
       w_beat_count = 0;
-      write_done.notify(SC_ZERO_TIME);
-      w_queue.pop_front();
+      w_queue_out.pop_front();
     }
+  }
+
+  if (b_state == ACK) {
+    b_state = CLEAR;
+    b_outgoing->unref();
+    b_outgoing = nullptr;
   }
 
   if (ar_state == ACK) {
     ar_state = CLEAR;
-    read_done.notify(SC_ZERO_TIME);
-    ar_queue.pop_front();
+    ar_queue_out.pop_front();
+  }
+
+  if (!aw_queue_in.empty() && state == AccelState::Idle) {
+    ARM::AXI::Phase phase = ARM::AXI::AW_READY;
+    tsocket.nb_transport_bw(*aw_queue_in.front(), phase);
+    state = AccelState::Busy;
+  }
+
+  switch (state) {
+  case AccelState::Busy:
+    if (!w_queue_in.empty()) {
+      data_queue.push_back(w_queue_in.front());
+      data_request.notify(clk_cycle);
+      b_outgoing = w_queue_in.front();
+      aw_queue_in.pop_front();
+      w_queue_in.pop_front();
+    }
+  default:
+    break;
   }
 }
 
-void Core::clk_negedge() {
+void HWAccel::clk_negedge() {
   // AW channel
-  if (aw_state == CLEAR && !aw_queue.empty()) {
-    ARM::AXI::Payload *payload = aw_queue.front();
+  if (aw_state == CLEAR && !aw_queue_out.empty()) {
+    ARM::AXI::Payload *payload = aw_queue_out.front();
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
 
     aw_state = REQ;
-    tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
-    if (reply == TLM_UPDATED) {
-      SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
-                    "AXI TLM Protocol: Unexpected phase");
+    if (send_dma_request(*payload, ARM::AXI4::CHANNEL_AW))
       aw_state = ACK;
-    }
+    else
+      aw_state = CLEAR;
   }
 
   // W channel
-  if (w_state == CLEAR && !w_queue.empty()) {
-    ARM::AXI::Payload *payload = w_queue.front();
+  if (w_state == CLEAR && !w_queue_out.empty()) {
+    ARM::AXI::Payload *payload = w_queue_out.front();
     ARM::AXI::Phase phase = (w_beat_count + 1 == payload->get_beat_count())
                                 ? ARM::AXI::W_VALID_LAST
                                 : ARM::AXI::W_VALID;
 
     w_state = REQ;
-    tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
-    if (reply == TLM_UPDATED) {
-      SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
-                    "AXI TLM Protocol: Unexpected phase");
+    if (send_dma_request(*payload, ARM::AXI4::CHANNEL_W))
       w_state = ACK;
+    else
+      w_state = CLEAR;
+  }
+
+  // B channel
+  if (b_state == CLEAR && b_outgoing) {
+    b_state = REQ;
+    ARM::AXI::Phase phase = ARM::AXI::B_VALID;
+    tlm_sync_enum reply = tsocket.nb_transport_bw(*b_outgoing, phase);
+    if (reply == TLM_UPDATED) {
+      SC_LOG_ASSERT(this, phase == ARM::AXI::B_READY,
+                    "AXI TLM Protocol: Unexpected phase");
+      b_state = ACK;
     }
   }
 
   // AR channel
-  if (ar_state == CLEAR && !ar_queue.empty()) {
-    ARM::AXI::Payload *payload = ar_queue.front();
+  if (ar_state == CLEAR && !ar_queue_out.empty()) {
+    ARM::AXI::Payload *payload = ar_queue_out.front();
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
 
     ar_state = REQ;
-    tlm_sync_enum reply = isocket.nb_transport_fw(*payload, phase);
-    if (reply == TLM_UPDATED) {
-      SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,
-                    "AXI TLM Protocol: Unexpected phase");
+    if (send_dma_request(*payload, ARM::AXI4::CHANNEL_AR))
       ar_state = ACK;
-    }
+    else
+      ar_state = CLEAR;
   }
 }
 
 // -------------------------------------------------------
 // Transport Functions
 // -------------------------------------------------------
-tlm_sync_enum Core::nb_transport_fw_irq(int id,
-                                        tlm_generic_payload &transaction,
-                                        tlm_phase &phase,
-                                        sc_core::sc_time &delay) {
+tlm_sync_enum HWAccel::nb_transport_fw(ARM::AXI::Payload &payload,
+                                       ARM::AXI::Phase &phase) {
   switch (phase) {
-  case BEGIN_REQ:
-    delay += delays.irq_transfer(transaction);
-
-    irq_queue.push_back(&transaction);
-    interrupt_request.notify(delay);
-
-    phase = END_REQ;
-    return TLM_COMPLETED;
+  case ARM::AXI::AW_VALID:
+    aw_queue_in.push_back(&payload);
+    payload.ref();
+    return TLM_ACCEPTED;
+  case ARM::AXI::W_VALID:
+    phase = ARM::AXI::W_READY;
+    return TLM_UPDATED;
+  case ARM::AXI::W_VALID_LAST:
+    w_queue_in.push_back(&payload);
+    phase = ARM::AXI::W_READY;
+    return TLM_UPDATED;
+  case ARM::AXI::B_READY:
+    b_state = b_state == REQ ? ACK : CLEAR;
+    return TLM_ACCEPTED;
+  default:
+    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase");
+    return TLM_ACCEPTED;
   }
-
-  return TLM_ACCEPTED;
 }
 
-tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
-                                    ARM::AXI::Phase &phase) {
+tlm_sync_enum HWAccel::nb_transport_bw_axi(ARM::AXI::Payload &payload,
+                                           ARM::AXI::Phase &phase) {
   std::shared_ptr<RequestHandle> h = request_handles.find(&payload)->second;
 
   switch (phase) {
@@ -208,11 +234,11 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
 // AXI Methods
 // -------------------------------------------------------
 std::shared_ptr<RequestHandle>
-Core::read_internal(uint32_t request_id, uint8_t src_module,
-                    uint8_t dst_chiplet, uint8_t dst_module, uint32_t address,
-                    bool fixed_address, unsigned char *data,
-                    unsigned data_length, ARM::AXI::Burst burst,
-                    bool is_volatile) {
+HWAccel::read_internal(uint32_t request_id, uint8_t src_module,
+                       uint8_t dst_chiplet, uint8_t dst_module,
+                       uint32_t address, bool fixed_address,
+                       unsigned char *data, unsigned data_length,
+                       ARM::AXI::Burst burst, bool is_volatile) {
   auto handle = std::make_shared<RequestHandle>();
 
   unsigned axi_bytes = axi_width / 8;
@@ -224,7 +250,6 @@ Core::read_internal(uint32_t request_id, uint8_t src_module,
       ARM::AXI::COMMAND_READ, address, size, len, burst);
 
   UserSignals user;
-  user.core = core_id;
   user.src_chiplet = chiplet_id;
   user.src_module = src_module;
   user.dst_chiplet = dst_chiplet;
@@ -243,14 +268,14 @@ Core::read_internal(uint32_t request_id, uint8_t src_module,
   handle->time_stamp = sc_time_stamp();
   request_handles[payload] = handle;
 
-  ar_queue.push_back(payload);
+  ar_queue_out.push_back(payload);
 
   wait(read_done);
 
   return handle;
 }
 
-std::shared_ptr<RequestHandle> Core::read(const AxiRequest &req) {
+std::shared_ptr<RequestHandle> HWAccel::read(const AxiRequest &req) {
   uint32_t max_burst = 0;
   switch (req.burst) {
   case ARM::AXI::BURST_FIXED:
@@ -334,11 +359,11 @@ std::shared_ptr<RequestHandle> Core::read(const AxiRequest &req) {
 }
 
 std::shared_ptr<RequestHandle>
-Core::write_internal(uint32_t request_id, uint8_t src_module,
-                     uint8_t dst_chiplet, uint8_t dst_module, uint32_t address,
-                     bool fixed_address, unsigned char *data,
-                     unsigned data_length, ARM::AXI::Burst burst,
-                     bool is_volatile) {
+HWAccel::write_internal(uint32_t request_id, uint8_t src_module,
+                        uint8_t dst_chiplet, uint8_t dst_module,
+                        uint32_t address, bool fixed_address,
+                        unsigned char *data, unsigned data_length,
+                        ARM::AXI::Burst burst, bool is_volatile) {
   auto handle = std::make_shared<RequestHandle>();
 
   unsigned axi_bytes = axi_width / 8;
@@ -350,7 +375,6 @@ Core::write_internal(uint32_t request_id, uint8_t src_module,
       ARM::AXI::COMMAND_WRITE, address, size, len, burst);
 
   UserSignals user;
-  user.core = core_id;
   user.src_chiplet = chiplet_id;
   user.src_module = src_module;
   user.dst_chiplet = dst_chiplet;
@@ -371,14 +395,14 @@ Core::write_internal(uint32_t request_id, uint8_t src_module,
   handle->time_stamp = sc_time_stamp();
   request_handles[payload] = handle;
 
-  aw_queue.push_back(payload);
+  aw_queue_out.push_back(payload);
 
   wait(write_done);
 
   return handle;
 }
 
-std::shared_ptr<RequestHandle> Core::write(const AxiRequest &req) {
+std::shared_ptr<RequestHandle> HWAccel::write(const AxiRequest &req) {
   uint32_t max_burst = 0;
   switch (req.burst) {
   case ARM::AXI::BURST_FIXED:
@@ -457,191 +481,4 @@ std::shared_ptr<RequestHandle> Core::write(const AxiRequest &req) {
   return write_internal(req.request_id, src_module->id, dst_chiplet_id,
                         dst_module->id, address, fixed_address, req.data,
                         req.data_length, req.burst, is_volatile);
-}
-
-std::shared_ptr<RequestHandle> Core::dma_internal(
-    uint32_t request_id, uint8_t src_fetch_module, uint8_t src_target_module,
-    uint8_t fetch_chiplet, uint8_t fetch_module, uint8_t target_chiplet,
-    uint8_t target_module, uint32_t fetch_addr, uint32_t target_addr,
-    unsigned data_length, ARM::AXI::Burst burst, bool is_volatile) {
-  DMARequest req = {};
-
-  req.request_id = request_id;
-  req.core_id = core_id;
-
-  // Read data from
-  req.src_chiplet = chiplet_id;
-  req.src_fetch_module = src_fetch_module;
-  req.src_target_module = src_target_module;
-  req.fetch_chiplet = fetch_chiplet;
-  req.fetch_module = fetch_module;
-  req.fetch_addr = fetch_addr;
-
-  // Write data to
-  req.target_chiplet = target_chiplet;
-  req.target_module = target_module;
-  req.target_addr = target_addr;
-
-  req.data_length = data_length;
-  req.burst = burst;
-  req.is_volatile = is_volatile;
-
-  auto chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
-  auto dma_engine = chiplet_desc->get("dma_engine");
-
-  SC_LOG_ASSERT(this, dma_engine,
-                "AXI DMA Request Error: Chiplet "
-                    << chiplet_desc->chiplet_name
-                    << " does not have a DMA engine");
-
-  return write_internal(request_id, dma_engine->id, chiplet_id, dma_engine->id,
-                        0, true, reinterpret_cast<unsigned char *>(&req),
-                        sizeof(req), ARM::AXI::BURST_INCR, true);
-}
-
-std::shared_ptr<RequestHandle> Core::dma(const AxiDMARequest &req) {
-  SC_LOG_ASSERT(this, req.fetch_chiplet_name.has_value(),
-                "AXI DMA Request Error: Fetch chiplet not set. Did you call "
-                "from() method?");
-  SC_LOG_ASSERT(this, req.fetch_module_name.has_value(),
-                "AXI DMA Request Error: Fetch module not set. Did you call "
-                "from() method?");
-  SC_LOG_ASSERT(this, req.fetch_addr.has_value(),
-                "AXI DMA Request Error: Fetch address not set. Did you call "
-                "from() method?");
-  SC_LOG_ASSERT(this, req.target_chiplet_name.has_value(),
-                "AXI DMA Request Error: Target chiplet not set. Did you call "
-                "to() method?");
-  SC_LOG_ASSERT(this, req.target_module_name.has_value(),
-                "AXI DMA Request Error: Target module not set. Did you call "
-                "to() method?");
-  SC_LOG_ASSERT(this, req.target_addr.has_value(),
-                "AXI DMA Request Error: Target address not set. Did you call "
-                "to() method?");
-
-  uint32_t max_burst = 0;
-  switch (req.burst) {
-  case ARM::AXI::BURST_FIXED:
-    max_burst = MAX_FIXED_BURST_SIZE;
-    break;
-  case ARM::AXI::BURST_INCR:
-    max_burst = MAX_INCR_BURST_SIZE;
-    break;
-  case ARM::AXI::BURST_WRAP:
-    max_burst = MAX_WRAP_BURST_SIZE;
-    break;
-  default:
-    SC_LOG_ERROR(this, "AXI DMA Request Error: Unknown burst type");
-  }
-
-  SC_LOG_ASSERT(this, req.data_length <= max_burst,
-                "AXI DMA Request Error: Requested data length ("
-                    << req.data_length
-                    << " bytes) exceeds maximum allowed burst size ("
-                    << max_burst << " bytes)");
-
-  auto src_chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
-  std::string src_chiplet_name = src_chiplet_desc->chiplet_name;
-
-  std::string fetch_chiplet_name = req.fetch_chiplet_name.value();
-  std::string fetch_module_name = req.fetch_module_name.value();
-
-  auto fetch_chiplet_desc = ChipletRegistry::instance().get(fetch_chiplet_name);
-
-  SC_LOG_ASSERT(this, fetch_chiplet_desc,
-                "AXI Request Error: Chiplet " << fetch_chiplet_name
-                                              << " does not exist");
-
-  uint8_t fetch_chiplet_id = fetch_chiplet_desc->chiplet_id;
-
-  std::string target_chiplet_name = req.target_chiplet_name.value();
-  std::string target_module_name = req.target_module_name.value();
-
-  auto target_chiplet_desc =
-      ChipletRegistry::instance().get(target_chiplet_name);
-
-  SC_LOG_ASSERT(this, target_chiplet_desc,
-                "AXI Request Error: Chiplet " << target_chiplet_name
-                                              << " does not exist");
-
-  uint8_t target_chiplet_id = target_chiplet_desc->chiplet_id;
-
-  if (fetch_chiplet_id != chiplet_id)
-    SC_LOG_ASSERT(
-        this, req.src_fetch_module_name.has_value(),
-        "AXI DMA Request Error: Source fetch module not set. Did you call "
-        "from_via() method?");
-
-  if (target_chiplet_id != chiplet_id)
-    SC_LOG_ASSERT(
-        this, req.src_target_module_name.has_value(),
-        "AXI DMA Request Error: Target fetch module not set. Did you call "
-        "to_via() method?");
-
-  std::string src_fetch_module_name;
-  std::string src_target_module_name;
-
-  if (fetch_chiplet_id != chiplet_id)
-    src_fetch_module_name = req.src_fetch_module_name.value();
-  else
-    src_fetch_module_name = req.fetch_module_name.value();
-
-  if (target_chiplet_id != chiplet_id)
-    src_target_module_name = req.src_target_module_name.value();
-  else
-    src_target_module_name = req.target_module_name.value();
-
-  auto *src_fetch_module =
-      ChipletRegistry::instance().get_module(chiplet_id, src_fetch_module_name);
-  auto *src_target_module = ChipletRegistry::instance().get_module(
-      chiplet_id, src_target_module_name);
-
-  SC_LOG_ASSERT(this, src_fetch_module,
-                "AXI DMA Request Error: Module " << src_fetch_module_name
-                                                 << " does not exist on "
-                                                 << src_chiplet_name);
-  SC_LOG_ASSERT(this, src_target_module,
-                "AXI DMA Request Error: Module " << src_target_module_name
-                                                 << " does not exist on "
-                                                 << src_chiplet_name);
-
-  auto *fetch_module = ChipletRegistry::instance().get_module(
-      fetch_chiplet_id, fetch_module_name);
-
-  SC_LOG_ASSERT(this, fetch_module,
-                "AXI DMA Request Error: Module " << fetch_module_name
-                                                 << " does not exist on "
-                                                 << fetch_chiplet_name);
-
-  auto *target_module = ChipletRegistry::instance().get_module(
-      fetch_chiplet_id, target_module_name);
-
-  SC_LOG_ASSERT(this, target_module,
-                "AXI DMA Request Error: Module " << target_module_name
-                                                 << " does not exist on "
-                                                 << target_chiplet_name);
-
-  SC_LOG_ASSERT(this, src_fetch_module->is_subordinate(),
-                "AXI DMA Request Error: Module "
-                    << src_fetch_module_name << " is not an AXI subordinate");
-
-  SC_LOG_ASSERT(this, src_target_module->is_subordinate(),
-                "AXI DMA Request Error: Module "
-                    << src_target_module_name << " is not an AXI subordinate");
-
-  SC_LOG_ASSERT(this, fetch_module->is_subordinate(),
-                "AXI DMA Request Error: Module "
-                    << fetch_module_name << " is not an AXI subordinate");
-
-  SC_LOG_ASSERT(this, target_module->is_subordinate(),
-                "AXI DMA Request Error: Module "
-                    << target_module_name << " is not an AXI subordinate");
-
-  bool is_volatile = req.is_volatile || (fetch_chiplet_id != chiplet_id);
-
-  return dma_internal(req.request_id, src_fetch_module->id,
-                      src_target_module->id, fetch_chiplet_id, fetch_module->id,
-                      target_chiplet_id, target_module->id,
-                      req.fetch_addr.value(), req.target_addr.value(),
-                      req.data_length, req.burst, is_volatile);
 }

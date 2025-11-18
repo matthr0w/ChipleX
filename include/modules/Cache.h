@@ -3,10 +3,10 @@
 #include <systemc>
 #include <tlm>
 #include <vector>
-#include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
 #include "common/Statistics.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -37,7 +37,7 @@ public:
   ARM::AXI::SimpleTargetSocket<Cache> tsocket;
   ARM::AXI::SimpleInitiatorSocket<Cache> isocket;
 
-  Cache(sc_module_name name, unsigned chiplet_id, YAML::Node config);
+  Cache(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config);
   ~Cache();
 
 private:

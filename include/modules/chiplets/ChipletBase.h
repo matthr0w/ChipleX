@@ -22,10 +22,10 @@ protected:
   std::map<std::string, Clocks> interconnect_clocks;
 
 public:
-  ChipletBase(sc_module_name name, unsigned id, SystemConfig sysconf,
-              const ChipletDescriptor &desc)
+  ChipletBase(sc_module_name name, unsigned id, ChipletConfig chiplet_config,
+              const ChipletDescriptor &chiplet_desc)
       : sc_module(name), chiplet_id(id), chiplet_name(std::string(name)),
-        chiplet_config(sysconf.chiplets[chiplet_name]), chiplet_desc(desc),
+        chiplet_config(chiplet_config), chiplet_desc(chiplet_desc),
         chiplet_clocks(chiplet_config.node) {
     ChipletRegistry::instance().register_chiplet(chiplet_id, chiplet_name,
                                                  chiplet_desc);

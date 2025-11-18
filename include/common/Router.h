@@ -17,6 +17,7 @@ public:
     build_table();
   }
 
+  int get_interconnect_id(int src_id, int dst_id) const;
   int get_link_id(int src_id, int interconnect_id, int dst_id) const;
   int get_dest_id(int src_id, int interconnect_id, int link_id) const;
 

@@ -381,8 +381,10 @@ void SLNetworkLayer::sender_thread() {
     } else if (w_gnt.read()) {
       payload_out->hdr = TagW;
       payload_out->axi_ch.addr = axi_in_trans.w_payload->get_address();
-      axi_in_trans.w_payload->write_out_beat(axi_in_trans.w_beat_count,
-                                             payload_out->axi_ch.data.data());
+      if (axi_in_trans.w_beat_count <
+          axi_in_trans.w_payload->get_beats_complete())
+        axi_in_trans.w_payload->write_out_beat(axi_in_trans.w_beat_count,
+                                               payload_out->axi_ch.data.data());
       payload_out->id = axi_in_trans.w_payload->id;
       payload_out->len = axi_in_trans.w_payload->get_beat_count() - 1;
       payload_out->burst = axi_in_trans.w_payload->get_burst();
@@ -397,8 +399,10 @@ void SLNetworkLayer::sender_thread() {
     } else if (r_gnt.read()) {
       payload_out->hdr = TagR;
       payload_out->axi_ch.addr = axi_out_trans.r_payload->get_address();
-      axi_out_trans.r_payload->read_out_beat(axi_out_trans.r_beat_count,
-                                             payload_out->axi_ch.data.data());
+      if (axi_out_trans.r_beat_count <
+          axi_out_trans.r_payload->get_beats_complete())
+        axi_out_trans.r_payload->read_out_beat(axi_out_trans.r_beat_count,
+                                               payload_out->axi_ch.data.data());
       payload_out->id = axi_out_trans.r_payload->id;
       payload_out->len = axi_out_trans.r_payload->get_beat_count() - 1;
       payload_out->burst = axi_out_trans.r_payload->get_burst();
@@ -521,6 +525,7 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
   }
 
   axi_in_trans.req_phase = phase;
+  axi_in_trans.rsp_sent = false;
 
   update_event.notify(SC_ZERO_TIME);
   return TLM_ACCEPTED;
@@ -529,6 +534,7 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
 tlm_sync_enum SLNetworkLayer::nb_transport_bw(ARM::AXI::Payload &payload,
                                               ARM::AXI::Phase &phase) {
   axi_out_trans.req_phase = phase;
+  axi_out_trans.rsp_sent = false;
 
   switch (phase) {
   case ARM::AXI::AR_READY:
@@ -566,10 +572,8 @@ void SLNetworkLayer::clear_axi_state() {
   if (w_state == ACK) {
     w_state = CLEAR;
     w_beat_count++;
-    if (w_beat_count == w_queue.front()->get_beat_count()) {
+    if (w_beat_count == w_queue.front()->get_beat_count())
       w_beat_count = 0;
-      send_irq(*w_queue.front());
-    }
     w_queue.pop_front();
   }
 
@@ -669,6 +673,9 @@ void SLNetworkLayer::send_axi_beats() {
 }
 
 void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
+  if (trans.rsp_sent)
+    return;
+
   ARM::AXI::Phase phase = trans.rsp_phase;
   ARM::AXI::Payload *payload = nullptr;
 
@@ -682,6 +689,8 @@ void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
             : trans.w_beat_count + 1;
   } else if (is_master && is_b_ready(phase)) {
     payload = trans.w_payload;
+    // We also send the IRQ here
+    send_irq(*payload);
   } else if (is_ar_ready(phase)) {
     payload = trans.r_payload;
   } else if (is_master && is_r_ready(phase)) {
@@ -697,6 +706,7 @@ void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
       axi_out.nb_transport_fw(*payload, phase);
     else
       axi_in.nb_transport_bw(*payload, phase);
+    trans.rsp_sent = true;
     trans.req_phase = ARM::AXI4::PHASE_UNINITIALIZED;
   }
 }

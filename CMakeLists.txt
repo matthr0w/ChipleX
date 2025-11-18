@@ -63,7 +63,7 @@ endif()
 # -----------------------
 # Setup libraries
 # -----------------------
-file(GLOB SETUP_DIRS "${PROJECT_SOURCE_DIR}/setups/*")
+file(GLOB SETUP_DIRS "${PROJECT_SOURCE_DIR}/setups/bcdc")
 
 foreach(SETUP_PATH ${SETUP_DIRS})
   if(IS_DIRECTORY ${SETUP_PATH})

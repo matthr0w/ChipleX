@@ -49,6 +49,13 @@ void Router::build_table() {
   }
 }
 
+int Router::get_interconnect_id(int src_id, int dst_id) const {
+  if (src_id < 0 || src_id >= (int)routing_table_.size() || dst_id < 0 ||
+      dst_id >= (int)routing_table_[src_id].size())
+    return -1;
+  return routing_table_[src_id][dst_id].interconnect_id;
+}
+
 int Router::get_link_id(int src_id, int interconnect_id, int dst_id) const {
   if (src_id < 0 || src_id >= (int)routing_table_.size() || dst_id < 0 ||
       dst_id >= (int)routing_table_[src_id].size())

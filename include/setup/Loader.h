@@ -15,8 +15,6 @@ public:
 
   const SystemConfig &get_config() const { return sysconf_; }
 
-  void dump_system_config();
-
 private:
   std::string chiplets_path_;
   std::string interconnects_path_;
