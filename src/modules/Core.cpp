@@ -82,15 +82,15 @@ void Core::clk_posedge() {
     w_beat_count++;
     if (w_beat_count == w_queue.front()->get_beat_count()) {
       w_beat_count = 0;
-      write_done.notify(SC_ZERO_TIME);
       w_queue.pop_front();
+      write_done.notify(SC_ZERO_TIME);
     }
   }
 
   if (ar_state == ACK) {
     ar_state = CLEAR;
-    read_done.notify(SC_ZERO_TIME);
     ar_queue.pop_front();
+    read_done.notify(SC_ZERO_TIME);
   }
 }
 
@@ -236,8 +236,6 @@ Core::read_internal(uint32_t request_id, uint8_t src_module,
   payload->cache = is_volatile ? ARM::AXI::CACHE_AR_DEVICE_NB
                                : ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
 
-  SC_LOG_INFO(this, "Sending request: READ from 0x" << std::hex << address);
-
   handle->payload = payload;
   handle->data = data;
   handle->time_stamp = sc_time_stamp();
@@ -363,8 +361,6 @@ Core::write_internal(uint32_t request_id, uint8_t src_module,
                                : ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
   payload->write_in(data);
-
-  SC_LOG_INFO(this, "Sending request: WRITE to 0x" << std::hex << address);
 
   handle->payload = payload;
   handle->data = data;

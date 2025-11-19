@@ -75,6 +75,7 @@ void HWAccel::clk_posedge() {
     if (w_beat_count == w_queue_out.front()->get_beat_count()) {
       w_beat_count = 0;
       w_queue_out.pop_front();
+      write_done.notify(SC_ZERO_TIME);
     }
   }
 
@@ -87,6 +88,7 @@ void HWAccel::clk_posedge() {
   if (ar_state == ACK) {
     ar_state = CLEAR;
     ar_queue_out.pop_front();
+    read_done.notify(SC_ZERO_TIME);
   }
 
   if (!aw_queue_in.empty() && state == AccelState::Idle) {
@@ -261,8 +263,6 @@ HWAccel::read_internal(uint32_t request_id, uint8_t src_module,
   payload->cache = is_volatile ? ARM::AXI::CACHE_AR_DEVICE_NB
                                : ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
 
-  SC_LOG_INFO(this, "Sending request: READ from 0x" << std::hex << address);
-
   handle->payload = payload;
   handle->data = data;
   handle->time_stamp = sc_time_stamp();
@@ -387,8 +387,6 @@ HWAccel::write_internal(uint32_t request_id, uint8_t src_module,
                                : ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
   payload->write_in(data);
-
-  SC_LOG_INFO(this, "Sending request: WRITE to 0x" << std::hex << address);
 
   handle->payload = payload;
   handle->data = data;

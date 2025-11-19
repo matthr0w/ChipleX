@@ -533,29 +533,29 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
 
 tlm_sync_enum SLNetworkLayer::nb_transport_bw(ARM::AXI::Payload &payload,
                                               ARM::AXI::Phase &phase) {
-  axi_out_trans.req_phase = phase;
-  axi_out_trans.rsp_sent = false;
-
   switch (phase) {
   case ARM::AXI::AR_READY:
     ar_state = ar_state == REQ ? ACK : CLEAR;
-    return TLM_ACCEPTED;
+    break;
   case ARM::AXI::R_VALID:
-    return TLM_ACCEPTED;
   case ARM::AXI::R_VALID_LAST:
-    return TLM_ACCEPTED;
+    axi_out_trans.rsp_sent = false;
+    break;
   case ARM::AXI::AW_READY:
     aw_state = aw_state == REQ ? ACK : CLEAR;
-    return TLM_ACCEPTED;
+    break;
   case ARM::AXI::W_READY:
     w_state = w_state == REQ ? ACK : CLEAR;
-    return TLM_ACCEPTED;
+    break;
   case ARM::AXI::B_VALID:
-    return TLM_ACCEPTED;
+    axi_out_trans.rsp_sent = false;
+    break;
   default:
     SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
                            << get_axi_phase_string(phase));
   }
+
+  axi_out_trans.req_phase = phase;
 
   return TLM_ACCEPTED;
 }

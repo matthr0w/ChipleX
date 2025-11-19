@@ -28,13 +28,15 @@ struct AxiRequest {
     return *this;
   }
 
-  AxiRequest &to_module(const std::string &module_name) {
+  AxiRequest &to(const std::string &module_name) {
     src_module_name = module_name;
     return *this;
   }
 
-  AxiRequest &to_target(const std::string &chiplet_name,
-                        const std::string &module_name = "memory") {
+  AxiRequest &to_via(const std::string &chiplet_name,
+                     const std::string &module_name,
+                     const std::string &via_module_name) {
+    src_module_name = via_module_name;
     dst_chiplet_name = chiplet_name;
     dst_module_name = module_name;
     return *this;
@@ -81,10 +83,10 @@ struct AxiDMARequest {
                           const std::string &module_name,
                           const uint32_t address,
                           const std::string &via_module_name) {
+    src_fetch_module_name = via_module_name;
     fetch_chiplet_name = chiplet_name;
     fetch_module_name = module_name;
     fetch_addr = address;
-    src_fetch_module_name = via_module_name;
     return *this;
   }
 
@@ -99,10 +101,10 @@ struct AxiDMARequest {
   AxiDMARequest &to_via(const std::string &chiplet_name,
                         const std::string &module_name, const uint32_t address,
                         const std::string &via_module_name) {
+    src_target_module_name = via_module_name;
     target_chiplet_name = chiplet_name;
     target_module_name = module_name;
     target_addr = address;
-    src_target_module_name = via_module_name;
     return *this;
   }
 
