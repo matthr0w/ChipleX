@@ -16,7 +16,7 @@
 #include "modules/interconnects/Manager.h"
 #include "setup/Types.h"
 
-struct CoreChiplet : ChipletBase {
+struct ComputeChiplet : ChipletBase {
   // ChipletDescriptor
   // ID | Module
   // -- | --------------
@@ -97,8 +97,8 @@ struct CoreChiplet : ChipletBase {
   // Bus
   Bus bus;
 
-  CoreChiplet(sc_module_name name, unsigned id, ChipletConfig chiplet_config,
-              CyclesDB cycles)
+  ComputeChiplet(sc_module_name name, unsigned id, ChipletConfig chiplet_config,
+                 CyclesDB cycles)
       : ChipletBase(name, id, chiplet_config,
                     build_descriptor(std::string(name), id, chiplet_config)),
         num_cores(chiplet_config.node["cores"]["num"].as<unsigned>()),

@@ -6,7 +6,7 @@
 #include "common/Router.h"
 #include "common/Statistics.h"
 #include "modules/chiplets/ChipletBase.h"
-#include "modules/chiplets/CoreChiplet.h"
+#include "modules/chiplets/ComputeChiplet.h"
 #include "modules/chiplets/MemoryChiplet.h"
 #include "setup/Loader.h"
 
@@ -28,11 +28,8 @@ int sc_main(int argc, char *argv[]) {
     auto chiplet_id = sysconf.chiplet_ids.find(chiplet_name)->second;
     auto chiplet_config = sysconf.chiplets[chiplet_name];
     switch (sysconf.chiplets[chiplet_name].type.value) {
-    case ChipletType::Type::SingleCore:
-    case ChipletType::Type::SingleCoreHW:
-    case ChipletType::Type::DualCore:
-    case ChipletType::Type::QuadCore:
-      chiplets[chiplet_name] = std::make_unique<CoreChiplet>(
+    case ChipletType::Type::Compute:
+      chiplets[chiplet_name] = std::make_unique<ComputeChiplet>(
           chiplet_name.c_str(), chiplet_id, chiplet_config, sysconf.cycles);
       break;
     case ChipletType::Type::Memory:

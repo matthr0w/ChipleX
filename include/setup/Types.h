@@ -27,14 +27,7 @@ using ModuleFunctions = std::variant<CPUCode, AccelCode>;
 using ModuleCodeMap = std::map<ModuleKey, ModuleFunctions>;
 
 struct ChipletType {
-  enum class Type {
-    Unknown,
-    SingleCore,
-    SingleCoreHW,
-    DualCore,
-    QuadCore,
-    Memory
-  };
+  enum class Type { Unknown, Compute, Memory };
 
   Type value;
 
@@ -43,14 +36,8 @@ struct ChipletType {
 
   std::string to_string() const {
     switch (value) {
-    case Type::SingleCore:
-      return "single-core";
-    case Type::SingleCoreHW:
-      return "single-core-hw";
-    case Type::DualCore:
-      return "dual-core";
-    case Type::QuadCore:
-      return "quad-core";
+    case Type::Compute:
+      return "compute";
     case Type::Memory:
       return "memory";
     default:
@@ -59,14 +46,8 @@ struct ChipletType {
   }
 
   static Type parse(const std::string &str) {
-    if (str == "single-core")
-      return Type::SingleCore;
-    if (str == "single-core-hw")
-      return Type::SingleCoreHW;
-    if (str == "dual-core")
-      return Type::DualCore;
-    if (str == "quad-core")
-      return Type::QuadCore;
+    if (str == "compute")
+      return Type::Compute;
     if (str == "memory")
       return Type::Memory;
     return Type::Unknown;
@@ -105,38 +86,6 @@ struct InterconnectType {
       return Type::SerialLink;
     if (str == "spi")
       return Type::SPI;
-    return Type::Unknown;
-  }
-};
-
-struct ConnectionPreset {
-  enum class Type { Unknown, Mesh, Ring, Star };
-
-  Type type;
-
-  ConnectionPreset() = default;
-  ConnectionPreset(Type type) : type(type) {}
-
-  std::string to_string() const {
-    switch (type) {
-    case Type::Mesh:
-      return "mesh";
-    case Type::Ring:
-      return "ring";
-    case Type::Star:
-      return "star";
-    default:
-      return "unknown";
-    }
-  }
-
-  static Type parse(const std::string &str) {
-    if (str == "mesh")
-      return Type::Mesh;
-    if (str == "ring")
-      return Type::Ring;
-    if (str == "star")
-      return Type::Star;
     return Type::Unknown;
   }
 };

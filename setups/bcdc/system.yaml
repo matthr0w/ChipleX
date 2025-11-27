@@ -1,12 +1,15 @@
 chiplets:
   - name: fpga
-    type: single-core
+    type: compute
     interconnects:
       - name: pulp
         type: serial-link
 
   - name: chiplet1
-    type: single-core-hw
+    type: compute
+    config:
+      hw_accels:
+        num: 2
     interconnects:
       - name: pulp
         type: serial-link
@@ -20,7 +23,10 @@ chiplets:
         type: spi
 
   - name: chiplet2
-    type: single-core-hw
+    type: compute
+    config:
+      hw_accels:
+        num: 2
     interconnects:
       - name: pulp
         type: serial-link
@@ -35,7 +41,16 @@ chiplets:
 
 connections:
   - endpoints: [fpga.pulp, chiplet1.pulp]
+    config:
+      clk_cycle: 5
+      num_channels: 1
   - endpoints: [fpga.pulp, chiplet2.pulp]
+    config:
+      clk_cycle: 5
+      num_channels: 1
   - endpoints: [chiplet1.spi, mem_chiplet1.spi]
   - endpoints: [chiplet2.spi, mem_chiplet2.spi]
   - endpoints: [chiplet1.pulp, chiplet2.pulp]
+    config:
+      clk_cycle: 2
+      num_channels: 1
