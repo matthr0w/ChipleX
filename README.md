@@ -92,28 +92,10 @@ make
 make run ARGS="--help"
 ```
 
-## Roadmap
+## TODO
 
-- [x] AXI4-like system bus with bursts and congestion handling
+- [ ] Advanced estimation of processing time and acceleration speedup factor
 
-- [x] Improved cache and RAM delay models
+- [ ] Smart Chiplet Interconnect features
 
-- [ ] Interconnect protocol extensions:
-
-  - [x] DMA support
-  - [x] Read/write to non-main memories
-  - [ ] Smart protocol controller features
-
-- [x] Expanded configuration options:
-  
-  - [x] Selectable chiplet components (e.g., pure memory)
-  - [x] Flexible interconnect parameters between chiplets
-  - [x] Custom connection topologies
-
-- [x] Streamlined user code workflow
-
-- [ ] Hardware accelerator modules with local memory (#9)
-
-- [x] Improved statistics collection
-
-- [ ] New applications using accelerators and multi-core
+- [ ] Additional applications using multi-core and accelerators
