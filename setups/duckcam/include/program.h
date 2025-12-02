@@ -2,4 +2,4 @@
 
 #include "setup/Types.h"
 
-extern "C" CoreCodeMap *get_program_code();
+extern "C" ModuleCodeMap *get_program_code();

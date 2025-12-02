@@ -1,12 +1,12 @@
 chiplets:
   - name: fpga
-    type: single-core
+    type: compute
     interconnects:
       - name: interconnect
         type: pcie
 
   - name: chiplet0
-    type: single-core
+    type: compute
     interconnects:
       - name: interconnect
         type: pcie
