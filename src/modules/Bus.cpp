@@ -2,13 +2,24 @@
 
 #include "logging.h"
 
-Bus::Bus(sc_module_name name, unsigned chiplet_id, unsigned num_managers,
-         unsigned num_subordinates, YAML::Node config)
+#include "common/Router.h"
+#include "modules/chiplets/ChipletRegistry.h"
+
+Bus::Bus(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
+         unsigned num_managers, unsigned num_subordinates)
     : sc_module(name), chiplet_id(chiplet_id),
-      axi_width(config["axi"]["width"].as<unsigned>()),
-      clk_cycle(config["axi"]["clk_cycle"].as<unsigned>(), SC_NS),
+      axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
+      clk_cycle(chiplet_config.node["axi"]["clk_cycle"].as<unsigned>(), SC_NS),
       beat_data(new uint8_t[axi_width >> 3]) {
-  stats.register_utilization(this->name(), clk_cycle);
+  for (unsigned i = 0; i < num_managers; ++i) {
+    for (unsigned j = 0; j < num_subordinates; ++j) {
+      std::string util_name =
+          "utilization" + std::to_string(i) + "-" + std::to_string(j);
+      stats.register_utilization(this->name(), util_name, clk_cycle);
+    }
+  }
+
+  interconnect_names = chiplet_config.interconnect_ids_reverse;
 
   mgr_tsockets.reserve(num_managers);
   for (unsigned i = 0; i < num_managers; ++i) {
@@ -40,6 +51,8 @@ Bus::~Bus() { delete[] beat_data; }
 void Bus::clk_posedge() {
   for (auto &[key, conn] : connections) {
     auto [mgr_id, sub_id] = key;
+    std::string util_name =
+        "utilization" + std::to_string(mgr_id) + "-" + std::to_string(sub_id);
 
     // Forward direction
     if (!conn.fw_q.empty()) {
@@ -53,9 +66,11 @@ void Bus::clk_posedge() {
       if (reply == TLM_UPDATED)
         conn.next_bw_q.push_back({request.payload, request.phase});
 
-      stats.mark_active_cycle(this->name());
+      stats.mark_active_cycle(this->name(), util_name);
 
       print_payload(*request.payload, prev_phase, request.phase);
+
+      stats.end_cycle(this->name(), util_name);
     }
 
     // Backward direction
@@ -70,9 +85,11 @@ void Bus::clk_posedge() {
       if (reply == TLM_UPDATED)
         conn.next_fw_q.push_back({request.payload, request.phase});
 
-      stats.mark_active_cycle(this->name());
+      stats.mark_active_cycle(this->name(), util_name);
 
       print_payload(*request.payload, prev_phase, request.phase);
+
+      stats.end_cycle(this->name(), util_name);
     }
   }
 
@@ -88,8 +105,6 @@ void Bus::clk_posedge() {
       conn.next_bw_q.clear();
     }
   }
-
-  stats.end_cycle(this->name());
 }
 
 // -------------------------------------------------------
@@ -106,8 +121,12 @@ tlm_sync_enum Bus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
       sub_id = user.src_module;
     else if (user.dst_chiplet == chiplet_id)
       sub_id = user.dst_module;
-    else
-      SC_LOG_ERROR(this, "This AXI beat should not be on this chiplet!");
+    else {
+      int id =
+          Router::instance().get_interconnect_id(chiplet_id, user.dst_chiplet);
+      std::string name = interconnect_names.find(id)->second;
+      sub_id = ChipletRegistry::instance().get_module(chiplet_id, name)->id;
+    }
     payloads2sub[&payload] = sub_id;
     payloads2mgr[&payload] = mgr_id;
   }

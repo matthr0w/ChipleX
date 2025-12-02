@@ -6,7 +6,7 @@
 #include "common/Router.h"
 #include "common/Statistics.h"
 #include "modules/chiplets/ChipletBase.h"
-#include "modules/chiplets/CoreChiplet.h"
+#include "modules/chiplets/ComputeChiplet.h"
 #include "modules/chiplets/MemoryChiplet.h"
 #include "setup/Loader.h"
 
@@ -26,16 +26,15 @@ int sc_main(int argc, char *argv[]) {
   std::map<std::string, std::unique_ptr<ChipletBase>> chiplets;
   for (const auto &[chiplet_name, chiplet] : sysconf.chiplets) {
     auto chiplet_id = sysconf.chiplet_ids.find(chiplet_name)->second;
+    auto chiplet_config = sysconf.chiplets[chiplet_name];
     switch (sysconf.chiplets[chiplet_name].type.value) {
-    case ChipletType::Type::SingleCore:
-    case ChipletType::Type::DualCore:
-    case ChipletType::Type::QuadCore:
-      chiplets[chiplet_name] = std::make_unique<CoreChiplet>(
-          chiplet_name.c_str(), chiplet_id, sysconf);
+    case ChipletType::Type::Compute:
+      chiplets[chiplet_name] = std::make_unique<ComputeChiplet>(
+          chiplet_name.c_str(), chiplet_id, chiplet_config, sysconf.cycles);
       break;
     case ChipletType::Type::Memory:
       chiplets[chiplet_name] = std::make_unique<MemoryChiplet>(
-          chiplet_name.c_str(), chiplet_id, sysconf);
+          chiplet_name.c_str(), chiplet_id, chiplet_config);
       break;
     default:
       break;

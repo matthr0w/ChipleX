@@ -3,10 +3,10 @@
 #include <memory>
 #include <systemc>
 #include <tlm>
-#include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
 #include "common/Statistics.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -34,8 +34,8 @@ public:
   std::vector<std::unique_ptr<ARM::AXI4::SimpleInitiatorSocketTagged<Bus>>>
       sub_isockets;
 
-  Bus(sc_module_name name, unsigned chiplet_id, unsigned num_managers,
-      unsigned num_subordinates, YAML::Node config);
+  Bus(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
+      unsigned num_managers, unsigned num_subordinates);
   ~Bus();
 
 private:
@@ -60,6 +60,8 @@ private:
 
   std::unordered_map<ARM::AXI::Payload *, int> payloads2mgr;
   std::unordered_map<ARM::AXI::Payload *, int> payloads2sub;
+
+  std::map<unsigned, std::string> interconnect_names;
 
   // Monitor
   uint8_t *beat_data;

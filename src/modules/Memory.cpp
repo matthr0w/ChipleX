@@ -2,10 +2,12 @@
 
 #include "logging.h"
 
-Memory::Memory(sc_module_name name, YAML::Node config)
-    : sc_module(name), axi_width(config["axi"]["width"].as<unsigned>()),
-      size(config["memory"]["size"].as<unsigned>()),
-      clk_cycle(config["memory"]["clk_cycle"].as<unsigned>(), SC_NS),
+Memory::Memory(sc_module_name name, ChipletConfig chiplet_config)
+    : sc_module(name),
+      axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
+      size(chiplet_config.node["memory"]["size"].as<unsigned>()),
+      clk_cycle(chiplet_config.node["memory"]["clk_cycle"].as<unsigned>(),
+                SC_NS),
       tsocket("tsocket", *this, &Memory::nb_transport_fw,
               ARM::TLM::PROTOCOL_AXI4, axi_width),
       mem(size * 1024, 0), mem_bitmap((mem.size() + 7) / 8, 0),
@@ -129,6 +131,7 @@ void Memory::clk_posedge() {
 }
 
 void Memory::clk_negedge() {
+  // B channel
   if (b_state == CLEAR && b_outgoing) {
     b_state = REQ;
     ARM::AXI::Phase phase = ARM::AXI::B_VALID;
@@ -140,6 +143,7 @@ void Memory::clk_negedge() {
     }
   }
 
+  // R channel
   if (r_state == CLEAR && r_outgoing) {
     r_state = REQ;
     ARM::AXI::Phase phase =
@@ -175,7 +179,6 @@ tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload,
     return TLM_UPDATED;
   case ARM::AXI::W_VALID_LAST:
     w_queue.push_back(&payload);
-    payload.ref();
     phase = ARM::AXI::W_READY;
     return TLM_UPDATED;
   case ARM::AXI::B_READY:

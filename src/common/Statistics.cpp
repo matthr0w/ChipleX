@@ -172,6 +172,15 @@ void StatManager::register_utilization(const std::string &module,
     stats["utilization"] = std::make_unique<StatUtilization>(clk_cycle);
 }
 
+void StatManager::register_utilization(const std::string &module,
+                                       const std::string &name,
+                                       const sc_time clk_cycle) {
+  auto &stats = module_stats_[module];
+  auto it = stats.find(name);
+  if (it == stats.end() || !it->second)
+    stats[name] = std::make_unique<StatUtilization>(clk_cycle);
+}
+
 void StatManager::set_value(const std::string &module, const std::string &name,
                             double value) {
   register_value(module, name);
@@ -211,7 +220,16 @@ void StatManager::set_active(const std::string &module) {
   auto *stat = dynamic_cast<StatUtilization *>(
       module_stats_[module]["utilization"].get());
   if (!stat)
-    LOG_ERROR("StatManager: Module utilization not registered");
+    LOG_ERROR("StatManager: " + module + " utilization not registered");
+  stat->set_active();
+}
+
+void StatManager::set_active(const std::string &module,
+                             const std::string &name) {
+  auto *stat =
+      dynamic_cast<StatUtilization *>(module_stats_[module][name].get());
+  if (!stat)
+    LOG_ERROR("StatManager: " + module + " " + name + " not registered");
   stat->set_active();
 }
 
@@ -219,7 +237,15 @@ void StatManager::set_idle(const std::string &module) {
   auto *stat = dynamic_cast<StatUtilization *>(
       module_stats_[module]["utilization"].get());
   if (!stat)
-    LOG_ERROR("StatManager: Module utilization not registered");
+    LOG_ERROR("StatManager: " + module + " utilization not registered");
+  stat->set_idle();
+}
+
+void StatManager::set_idle(const std::string &module, const std::string &name) {
+  auto *stat =
+      dynamic_cast<StatUtilization *>(module_stats_[module][name].get());
+  if (!stat)
+    LOG_ERROR("StatManager: " + module + " " + name + " not registered");
   stat->set_idle();
 }
 
@@ -228,7 +254,17 @@ void StatManager::add_active_time(const std::string &module,
   auto *stat = dynamic_cast<StatUtilization *>(
       module_stats_[module]["utilization"].get());
   if (!stat)
-    LOG_ERROR("StatManager: Module utilization not registered");
+    LOG_ERROR("StatManager: " + module + " utilization not registered");
+  stat->add_active_time(delta);
+}
+
+void StatManager::add_active_time(const std::string &module,
+                                  const std::string &name,
+                                  const sc_time delta) {
+  auto *stat =
+      dynamic_cast<StatUtilization *>(module_stats_[module][name].get());
+  if (!stat)
+    LOG_ERROR("StatManager: " + module + " " + name + " not registered");
   stat->add_active_time(delta);
 }
 
@@ -237,7 +273,16 @@ void StatManager::add_idle_time(const std::string &module,
   auto *stat = dynamic_cast<StatUtilization *>(
       module_stats_[module]["utilization"].get());
   if (!stat)
-    LOG_ERROR("StatManager: Module utilization not registered");
+    LOG_ERROR("StatManager: " + module + " utilization not registered");
+  stat->add_idle_time(delta);
+}
+
+void StatManager::add_idle_time(const std::string &module,
+                                const std::string &name, const sc_time delta) {
+  auto *stat =
+      dynamic_cast<StatUtilization *>(module_stats_[module][name].get());
+  if (!stat)
+    LOG_ERROR("StatManager: " + module + " " + name + " not registered");
   stat->add_idle_time(delta);
 }
 
@@ -246,7 +291,17 @@ void StatManager::mark_active_cycle(const std::string &module,
   auto *stat = dynamic_cast<StatUtilization *>(
       module_stats_[module]["utilization"].get());
   if (!stat)
-    LOG_ERROR("StatManager: Module utilization not registered");
+    LOG_ERROR("StatManager: " + module + " utilization not registered");
+  stat->mark_active_cycle(fraction);
+}
+
+void StatManager::mark_active_cycle(const std::string &module,
+                                    const std::string &name,
+                                    const double fraction) {
+  auto *stat =
+      dynamic_cast<StatUtilization *>(module_stats_[module][name].get());
+  if (!stat)
+    LOG_ERROR("StatManager: " + module + " " + name + " not registered");
   stat->mark_active_cycle(fraction);
 }
 
@@ -254,7 +309,16 @@ void StatManager::end_cycle(const std::string &module) {
   auto *stat = dynamic_cast<StatUtilization *>(
       module_stats_[module]["utilization"].get());
   if (!stat)
-    LOG_ERROR("StatManager: Module utilization not registered");
+    LOG_ERROR("StatManager: " + module + " utilization not registered");
+  stat->end_cycle();
+}
+
+void StatManager::end_cycle(const std::string &module,
+                            const std::string &name) {
+  auto *stat =
+      dynamic_cast<StatUtilization *>(module_stats_[module][name].get());
+  if (!stat)
+    LOG_ERROR("StatManager: " + module + " " + name + " not registered");
   stat->end_cycle();
 }
 

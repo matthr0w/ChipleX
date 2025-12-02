@@ -93,8 +93,10 @@ void SPI::clk_posedge() {
     links_queue.pop_front();
 
     uint8_t destination_id = UserSignals::decode(req.payload->user).dst_chiplet;
+    int link_id = Router::instance().get_link_id(chiplet_id, interconnect_id,
+                                                 destination_id);
 
-    if (destination_id == chiplet_id) {
+    if (link_id == -1) {
       link_req_out = req;
       break;
     } else {
@@ -176,6 +178,9 @@ void SPI::clk_posedge() {
       active_transfer = send_link_request(*payload);
       if (active_transfer) {
         b_queue_in.pop_front();
+        // We also send the IRQ here
+        if (dma_vm_id == -1)
+          send_irq(*payload);
         ARM::AXI::Phase phase = ARM::AXI::B_READY;
         axi_out.nb_transport_fw(*payload, phase);
       }
@@ -338,11 +343,8 @@ void SPI::clear_axi_states() {
     w_state = CLEAR;
     ARM::AXI::Payload *payload = w_queue_out.front().payload;
     increment_beat_count(*payload);
-    if (get_beat_count(*payload) == payload->get_beat_count()) {
+    if (get_beat_count(*payload) == payload->get_beat_count())
       unregister_beat_count(*payload);
-      if (dma_vm_id == -1)
-        send_irq(*payload);
-    }
     w_queue_out.pop_front();
   }
 

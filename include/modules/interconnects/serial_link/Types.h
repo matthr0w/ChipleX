@@ -33,6 +33,7 @@ struct AxiTrans_t {
   ARM::AXI::Payload *r_payload = nullptr;
   ARM::AXI::Phase req_phase = ARM::AXI4::PHASE_UNINITIALIZED;
   ARM::AXI::Phase rsp_phase = ARM::AXI4::PHASE_UNINITIALIZED;
+  bool rsp_sent = false;
   unsigned w_beat_count = 0;
   unsigned r_beat_count = 0;
 

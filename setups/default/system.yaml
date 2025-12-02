@@ -1,18 +1,18 @@
 chiplets:
   - name: chiplet0
-    type: single-core
+    type: compute
     interconnects:
       - name: interconnect
         type: spi
 
   - name: chiplet1
-    type: single-core
+    type: compute
     interconnects:
       - name: interconnect
         type: spi
 
   - name: chiplet2
-    type: single-core
+    type: compute
     interconnects:
       - name: interconnect
         type: spi

@@ -4,10 +4,10 @@
 #include <systemc>
 #include <tlm>
 #include <vector>
-#include <yaml-cpp/yaml.h>
 
 #include "ARM/TLM/arm_axi4.h"
 #include "common/Statistics.h"
+#include "setup/Types.h"
 
 using namespace sc_core;
 using namespace tlm;
@@ -34,7 +34,7 @@ public:
   // -------------------------------------------------------
   ARM::AXI::SimpleTargetSocket<Memory> tsocket;
 
-  Memory(sc_module_name name, YAML::Node config);
+  Memory(sc_module_name name, ChipletConfig chiplet_config);
 
 private:
   // -------------------------------------------------------

@@ -7,14 +7,13 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2,
   auto *buf1 = new unsigned char[4 * sizeof(int)];
   auto *buf2 = new unsigned char[4 * sizeof(int)];
 
-  auto reqr = Core::AxiRequest(1, reinterpret_cast<unsigned char *>(buf1),
-                               4 * sizeof(int))
-                  .set_addr(src_addr1)
-                  .skip_cache();
+  auto reqr =
+      AxiRequest(1, reinterpret_cast<unsigned char *>(buf1), 4 * sizeof(int))
+          .set_addr(src_addr1)
+          .skip_cache();
   auto handle = core.read(reqr);
   handle->wait();
-  reqr = Core::AxiRequest(2, reinterpret_cast<unsigned char *>(buf2),
-                          4 * sizeof(int))
+  reqr = AxiRequest(2, reinterpret_cast<unsigned char *>(buf2), 4 * sizeof(int))
              .set_addr(src_addr2);
   handle = core.read(reqr);
   handle->wait();
@@ -33,10 +32,10 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2,
   auto *data = new unsigned char[4 * sizeof(int)];
   std::memcpy(data, result, 4 * sizeof(int));
 
-  auto reqw = Core::AxiRequest(3, reinterpret_cast<unsigned char *>(data),
-                               4 * sizeof(int))
-                  .set_addr(dest_addr)
-                  .skip_cache();
+  auto reqw =
+      AxiRequest(3, reinterpret_cast<unsigned char *>(data), 4 * sizeof(int))
+          .set_addr(dest_addr)
+          .skip_cache();
   handle = core.write(reqw);
   handle->wait();
 
@@ -44,77 +43,83 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2,
   delete[] buf2;
 }
 
-CoreCodeMap *get_program_code() {
-  static CoreCodeMap code = {
-      {{"fpga", 0},
-       {[](Core &core) {
-          int matrix[4] = {1, 2, 3, 4};
-          auto *data = new unsigned char[sizeof(matrix)];
-          memcpy(data, matrix, sizeof(matrix));
+ModuleCodeMap *get_program_code() {
+  static ModuleCodeMap code = {
+      {{"fpga", "core0"},
+       {CPUCode{.main =
+                    [](Core &core) {
+                      int matrix[4] = {1, 2, 3, 4};
+                      auto *data = new unsigned char[sizeof(matrix)];
+                      memcpy(data, matrix, sizeof(matrix));
 
-          auto reqw =
-              Core::AxiRequest(0, reinterpret_cast<unsigned char *>(data),
-                               sizeof(matrix))
-                  .to_module("interconnect")
-                  .to_target("chiplet0")
-                  .skip_cache();
-          auto handle = core.write(reqw);
-          handle->wait();
+                      auto reqw =
+                          AxiRequest(0, reinterpret_cast<unsigned char *>(data),
+                                     sizeof(matrix))
+                              .to_via("chiplet0", "memory", "interconnect")
+                              .skip_cache();
+                      auto handle = core.write(reqw);
+                      handle->wait();
 
-          delete[] data;
-        },
-        [](Core &core, const IRQ &irq) {
-          auto *data = new unsigned char[4 * sizeof(int)];
+                      delete[] data;
+                    },
+                .irq =
+                    [](Core &core, const IRQ &irq) {
+                      auto *data = new unsigned char[4 * sizeof(int)];
 
-          auto reqr =
-              Core::AxiRequest(0, reinterpret_cast<unsigned char *>(data),
-                               4 * sizeof(int))
-                  .set_addr(irq.target_address)
-                  .skip_cache();
-          auto handle = core.read(reqr);
-          handle->wait();
+                      auto reqr =
+                          AxiRequest(0, reinterpret_cast<unsigned char *>(data),
+                                     4 * sizeof(int))
+                              .set_addr(irq.target_address)
+                              .skip_cache();
+                      auto handle = core.read(reqr);
+                      handle->wait();
 
-          int *result = reinterpret_cast<int *>(data);
+                      int *result = reinterpret_cast<int *>(data);
 
-          LOG_INFO("A^6 = [" << result[0] << " " << result[1] << " ; "
-                             << result[2] << " " << result[3] << "]");
+                      LOG_INFO("A^6 = [" << result[0] << " " << result[1]
+                                         << " ; " << result[2] << " "
+                                         << result[3] << "]");
 
-          delete[] data;
+                      delete[] data;
 
-          sc_stop();
-        }}},
+                      sc_stop();
+                    }}}},
 
-      {{"chiplet0", 0},
-       {[](Core &core) {},
-        [](Core &core, const IRQ &irq) {
-          uint32_t matrix_addr = irq.target_address;
+      {{"chiplet0", "core0"},
+       {CPUCode{.main = [](Core &core) {},
+                .irq =
+                    [](Core &core, const IRQ &irq) {
+                      uint32_t matrix_addr = irq.target_address;
 
-          matrix_multiply(core, matrix_addr, matrix_addr,
-                          0x1000);                            // A^2 = A * A
-          matrix_multiply(core, 0x1000, matrix_addr, 0x2000); // A^3 = A^2 * A
-          matrix_multiply(core, 0x2000, matrix_addr, 0x3000); // A^4 = A^3 * A
-          matrix_multiply(core, 0x3000, matrix_addr, 0x4000); // A^5 = A^4 * A
-          matrix_multiply(core, 0x4000, matrix_addr, 0x5000); // A^6 = A^5 * A
+                      matrix_multiply(core, matrix_addr, matrix_addr,
+                                      0x1000); // A^2 = A * A
+                      matrix_multiply(core, 0x1000, matrix_addr,
+                                      0x2000); // A^3 = A^2 * A
+                      matrix_multiply(core, 0x2000, matrix_addr,
+                                      0x3000); // A^4 = A^3 * A
+                      matrix_multiply(core, 0x3000, matrix_addr,
+                                      0x4000); // A^5 = A^4 * A
+                      matrix_multiply(core, 0x4000, matrix_addr,
+                                      0x5000); // A^6 = A^5 * A
 
-          auto *data = new unsigned char[4 * sizeof(int)];
-          auto reqr =
-              Core::AxiRequest(4, reinterpret_cast<unsigned char *>(data),
-                               4 * sizeof(int))
-                  .set_addr(0x5000)
-                  .skip_cache();
-          auto handle = core.read(reqr);
-          handle->wait();
+                      auto *data = new unsigned char[4 * sizeof(int)];
+                      auto reqr =
+                          AxiRequest(4, reinterpret_cast<unsigned char *>(data),
+                                     4 * sizeof(int))
+                              .set_addr(0x5000)
+                              .skip_cache();
+                      auto handle = core.read(reqr);
+                      handle->wait();
 
-          auto reqw =
-              Core::AxiRequest(5, reinterpret_cast<unsigned char *>(data),
-                               4 * sizeof(int))
-                  .to_module("interconnect")
-                  .to_target("fpga")
-                  .skip_cache();
-          handle = core.write(reqw);
-          handle->wait();
+                      auto reqw =
+                          AxiRequest(5, reinterpret_cast<unsigned char *>(data),
+                                     4 * sizeof(int))
+                              .to_via("fpga", "memory", "interconnect")
+                              .skip_cache();
+                      handle = core.write(reqw);
+                      handle->wait();
 
-          delete[] data;
-        }}}};
+                      delete[] data;
+                    }}}}};
   return &code;
 }

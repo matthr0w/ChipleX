@@ -217,9 +217,11 @@ void GenericInterconnect::clk_posedge_protocol() {
     Flit flit = read_flit_from_buffer(rx_buffers[rx_idx].data());
 
     UserSignals user = UserSignals::decode(flit.user);
+    int link_id = Router::instance().get_link_id(chiplet_id, interconnect_id,
+                                                 user.dst_chiplet);
 
-    // Forward flit if not for this chiplet
-    if (user.dst_chiplet != chiplet_id) {
+    // Forward flit if not for this chiplet and there is valid link
+    if (link_id != -1) {
       forward_flit(rx_idx, user.dst_chiplet);
       continue;
     }
@@ -414,8 +416,6 @@ void GenericInterconnect::clear_axi_states() {
       w_beat_count = 0;
       flit_w_beat_count = 0;
       erase_payload(manager_payloads, w_queue_out.front());
-      if (dma_vm_id == -1)
-        send_irq(*w_queue_out.front());
     }
     w_queue_out.pop_front();
   }
@@ -516,6 +516,10 @@ void GenericInterconnect::handle_axi_channels() {
   if (!b_queue_in.empty()) {
     auto *payload = b_queue_in.front();
     b_queue_in.pop_front();
+
+    // We also send the IRQ here
+    if (dma_vm_id == -1)
+      send_irq(*payload);
 
     // Set channel information
     axi_transaction.channel = B;

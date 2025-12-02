@@ -7,6 +7,7 @@
 #include "modules/chiplets/ChipletDescriptor.h"
 #include "modules/interconnects/InterconnectBase.h"
 #include "modules/interconnects/Manager.h"
+#include "setup/Types.h"
 
 struct MemoryChiplet : ChipletBase {
   // ChipletDescriptor
@@ -16,8 +17,7 @@ struct MemoryChiplet : ChipletBase {
   //  1 | Interconnect
 
   static ChipletDescriptor build_descriptor(std::string name, unsigned id,
-                                            SystemConfig sysconf) {
-    ChipletConfig chiplet_config = sysconf.chiplets[name];
+                                            ChipletConfig chiplet_config) {
     ChipletDescriptor desc;
     desc.chiplet_id = id;
     desc.chiplet_name = name;
@@ -54,10 +54,10 @@ struct MemoryChiplet : ChipletBase {
   // Dummy AXI port for interconnect
   ARM::AXI::SimpleInitiatorSocket<MemoryChiplet> dummy_axi_port;
 
-  MemoryChiplet(sc_module_name name, unsigned id, SystemConfig sysconf)
-      : ChipletBase(name, id, sysconf,
-                    build_descriptor(std::string(name), id, sysconf)),
-        memory(chiplet_desc.get(0)->name.c_str(), chiplet_config.node),
+  MemoryChiplet(sc_module_name name, unsigned id, ChipletConfig chiplet_config)
+      : ChipletBase(name, id, chiplet_config,
+                    build_descriptor(std::string(name), id, chiplet_config)),
+        memory(chiplet_desc.get(0)->name.c_str(), chiplet_config),
         dummy_axi_port("dummy_axi_port", *this, nullptr,
                        ARM::TLM::PROTOCOL_AXI4,
                        chiplet_config.node["axi"]["width"].as<unsigned>()) {
