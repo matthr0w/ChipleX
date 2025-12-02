@@ -11,7 +11,13 @@ Bus::Bus(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
       clk_cycle(chiplet_config.node["axi"]["clk_cycle"].as<unsigned>(), SC_NS),
       beat_data(new uint8_t[axi_width >> 3]) {
-  stats.register_utilization(this->name(), clk_cycle);
+  for (unsigned i = 0; i < num_managers; ++i) {
+    for (unsigned j = 0; j < num_subordinates; ++j) {
+      std::string util_name =
+          "utilization" + std::to_string(i) + "-" + std::to_string(j);
+      stats.register_utilization(this->name(), util_name, clk_cycle);
+    }
+  }
 
   interconnect_names = chiplet_config.interconnect_ids_reverse;
 
@@ -45,6 +51,8 @@ Bus::~Bus() { delete[] beat_data; }
 void Bus::clk_posedge() {
   for (auto &[key, conn] : connections) {
     auto [mgr_id, sub_id] = key;
+    std::string util_name =
+        "utilization" + std::to_string(mgr_id) + "-" + std::to_string(sub_id);
 
     // Forward direction
     if (!conn.fw_q.empty()) {
@@ -58,9 +66,11 @@ void Bus::clk_posedge() {
       if (reply == TLM_UPDATED)
         conn.next_bw_q.push_back({request.payload, request.phase});
 
-      stats.mark_active_cycle(this->name());
+      stats.mark_active_cycle(this->name(), util_name);
 
       print_payload(*request.payload, prev_phase, request.phase);
+
+      stats.end_cycle(this->name(), util_name);
     }
 
     // Backward direction
@@ -75,9 +85,11 @@ void Bus::clk_posedge() {
       if (reply == TLM_UPDATED)
         conn.next_fw_q.push_back({request.payload, request.phase});
 
-      stats.mark_active_cycle(this->name());
+      stats.mark_active_cycle(this->name(), util_name);
 
       print_payload(*request.payload, prev_phase, request.phase);
+
+      stats.end_cycle(this->name(), util_name);
     }
   }
 
@@ -93,8 +105,6 @@ void Bus::clk_posedge() {
       conn.next_bw_q.clear();
     }
   }
-
-  stats.end_cycle(this->name());
 }
 
 // -------------------------------------------------------

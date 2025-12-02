@@ -115,6 +115,8 @@ public:
   void register_usage(const std::string &module, const std::string &name);
   void register_utilization(const std::string &module,
                             const sc_time clk_cycle = sc_time(0, SC_NS));
+  void register_utilization(const std::string &module, const std::string &name,
+                            const sc_time clk_cycle = sc_time(0, SC_NS));
 
   void set_value(const std::string &module, const std::string &name,
                  double value);
@@ -128,11 +130,22 @@ public:
                     unsigned value);
 
   void set_active(const std::string &module);
+  void set_active(const std::string &module, const std::string &name);
   void set_idle(const std::string &module);
-  void add_active_time(const std::string &module, const sc_time delta);
-  void add_idle_time(const std::string &module, const sc_time delta);
+  void set_idle(const std::string &module, const std::string &name);
+  void add_active_time(const std::string &module,
+                       const sc_time delta = sc_time(0, SC_NS));
+  void add_active_time(const std::string &module, const std::string &name,
+                       const sc_time delta = sc_time(0, SC_NS));
+  void add_idle_time(const std::string &module,
+                     const sc_time delta = sc_time(0, SC_NS));
+  void add_idle_time(const std::string &module, const std::string &name,
+                     const sc_time delta = sc_time(0, SC_NS));
   void mark_active_cycle(const std::string &module, double fraction = 1.0);
+  void mark_active_cycle(const std::string &module, const std::string &name,
+                         double fraction = 1.0);
   void end_cycle(const std::string &module);
+  void end_cycle(const std::string &module, const std::string &name);
 
   void start_simulation_timer();
   void end_simulation_timer();
