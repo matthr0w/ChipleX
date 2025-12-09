@@ -1,0 +1,6 @@
+Speedup S = Block RThroughput / (ALU Pressure per Iteration / N_ALUs)
+
+Block RThroughput: Cycles per iteration
+Field Block RThroughput is the reciprocal of the block throughput. Block throughput is a theoretical quantity computed as the maximum number of blocks (i.e. iterations) that can be executed per simulated clock cycle in the absence of loop carried dependencies. Block throughput is superiorly limited by the dispatch rate, and the availability of hardware resources.
+
+ALU Pressure per Iteration: Cycles on ALU on average per iteration

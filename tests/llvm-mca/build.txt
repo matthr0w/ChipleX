@@ -1,0 +1,2 @@
+riscv64-unknown-elf-gcc -S test.c -o test.s
+llvm-mca -mtriple=riscv64 -mcpu=rocket-rv64 test.s
