@@ -1,3 +1,5 @@
+cores:
+  num: 0
 memory:
   size: 512 # KB
   clk_cycle: 3 # ns
