@@ -13,29 +13,36 @@ Bus::Bus(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
       beat_data(new uint8_t[axi_width >> 3]) {
   for (unsigned i = 0; i < num_managers; ++i) {
     for (unsigned j = 0; j < num_subordinates; ++j) {
-      std::string util_name =
-          "utilization" + std::to_string(i) + "-" + std::to_string(j);
+      std::string mgr_name =
+          ChipletRegistry::instance().get_module_name_at_mgr_port(chiplet_id,
+                                                                  i);
+      std::string sub_name =
+          ChipletRegistry::instance().get_module_name_at_sub_port(chiplet_id,
+                                                                  j);
+      std::string util_name = "utilization_" + mgr_name + "<->" + sub_name;
       stats.register_utilization(this->name(), util_name, clk_cycle);
+      mgr_names[i] = mgr_name;
+      sub_names[j] = sub_name;
     }
   }
 
   interconnect_names = chiplet_config.interconnect_ids_reverse;
 
-  mgr_tsockets.reserve(num_managers);
+  managers.reserve(num_managers);
   for (unsigned i = 0; i < num_managers; ++i) {
     std::ostringstream name;
     name << "tsocket" << i;
-    mgr_tsockets.emplace_back(
+    managers.emplace_back(
         std::make_unique<ARM::AXI4::SimpleTargetSocketTagged<Bus>>(
             name.str().c_str(), *this, i, &Bus::nb_transport_fw,
             ARM::TLM::PROTOCOL_AXI4, axi_width));
   }
 
-  sub_isockets.reserve(num_subordinates);
+  subordinates.reserve(num_subordinates);
   for (unsigned i = 0; i < num_subordinates; ++i) {
     std::ostringstream name;
     name << "isocket" << i;
-    sub_isockets.emplace_back(
+    subordinates.emplace_back(
         std::make_unique<ARM::AXI4::SimpleInitiatorSocketTagged<Bus>>(
             name.str().c_str(), *this, i, &Bus::nb_transport_bw,
             ARM::TLM::PROTOCOL_AXI4, axi_width));
@@ -52,7 +59,7 @@ void Bus::clk_posedge() {
   for (auto &[key, conn] : connections) {
     auto [mgr_id, sub_id] = key;
     std::string util_name =
-        "utilization" + std::to_string(mgr_id) + "-" + std::to_string(sub_id);
+        "utilization_" + mgr_names[mgr_id] + "<->" + sub_names[sub_id];
 
     // Forward direction
     if (!conn.fw_q.empty()) {
@@ -60,7 +67,7 @@ void Bus::clk_posedge() {
       conn.fw_q.pop_front();
 
       ARM::AXI::Phase prev_phase = request.phase;
-      auto reply = sub_isockets[sub_id]->nb_transport_fw(*request.payload,
+      auto reply = subordinates[sub_id]->nb_transport_fw(*request.payload,
                                                          request.phase);
 
       if (reply == TLM_UPDATED)
@@ -79,8 +86,8 @@ void Bus::clk_posedge() {
       conn.bw_q.pop_front();
 
       ARM::AXI::Phase prev_phase = request.phase;
-      auto reply = mgr_tsockets[mgr_id]->nb_transport_bw(*request.payload,
-                                                         request.phase);
+      auto reply =
+          managers[mgr_id]->nb_transport_bw(*request.payload, request.phase);
 
       if (reply == TLM_UPDATED)
         conn.next_fw_q.push_back({request.payload, request.phase});
@@ -118,14 +125,20 @@ tlm_sync_enum Bus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
   } else {
     UserSignals user = UserSignals::decode(payload.user);
     if (user.src_chiplet == chiplet_id)
-      sub_id = user.src_module;
+      sub_id = ChipletRegistry::instance()
+                   .get_module(chiplet_id, user.src_module)
+                   ->get_sub_port();
     else if (user.dst_chiplet == chiplet_id)
-      sub_id = user.dst_module;
+      sub_id = ChipletRegistry::instance()
+                   .get_module(chiplet_id, user.dst_module)
+                   ->get_sub_port();
     else {
       int id =
           Router::instance().get_interconnect_id(chiplet_id, user.dst_chiplet);
       std::string name = interconnect_names.find(id)->second;
-      sub_id = ChipletRegistry::instance().get_module(chiplet_id, name)->id;
+      sub_id = ChipletRegistry::instance()
+                   .get_module(chiplet_id, name)
+                   ->get_sub_port();
     }
     payloads2sub[&payload] = sub_id;
     payloads2mgr[&payload] = mgr_id;
@@ -264,8 +277,8 @@ void Bus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase,
   auto mgr_it = payloads2mgr.find(&payload);
   auto sub_it = payloads2sub.find(&payload);
   if (mgr_it != payloads2mgr.end() && sub_it != payloads2sub.end())
-    message << "MGR[" << mgr_it->second << "] <-> SUB[" << sub_it->second
-            << "] | ";
+    message << std::left << std::setw(10) << mgr_names[mgr_it->second]
+            << " <-> " << std::setw(10) << sub_names[sub_it->second] << " | ";
 
   // Phase
   message << phase_name << " ";

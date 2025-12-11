@@ -30,9 +30,9 @@ public:
   // Sockets
   // -------------------------------------------------------
   std::vector<std::unique_ptr<ARM::AXI4::SimpleTargetSocketTagged<Bus>>>
-      mgr_tsockets;
+      managers;
   std::vector<std::unique_ptr<ARM::AXI4::SimpleInitiatorSocketTagged<Bus>>>
-      sub_isockets;
+      subordinates;
 
   Bus(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
       unsigned num_managers, unsigned num_subordinates);
@@ -61,6 +61,8 @@ private:
   std::unordered_map<ARM::AXI::Payload *, int> payloads2mgr;
   std::unordered_map<ARM::AXI::Payload *, int> payloads2sub;
 
+  std::map<unsigned, std::string> mgr_names;
+  std::map<unsigned, std::string> sub_names;
   std::map<unsigned, std::string> interconnect_names;
 
   // Monitor
