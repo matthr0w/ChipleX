@@ -162,11 +162,8 @@ class CycleManager:
     def prepare_workload(self, workload: WorkloadEntry):
         text = workload.copypath.read_text(encoding="utf-8")
         # Check if main function exists
-        if re.search(r"\bint\s+main\s*\(", text):
-            log_error(f"{workload.filepath}: contains 'main()' definition. Workloads must not define 'main()'.")
-        # Check if sim function exists
-        if not re.search(rf"\bvoid\s+{re.escape(workload.stem)}\s*\(", text):
-            log_error(f"{workload.filepath}: does not contain 'void {workload.stem}()' definition. Workload must define 'void {workload.stem}()'.")
+        if not re.search(r"\bint\s+main\s*\(", text):
+            log_error(f"{workload.filepath}: does not contain 'main()' definition. Workloads must define 'main()'.")
         # Check annotation counts
         start_count = text.count(START_ANNOT)
         end_count = text.count(END_ANNOT)
@@ -181,16 +178,6 @@ class CycleManager:
             text = f'#include "{MEASURE_HEADER}"' + "\n" + text
         # Write back
         workload.copypath.write_text(text, encoding="utf-8")
-
-    def create_wrapper(self, workload: WorkloadEntry):
-        wrapper_lines = []
-        wrapper_lines.append(f"extern void {workload.stem}();")
-        wrapper_lines.append("int main() {")
-        wrapper_lines.append(f"    {workload.stem}();")
-        wrapper_lines.append("    return 0;")
-        wrapper_lines.append("}")
-        wrapper_path = self.tmp_root / "wrapper.cpp"
-        wrapper_path.write_text("\n".join(wrapper_lines), encoding="utf-8")
 
     def compile_tmp(self) -> Path:
         # Find all .c and .cpp in tmp
@@ -233,7 +220,6 @@ class CycleManager:
                 log_info(f"Updating cycle estimation for '{workload.filepath}'...")
                 self.prepare_tmp(setup, workload)
                 self.prepare_workload(workload)
-                self.create_wrapper(workload)
                 binary = self.compile_tmp()
                 value = self.parse_spike(binary)
                 self.update_yaml(setup, workload, value)
