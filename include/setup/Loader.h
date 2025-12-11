@@ -7,6 +7,7 @@ public:
   SetupLoader(const std::string &configs_path, const std::string &setups_path,
               const std::string &setup_name) {
     chiplets_path_ = configs_path + "/chiplets/";
+    accels_path_ = configs_path + "/accelerators/";
     interconnects_path_ = configs_path + "/interconnects/";
     load_system_config(setups_path + "/" + setup_name + "/system.yaml");
     load_cycles_db(setups_path + "/" + setup_name + "/workloads.yaml");
@@ -17,6 +18,7 @@ public:
 
 private:
   std::string chiplets_path_;
+  std::string accels_path_;
   std::string interconnects_path_;
   SystemConfig sysconf_;
 

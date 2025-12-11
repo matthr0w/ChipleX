@@ -127,7 +127,7 @@ ModuleCodeMap *get_program_code() {
                         // Path 3: SRAM -> DFP with DMA Engine
                         auto dma = AxiDMARequest(3, chunk_bytes)
                                        .from("chiplet1", "memory", 0x0)
-                                       .to("chiplet1", "hw_accel0", 0x0);
+                                       .to("chiplet1", "dfp", 0x0);
                         core.dma(dma);
                       } break;
                       case Operation::TransToAILC: {
@@ -136,14 +136,14 @@ ModuleCodeMap *get_program_code() {
                         auto dma =
                             AxiDMARequest(5, chunk_bytes)
                                 .from("chiplet1", "memory", irq.target_address)
-                                .to("chiplet1", "hw_accel1", 0x0);
+                                .to("chiplet1", "ai-lc", 0x0);
                         core.dma(dma);
                       } break;
                       default:
                         break;
                       }
                     }}}},
-      {{"chiplet1", "hw_accel0"}, // DFP
+      {{"chiplet1", "dfp"}, // DFP
        {AccelCode{.main =
                       [](HWAccel &accel, uint8_t *data, size_t size) {
                         for (size_t i = 0; i < size; ++i)
@@ -155,7 +155,7 @@ ModuleCodeMap *get_program_code() {
                         auto handle = accel.write(request);
                         handle->wait();
                       }}}},
-      {{"chiplet1", "hw_accel1"}, // AI-LC
+      {{"chiplet1", "ai-lc"}, // AI-LC
        {AccelCode{.main =
                       [](HWAccel &accel, uint8_t *data, size_t size) {
                         for (size_t i = 0; i < size; ++i)
@@ -166,7 +166,7 @@ ModuleCodeMap *get_program_code() {
                             AxiRequest(6,
                                        reinterpret_cast<unsigned char *>(data),
                                        size)
-                                .to_via("chiplet2", "hw_accel1", "pulp");
+                                .to_via("chiplet2", "ai-lc", "pulp");
                         auto handle = accel.write(request);
                         handle->wait();
                       }}}},
@@ -206,7 +206,7 @@ ModuleCodeMap *get_program_code() {
                         // Path 8: SRAM -> DFP with DMA Engine
                         auto dma = AxiDMARequest(8, irq.data_length)
                                        .from("chiplet2", "memory", 0x0)
-                                       .to("chiplet2", "hw_accel0", 0x0);
+                                       .to("chiplet2", "dfp", 0x0);
                         core.dma(dma);
                       } break;
                       case Operation::TransToMem: {
@@ -236,7 +236,7 @@ ModuleCodeMap *get_program_code() {
                         break;
                       }
                     }}}},
-      {{"chiplet2", "hw_accel0"}, // DFP
+      {{"chiplet2", "dfp"}, // DFP
        {AccelCode{.main =
                       [](HWAccel &accel, uint8_t *data, size_t size) {
                         for (size_t i = 0; i < size; ++i)
@@ -248,7 +248,7 @@ ModuleCodeMap *get_program_code() {
                         auto handle = accel.write(request);
                         handle->wait();
                       }}}},
-      {{"chiplet2", "hw_accel1"}, // AI-LC
+      {{"chiplet2", "ai-lc"}, // AI-LC
        {AccelCode{.main = [](HWAccel &accel, uint8_t *data, size_t size) {
          for (size_t i = 0; i < size; ++i)
            data[i] += 1;

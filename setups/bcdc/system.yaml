@@ -7,9 +7,11 @@ chiplets:
 
   - name: chiplet1
     type: compute
-    config:
-      hw_accels:
-        num: 2
+    accelerators:
+      - name: dfp
+        type: dfp
+      - name: ai-lc
+        type: ai-lc
     interconnects:
       - name: pulp
         type: serial-link
@@ -24,9 +26,11 @@ chiplets:
 
   - name: chiplet2
     type: compute
-    config:
-      hw_accels:
-        num: 2
+    accelerators:
+      - name: dfp
+        type: dfp
+      - name: ai-lc
+        type: ai-lc
     interconnects:
       - name: pulp
         type: serial-link
