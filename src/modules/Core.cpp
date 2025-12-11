@@ -610,7 +610,7 @@ std::shared_ptr<RequestHandle> Core::dma(const AxiDMARequest &req) {
                                                  << fetch_chiplet_name);
 
   auto *target_module = ChipletRegistry::instance().get_module(
-      fetch_chiplet_id, target_module_name);
+      target_chiplet_id, target_module_name);
 
   SC_LOG_ASSERT(this, target_module,
                 "AXI DMA Request Error: Module " << target_module_name
