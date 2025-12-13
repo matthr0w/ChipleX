@@ -280,22 +280,27 @@ class CycleEstimator:
 
             # Compute speedup factor
             params = get_accel_params(setup, workload.id)
-            speedup = rthroughput / (
-                + (p0 / params["num_alus"])
-                + p1
-                + (p2 / params["num_fpalus"])
-                + (p3 / params["num_fpdivsqrt"])
-                + (p4 / params["num_idiv"])
-                + (p5 / params["num_imul"])
-                + p6
-            )
-            speedup_sections[section_name] = speedup
+
+            if params["speedup_factor"]:
+                speedup_factor = params["speedup_factor"]
+            else:
+                speedup_factor = rthroughput / (
+                    + (p0 / params["num_alus"])
+                    + p1
+                    + (p2 / params["num_fpalus"])
+                    + (p3 / params["num_fpdivsqrt"])
+                    + (p4 / params["num_idiv"])
+                    + (p5 / params["num_imul"])
+                    + p6
+                )
+
+            speedup_sections[section_name] = speedup_factor
 
         # Compute total cycles
         total_cycles = 0
         for section_name, cycles in cycle_sections.items():
-            speedup = speedup_sections.get(section_name, 1.0) # default: no speedup
-            total_cycles += cycles / speedup
+            speedup_factor = speedup_sections.get(section_name, 1.0) # default: no speedup
+            total_cycles += cycles / speedup_factor
 
         workload.estimation_result = int(total_cycles)
 
