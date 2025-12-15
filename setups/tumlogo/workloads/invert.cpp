@@ -10,7 +10,7 @@ struct ImageHeader {
 #define HEIGHT (256 - 2 * 28)
 #define CHANNELS 3
 
-void invert() {
+int main() {
   // Dummy image data
   const unsigned total_len = sizeof(ImageHeader) + WIDTH * HEIGHT * CHANNELS;
   auto *read_buf = new unsigned char[total_len];
@@ -18,7 +18,7 @@ void invert() {
   header->width = WIDTH;
   header->height = HEIGHT;
 
-  //@START_MEASURE
+  //@BEGIN_CYCLE_MEASURE
   const size_t header_size = sizeof(ImageHeader);
   header = reinterpret_cast<ImageHeader *>(read_buf);
 
@@ -27,8 +27,10 @@ void invert() {
 
   for (size_t i = header_size; i < total_len; ++i)
     write_buf[i] = 255 - read_buf[i];
-  //@END_MEASURE
+  //@END_CYCLE_MEASURE
 
   delete[] read_buf;
   delete[] write_buf;
+
+  return 0;
 }

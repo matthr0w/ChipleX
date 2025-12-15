@@ -7,13 +7,13 @@ struct DataHeader {
   uint32_t compressed_data_size;
 };
 
-void compress() {
+int main() {
   const char *const str = "Hello, World! This is a test string for the LZ4 "
                           "compression algorithm. Hello, World! This is a test "
                           "string for the LZ4 compression algorithm.";
   const unsigned len = strlen(str) + 1;
 
-  //@START_MEASURE
+  //@BEGIN_CYCLE_MEASURE
   // Calculate compression sizes
   const int max_compressed_size = LZ4_compressBound(len);
   auto *compressed_data = new unsigned char[max_compressed_size];
@@ -33,8 +33,10 @@ void compress() {
   std::memcpy(packet, &header, sizeof(DataHeader));
   std::memcpy(packet + sizeof(DataHeader), compressed_data,
               compressed_data_size);
-  //@END_MEASURE
+  //@END_CYCLE_MEASURE
 
   delete[] compressed_data;
   delete[] packet;
+
+  return 0;
 }

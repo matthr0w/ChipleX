@@ -11,7 +11,7 @@ struct ImageHeader {
 #define HEIGHT (24 - 12)
 #define CHANNELS 3
 
-void grayscale() {
+int main() {
   // Dummy image data
   auto *read_buf =
       new unsigned char[sizeof(ImageHeader) + WIDTH * HEIGHT * CHANNELS];
@@ -20,7 +20,7 @@ void grayscale() {
   header->height = HEIGHT;
   header->channels = CHANNELS;
 
-  //@START_MEASURE
+  //@BEGIN_CYCLE_MEASURE
   const size_t header_size = sizeof(ImageHeader);
   header = reinterpret_cast<ImageHeader *>(read_buf);
   uint32_t width = header->width;
@@ -45,8 +45,10 @@ void grayscale() {
 
     dst[i] = static_cast<unsigned char>(0.299 * r + 0.587 * g + 0.114 * b);
   }
-  //@END_MEASURE
+  //@END_CYCLE_MEASURE
 
   delete[] read_buf;
   delete[] write_buf;
+
+  return 0;
 }

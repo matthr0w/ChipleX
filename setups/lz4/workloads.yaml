@@ -1,7 +1,7 @@
 workloads:
   compress:
     cycles_count: 60136
-    source_hash: 03e8ffec89968db255fc9c627edfa08077ab8bb6
+    source_hash: 873fefe47edf9da76dfdd1f9efafef576cbc494d
   decompress:
     cycles_count: 10638
-    source_hash: 591c4cdbe3348475f19f5a0fdf6e8fbf9f1577b4
+    source_hash: b14842b828571cec25b10f2c9351886b0696e201

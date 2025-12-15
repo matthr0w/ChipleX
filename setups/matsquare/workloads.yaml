@@ -1,4 +1,4 @@
 workloads:
   matmultiply:
     cycles_count: 46
-    source_hash: d9bcb7cf0d000bc60be88ae3cbea2c053d242400
+    source_hash: 8f7cb436ec20c40b3ddb56ad05a90f6aaeb463d1

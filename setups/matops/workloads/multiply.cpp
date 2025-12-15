@@ -9,7 +9,7 @@ typedef struct {
 const unsigned MATRIX_ROWS = 10;
 const unsigned MATRIX_COLS = 10;
 
-void multiply() {
+int main() {
   size_t header_size = sizeof(MatrixHeader);
   size_t matrix_size = MATRIX_ROWS * MATRIX_COLS * sizeof(int);
   size_t buffer_size = header_size + matrix_size;
@@ -24,7 +24,7 @@ void multiply() {
   for (int i = 0; i < MATRIX_ROWS * MATRIX_COLS; ++i)
     matrix[i] = i + 1;
 
-  //@START_MEASURE
+  //@BEGIN_CYCLE_MEASURE
   // Matrix header
   header_size = sizeof(MatrixHeader);
   header = reinterpret_cast<MatrixHeader *>(data);
@@ -37,7 +37,9 @@ void multiply() {
   // Multiply by 2
   for (int i = 0; i < rows * cols; ++i)
     matrix[i] *= 2;
-  //@END_MEASURE
+  //@END_CYCLE_MEASURE
 
   delete[] data;
+
+  return 0;
 }

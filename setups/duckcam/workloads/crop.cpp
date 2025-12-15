@@ -11,7 +11,7 @@ struct ImageHeader {
 #define HEIGHT 24
 #define CHANNELS 3
 
-void crop() {
+int main() {
   // Dummy image data
   auto *read_buf =
       new unsigned char[sizeof(ImageHeader) + WIDTH * HEIGHT * CHANNELS];
@@ -20,7 +20,7 @@ void crop() {
   header->height = HEIGHT;
   header->channels = CHANNELS;
 
-  //@START_MEASURE
+  //@BEGIN_CYCLE_MEASURE
   const size_t header_size = sizeof(ImageHeader);
   header = reinterpret_cast<ImageHeader *>(read_buf);
 
@@ -44,8 +44,10 @@ void crop() {
   for (uint32_t y = 0; y < new_height; ++y)
     std::memcpy(dst + y * new_width * 3,
                 src + (y + crop_margin) * new_width * 3, new_width * 3);
-  //@END_MEASURE
+  //@END_CYCLE_MEASURE
 
   delete[] read_buf;
   delete[] write_buf;
+
+  return 0;
 }
