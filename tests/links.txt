@@ -1,8 +1,0 @@
-Spike Simulator Documentation
-https://github.com/poweihuang17/Documentation_Spike
-
-LLVM-MCA Documentation
-https://llvm.org/docs/CommandGuide/llvm-mca.html#how-llvm-mca-works
-
-RISC-V Rocket Core
-https://www.cl.cam.ac.uk/~jrrk2/docs/tagged-memory-v0.1/rocket-core/
