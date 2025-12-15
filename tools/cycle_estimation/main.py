@@ -48,13 +48,15 @@ class CycleEstimator:
 
             for cpp_file in sorted(workloads_dir.glob("*.cpp")):
                 id = cpp_file.stem
+                file_id = f"{setup.id}__{id}"
                 workload = Workload(
                     id=id,
+                    file_id=file_id,
                     source_path=cpp_file,
                     source_hash=sha1_file(cpp_file),
-                    dest_path=BUILD_DIR / f"{setup.id}__{id}.cpp",
-                    asm_path=BUILD_DIR / ASM_NAME, 
-                    binary_path=BUILD_DIR / BUILD_NAME, 
+                    dest_path=BUILD_DIR / f"{file_id}.cpp",
+                    asm_path=BUILD_DIR / f"{file_id}.s", 
+                    binary_path=BUILD_DIR / f"{file_id}", 
                     estimation_result=0
                 )
                 setup.workloads[id] = workload
@@ -195,14 +197,14 @@ class CycleEstimator:
             src_files.extend([str(src_file) for src_file in BUILD_DIR.glob(ext)])
 
         # Compile for LLVM-MCA
-        command = [RISCV_COMPILER] + ["-S"] + src_files + ["-I.", "-o", ASM_NAME] + RISCV_COMPILER_FLAGS
-        proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        command = [RISCV_COMPILER] + ["-S"] + src_files + ["-I."] + RISCV_COMPILER_FLAGS
+        proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if proc.returncode != 0:
             log_error(f"Assembly compilation failed:\n{proc.stderr}")
 
         # Compile for Spike
-        command = [RISCV_COMPILER] + src_files + ["-I.", "-o", BUILD_NAME] + RISCV_COMPILER_FLAGS
-        proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        command = [RISCV_COMPILER] + src_files + ["-I.", "-o", workload.file_id] + RISCV_COMPILER_FLAGS
+        proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if proc.returncode != 0:
             log_error(f"Binary compilation failed:\n{proc.stderr}")
 

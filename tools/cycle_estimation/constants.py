@@ -29,8 +29,6 @@ SETUP_WORKLOADS_DB = "workloads.yaml"
 SETUP_SYSTEM_FILE = "system.yaml"
 ## Build
 BUILD_DIR = SCRIPT_ROOT / "build"
-BUILD_NAME = "workload"
-ASM_NAME = "workload.s"
 
 # Annotations
 BEGIN_CYCLE_ANNOT = "//@BEGIN_CYCLE_MEASURE"

@@ -6,6 +6,7 @@ from typing import Dict
 @dataclass
 class Workload:
     id: str
+    file_id: str
     source_path: Path
     source_hash: str
     dest_path: Path
