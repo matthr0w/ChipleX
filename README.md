@@ -94,7 +94,7 @@ make run ARGS="--help"
 
 ## TODO
 
-- [ ] Advanced estimation of processing time and acceleration speedup factor
+- [x] Advanced estimation of processing time and acceleration speedup factor
 
 - [ ] Smart Chiplet Interconnect features
 
