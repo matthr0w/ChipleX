@@ -50,17 +50,45 @@ public:
     return it->second;
   }
 
-  // Global lookup: (chiplet_id, module_name) -> module_id
+  // Global lookup: (chiplet_id, module_id) -> chiplet_module
+  const ChipletModuleInfo *get_module(const unsigned &chiplet_id,
+                                      const unsigned &module_id) const {
+    auto desc = get(chiplet_id);
+    return desc->get(module_id);
+  }
+
+  // Global lookup: (chiplet_id, module_name) -> chiplet_module
   const ChipletModuleInfo *get_module(const unsigned &chiplet_id,
                                       const std::string &module_name) const {
     auto desc = get(chiplet_id);
     return desc->get(module_name);
   }
 
-  // Global lookup: (chiplet_name, module_name) -> module_id
+  // Global lookup: (chiplet_name, module_id) -> chiplet_module
+  const ChipletModuleInfo *get_module(const std::string &chiplet_name,
+                                      const unsigned &module_id) const {
+    auto desc = get(chiplet_name);
+    return desc->get(module_id);
+  }
+
+  // Global lookup: (chiplet_name, module_name) -> chiplet_module
   const ChipletModuleInfo *get_module(const std::string &chiplet_name,
                                       const std::string &module_name) const {
     auto desc = get(chiplet_name);
     return desc->get(module_name);
+  }
+
+  // Global lookup: (chiplet_id, mgr_port) -> module_name
+  const std::string get_module_name_at_mgr_port(const unsigned &chiplet_id,
+                                                const unsigned &port) const {
+    auto desc = get(chiplet_id);
+    return desc->get_name_at_mgr_port(port);
+  }
+
+  // Global lookup: (chiplet_id, sub_port) -> module_name
+  const std::string get_module_name_at_sub_port(const unsigned &chiplet_id,
+                                                const unsigned &port) const {
+    auto desc = get(chiplet_id);
+    return desc->get_name_at_sub_port(port);
   }
 };

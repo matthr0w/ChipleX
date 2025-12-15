@@ -1,9 +1,14 @@
 BUILD_DIR := build
 SIM_BINARY := ./sim
+
+# Python
 PYVENV := tools/.venv
 PYREQ := tools/requirements.txt
-CYCLE_SCRIPT := tools/cycle_manager.py
 
+# Tools
+CYCLE_ESTIMATION := tools/cycle_estimation/main.py
+
+# Logging
 LOG_INFO = printf "\033[0m[INFO]\033[0m  | %-16s | %s\n" "$(shell date +'%H:%M:%S')" 
 LOG_WARN = printf \033[33m[WARN]\033[0m  | %-16s | %s\n" "$(shell date +'%H:%M:%S')" 
 LOG_ERROR = printf "\033[31m[ERROR]\033[0m  | %-16s | %s\n" "$(shell date +'%H:%M:%S')" 
@@ -30,6 +35,6 @@ venv:
 	fi
 
 run: build venv
-	@$(PYVENV)/bin/python $(CYCLE_SCRIPT)
+	@$(PYVENV)/bin/python $(CYCLE_ESTIMATION)
 	@SYSTEMC_DISABLE_COPYRIGHT_MESSAGE=1 $(SIM_BINARY) $(ARGS)
 	@$(LOG_INFO) "Simulation finished."

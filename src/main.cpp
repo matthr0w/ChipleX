@@ -1,5 +1,3 @@
-#include <vector>
-
 #include "globals.h"
 
 #include "common/Parser.h"
@@ -24,9 +22,8 @@ int sc_main(int argc, char *argv[]) {
 
   // Create chiplets
   std::map<std::string, std::unique_ptr<ChipletBase>> chiplets;
-  for (const auto &[chiplet_name, chiplet] : sysconf.chiplets) {
+  for (const auto &[chiplet_name, chiplet_config] : sysconf.chiplets) {
     auto chiplet_id = sysconf.chiplet_ids.find(chiplet_name)->second;
-    auto chiplet_config = sysconf.chiplets[chiplet_name];
     switch (sysconf.chiplets[chiplet_name].type.value) {
     case ChipletType::Type::Compute:
       chiplets[chiplet_name] = std::make_unique<ComputeChiplet>(

@@ -19,6 +19,7 @@ protected:
 
   // Clock databases
   Clocks chiplet_clocks;
+  std::map<std::string, Clocks> accel_clocks;
   std::map<std::string, Clocks> interconnect_clocks;
 
 public:
@@ -29,6 +30,8 @@ public:
         chiplet_clocks(chiplet_config.node) {
     ChipletRegistry::instance().register_chiplet(chiplet_id, chiplet_name,
                                                  chiplet_desc);
+    for (const auto &[name, config] : chiplet_config.accels)
+      accel_clocks.emplace(name, Clocks(config.node));
     for (const auto &[name, config] : chiplet_config.interconnects)
       interconnect_clocks.emplace(name, Clocks(config.node));
   }
@@ -38,6 +41,12 @@ public:
   std::map<std::string, std::unique_ptr<InterconnectBase>> interconnects;
 
 protected:
+  Clocks &get_accel_clocks(const std::string &accel_name) {
+    auto it = accel_clocks.find(accel_name);
+    if (it != accel_clocks.end())
+      return it->second;
+    return chiplet_clocks;
+  }
   Clocks &get_interconnect_clocks(const std::string &interconnect_name) {
     auto it = interconnect_clocks.find(interconnect_name);
     if (it != interconnect_clocks.end())

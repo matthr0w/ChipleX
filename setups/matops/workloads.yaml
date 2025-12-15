@@ -1,13 +1,13 @@
 workloads:
   add:
     cycles_count: 2225
-    source_hash: 6d173a2b23c697dc9669e57130b0dbc847f0c2c0
+    source_hash: eb00beb5626161c7b15b19a1cf05933d2eefa64b
   multiply:
     cycles_count: 2225
-    source_hash: eb1f6457659559e5b62d1ebcad1447614f9ce46a
+    source_hash: 4cef6d749c69cca8d1ac82fd0912c0ce2edd1f6c
   subtract:
     cycles_count: 2225
-    source_hash: f7edd98d08a47a29499009463ade2bcaae2eb085
+    source_hash: 64d128c1318db70ea07e4847d9566f41e64230dd
   transpose:
     cycles_count: 5498
-    source_hash: c9070429d892adc63c9cea43f66caf5a7e7dd7ac
+    source_hash: cdfc377ee8b51e83b8a9d81509ba1919773fd4e6

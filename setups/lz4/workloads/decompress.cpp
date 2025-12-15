@@ -7,7 +7,7 @@ struct DataHeader {
   uint32_t compressed_data_size;
 };
 
-void decompress() {
+int main() {
   const char *const str = "Hello, World! This is a test string for the LZ4 "
                           "compression algorithm. Hello, World! This is a test "
                           "string for the LZ4 compression algorithm.";
@@ -16,7 +16,7 @@ void decompress() {
   const auto decompressed_size = len;
   const auto compressed_size = 82;
 
-  //@START_MEASURE
+  //@BEGIN_CYCLE_MEASURE
   // Allocate decompression buffer
   auto *decompressed_data = new unsigned char[decompressed_size];
 
@@ -25,7 +25,9 @@ void decompress() {
       LZ4_decompress_safe(reinterpret_cast<const char *>(str),
                           reinterpret_cast<char *>(decompressed_data),
                           compressed_size, decompressed_size);
-  //@END_MEASURE
+  //@END_CYCLE_MEASURE
 
   delete[] decompressed_data;
+
+  return 0;
 }

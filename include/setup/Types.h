@@ -8,6 +8,8 @@
 #include <vector>
 #include <yaml-cpp/yaml.h>
 
+#include "logging.h"
+
 #include "common/IRQ.h"
 
 class Core;
@@ -50,6 +52,34 @@ struct ChipletType {
       return Type::Compute;
     if (str == "memory")
       return Type::Memory;
+    return Type::Unknown;
+  }
+};
+
+struct AccelType {
+  enum class Type { Unknown, DFP, AILC };
+
+  Type value;
+
+  AccelType() = default;
+  AccelType(Type type) : value(type) {}
+
+  std::string to_string() const {
+    switch (value) {
+    case Type::DFP:
+      return "dfp";
+    case Type::AILC:
+      return "ai-lc";
+    default:
+      return "unknown";
+    }
+  }
+
+  static Type parse(const std::string &str) {
+    if (str == "dfp")
+      return Type::DFP;
+    if (str == "ai-lc")
+      return Type::AILC;
     return Type::Unknown;
   }
 };
@@ -102,9 +132,15 @@ struct InterconnectConfig {
   std::vector<ConnectionConfig> connections;
 };
 
+struct AccelConfig {
+  AccelType type;
+  YAML::Node node;
+};
+
 struct ChipletConfig {
   ChipletType type;
   YAML::Node node;
+  std::map<std::string, AccelConfig> accels;
   std::map<std::string, InterconnectConfig> interconnects;
   std::map<std::string, unsigned> interconnect_ids;
   std::map<unsigned, std::string> interconnect_ids_reverse;
@@ -129,6 +165,8 @@ struct CyclesDB {
 
   unsigned get(const std::string &name) const {
     auto it = db.find(name);
+    if (it == db.end())
+      LOG_WARN("No cycles count found for: " + name + ". Waiting zero cycles.");
     return it != db.end() ? it->second : 0;
   }
 };

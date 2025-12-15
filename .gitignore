@@ -1,10 +1,12 @@
-# VSCode directory
-.vscode/
-
 # Cache directories
 .cache/
 __pycache__/
 
 # Build directories
 build/
-tmp/
+
+# Python venv
+.venv/
+
+# VSCode directory
+.vscode/

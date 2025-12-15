@@ -52,6 +52,38 @@ void SetupLoader::load_system_config(const std::string &system_file) {
     ChipletConfig chiplet{type, chiplet_config};
 
     // -------------------------------------------------------
+    // Accelerators
+    // -------------------------------------------------------
+    for (const auto &ic : c["accelerators"]) {
+      LOG_ASSERT(ic["name"], "SetupLoader: Missing required key 'name' in "
+                             "accelerator description");
+      LOG_ASSERT(ic["type"], "SetupLoader: Missing required key 'type' in "
+                             "accelerator description");
+
+      std::string accel_name = ic["name"].as<std::string>();
+      std::string accel_type = ic["type"].as<std::string>();
+      std::string accel_file = accels_path_ + accel_type + ".yaml";
+
+      LOG_ASSERT(std::filesystem::exists(accel_file) &&
+                     std::filesystem::is_regular_file(accel_file),
+                 "SetupLoader: Unknown accelerator type: " + accel_type);
+
+      YAML::Node accel_config = YAML::LoadFile(accel_file);
+
+      // Merge overrides
+      if (ic["config"]) {
+        for (auto it : ic["config"]) {
+          std::string section = it.first.as<std::string>();
+          merge_nodes(accel_config[section], it.second);
+        }
+      }
+
+      AccelType type(AccelType::parse(accel_type));
+      AccelConfig accel{type, accel_config};
+      chiplet.accels[accel_name] = accel;
+    }
+
+    // -------------------------------------------------------
     // Interconnects
     // -------------------------------------------------------
     unsigned interconnect_id = 0;

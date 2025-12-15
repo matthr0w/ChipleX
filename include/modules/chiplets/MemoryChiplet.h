@@ -10,12 +10,6 @@
 #include "setup/Types.h"
 
 struct MemoryChiplet : ChipletBase {
-  // ChipletDescriptor
-  // ID | Module
-  // -- | --------------
-  //  0 | Memory
-  //  1 | Interconnect
-
   static ChipletDescriptor build_descriptor(std::string name, unsigned id,
                                             ChipletConfig chiplet_config) {
     ChipletDescriptor desc;
@@ -25,8 +19,7 @@ struct MemoryChiplet : ChipletBase {
     unsigned module_id = 0;
 
     // Memory
-    desc.modules.push_back(
-        {module_id++, MEMORY_MODULE_NAME, {AXIModuleType::SUBORDINATE}});
+    desc.add_module(MEMORY_MODULE_NAME, {AXIModuleType::SUBORDINATE});
 
     // Interconnect
     const auto &first_it = *chiplet_config.interconnects.begin();
@@ -39,11 +32,9 @@ struct MemoryChiplet : ChipletBase {
                      << " has multiple interconnects defined. Interconnect "
                      << interconnect_name << " will be used.");
 
-    desc.modules.push_back(
-        {module_id++,
-         interconnect_name,
-         {AXIModuleType::INTERCONNECT, AXIModuleType::MANAGER,
-          AXIModuleType::SUBORDINATE}});
+    desc.add_module(interconnect_name,
+                    {AXIModuleType::INTERCONNECT, AXIModuleType::MANAGER,
+                     AXIModuleType::SUBORDINATE});
 
     return desc;
   }
@@ -57,7 +48,7 @@ struct MemoryChiplet : ChipletBase {
   MemoryChiplet(sc_module_name name, unsigned id, ChipletConfig chiplet_config)
       : ChipletBase(name, id, chiplet_config,
                     build_descriptor(std::string(name), id, chiplet_config)),
-        memory(chiplet_desc.get(0)->name.c_str(), chiplet_config),
+        memory(MEMORY_MODULE_NAME.c_str(), chiplet_config),
         dummy_axi_port("dummy_axi_port", *this, nullptr,
                        ARM::TLM::PROTOCOL_AXI4,
                        chiplet_config.node["axi"]["width"].as<unsigned>()) {
