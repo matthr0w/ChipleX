@@ -59,12 +59,12 @@ private:
       uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
       uint8_t dst_module, uint32_t address, bool fixed_address,
       unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
-      bool is_volatile);
+      uint8_t extension_mask, bool is_volatile);
   std::shared_ptr<RequestHandle> write_internal(
       uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
       uint8_t dst_module, uint32_t address, bool fixed_address,
       unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
-      bool is_volatile);
+      uint8_t extension_mask, bool is_volatile);
 
 public:
   std::shared_ptr<RequestHandle> read(const AxiRequest &req);

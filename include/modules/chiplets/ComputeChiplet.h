@@ -27,30 +27,37 @@ struct ComputeChiplet : ChipletBase {
     unsigned num_cores = chiplet_config.node["cores"]["num"].as<unsigned>();
     for (unsigned i = 0; i < num_cores; i++) {
       desc.add_module(CORE_MODULE_NAME + std::to_string(i),
-                      {AXIModuleType::NONE});
-      desc.add_module(CACHE_MODULE_NAME + std::to_string(i),
                       {AXIModuleType::MANAGER});
+      desc.add_module(CACHE_MODULE_NAME + std::to_string(i),
+                      {AXIModuleType::BUS_MANAGER});
     }
 
     // Accelerators
     for (auto &[name, config] : chiplet_config.accels)
-      desc.add_module(name, {AXIModuleType::SUBORDINATE});
+      desc.add_module(name, {AXIModuleType::BUS_SUBORDINATE});
 
     // DMA Engine
-    desc.add_module(DMA_ENGINE_MODULE_NAME,
-                    {AXIModuleType::MANAGER, AXIModuleType::SUBORDINATE});
+    desc.add_module(DMA_ENGINE_MODULE_NAME, {AXIModuleType::BUS_MANAGER,
+                                             AXIModuleType::BUS_SUBORDINATE});
 
     // Memory
-    desc.add_module(MEMORY_MODULE_NAME, {AXIModuleType::SUBORDINATE});
+    desc.add_module(MEMORY_MODULE_NAME, {AXIModuleType::BUS_SUBORDINATE});
 
     // Bus
     desc.add_module(BUS_MODULE_NAME, {AXIModuleType::BUS});
 
-    // Interconnects
-    for (auto &[name, config] : chiplet_config.interconnects)
+    // Extension Layers + Interconnects
+    for (auto &[name, config] : chiplet_config.interconnects) {
+      const std::string ext_name = EXT_LAYER_MODULE_NAME + "_" + name;
+      desc.add_module(ext_name, {AXIModuleType::BUS_MANAGER,
+                                 AXIModuleType::BUS_SUBORDINATE});
       desc.add_module(name,
                       {AXIModuleType::INTERCONNECT, AXIModuleType::MANAGER,
                        AXIModuleType::SUBORDINATE});
+    }
+
+    // Generate LUTs
+    desc.generate_luts();
 
     return desc;
   }
@@ -80,7 +87,8 @@ struct ComputeChiplet : ChipletBase {
         memory(MEMORY_MODULE_NAME.c_str(), chiplet_config),
         dma_engine(DMA_ENGINE_MODULE_NAME.c_str(), chiplet_config),
         bus(BUS_MODULE_NAME.c_str(), chiplet_id, chiplet_config,
-            chiplet_desc.num_managers(), chiplet_desc.num_subordinates()) {
+            chiplet_desc.num_bus_managers(),
+            chiplet_desc.num_bus_subordinates()) {
     // Assertions
     LOG_ASSERT(chiplet_config.node["axi"]["width"].as<unsigned>() >= 8 ||
                    (chiplet_config.node["axi"]["width"].as<unsigned>() % 8) ==
@@ -171,17 +179,33 @@ struct ComputeChiplet : ChipletBase {
     InterconnectManager manager(chiplet_id, chiplet_config);
     for (const auto &[name, config] : chiplet_config.interconnects) {
       const unsigned id = chiplet_config.interconnect_ids.find(name)->second;
+      const std::string ext_name = EXT_LAYER_MODULE_NAME + "_" + name;
+
       DMAEngine *dma_engine_ptr =
           (config.node["use_dma"] && !config.node["use_dma"].as<bool>())
               ? nullptr
               : &dma_engine;
+
+      // Create extension layer
+      auto ext_layer =
+          std::make_unique<ExtensionLayer>(ext_name.c_str(), chiplet_config);
+      ext_layer->clk.bind(chiplet_clocks.get("extensions"));
+
+      // Create interconnect
       auto interconnect =
           manager.create_interconnect(name, id, config, dma_engine_ptr);
       interconnect->bind_clocks(get_interconnect_clocks(name));
-      interconnect->axi_out_port->bind(
-          *bus.managers[chiplet_desc.get_mgr_port(name)]);
-      interconnect->axi_in_port->bind(
-          *bus.subordinates[chiplet_desc.get_sub_port(name)]);
+
+      // Connect bus <-> extension layer <-> interconnect
+      ext_layer->axi_out_up.bind(
+          *bus.managers[chiplet_desc.get_mgr_port(ext_name)]);
+      ext_layer->axi_in_up.bind(
+          *bus.subordinates[chiplet_desc.get_sub_port(ext_name)]);
+      ext_layer->axi_out_down.bind(*interconnect->axi_in_port);
+      ext_layer->axi_in_down.bind(*interconnect->axi_out_port);
+
+      // Move into base class
+      ext_layers.emplace(ext_name, std::move(ext_layer));
       interconnects.emplace(name, std::move(interconnect));
     }
 

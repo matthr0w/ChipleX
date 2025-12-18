@@ -122,19 +122,17 @@ tlm_sync_enum Bus::nb_transport_fw(int mgr_id, ARM::AXI::Payload &payload,
     UserSignals user = UserSignals::decode(payload.user);
     if (user.src_chiplet == chiplet_id)
       sub_id = ChipletRegistry::instance()
-                   .get_module(chiplet_id, user.src_module)
-                   ->get_sub_port();
+                   .get(chiplet_id)
+                   ->get_sub_port(user.src_module);
     else if (user.dst_chiplet == chiplet_id)
       sub_id = ChipletRegistry::instance()
-                   .get_module(chiplet_id, user.dst_module)
-                   ->get_sub_port();
+                   .get(chiplet_id)
+                   ->get_sub_port(user.dst_module);
     else {
       int id =
           Router::instance().get_interconnect_id(chiplet_id, user.dst_chiplet);
       std::string name = interconnect_names.find(id)->second;
-      sub_id = ChipletRegistry::instance()
-                   .get_module(chiplet_id, name)
-                   ->get_sub_port();
+      sub_id = ChipletRegistry::instance().get(chiplet_id)->get_sub_port(name);
     }
     payloads2sub[&payload] = sub_id;
     payloads2mgr[&payload] = mgr_id;

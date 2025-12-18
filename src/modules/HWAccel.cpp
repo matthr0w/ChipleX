@@ -235,12 +235,11 @@ tlm_sync_enum HWAccel::nb_transport_bw_axi(ARM::AXI::Payload &payload,
 // -------------------------------------------------------
 // AXI Methods
 // -------------------------------------------------------
-std::shared_ptr<RequestHandle>
-HWAccel::read_internal(uint32_t request_id, uint8_t src_module,
-                       uint8_t dst_chiplet, uint8_t dst_module,
-                       uint32_t address, bool fixed_address,
-                       unsigned char *data, unsigned data_length,
-                       ARM::AXI::Burst burst, bool is_volatile) {
+std::shared_ptr<RequestHandle> HWAccel::read_internal(
+    uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
+    uint8_t dst_module, uint32_t address, bool fixed_address,
+    unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
+    uint8_t extension_mask, bool is_volatile) {
   auto handle = std::make_shared<RequestHandle>();
 
   unsigned axi_bytes = axi_width / 8;
@@ -256,6 +255,7 @@ HWAccel::read_internal(uint32_t request_id, uint8_t src_module,
   user.src_module = src_module;
   user.dst_chiplet = dst_chiplet;
   user.dst_module = dst_module;
+  user.extension_mask = extension_mask;
   user.fixed_address = fixed_address;
 
   payload->id = request_id;
@@ -351,19 +351,21 @@ std::shared_ptr<RequestHandle> HWAccel::read(const AxiRequest &req) {
 
   uint32_t address = req.address.value();
   bool fixed_address = true;
+  uint8_t extension_mask = 0;
+  if (req.ext_id)
+    extension_mask = 1u << static_cast<uint8_t>(*req.ext_id);
   bool is_volatile = req.is_volatile || (dst_chiplet_id != chiplet_id);
 
   return read_internal(req.request_id, src_module->id, dst_chiplet_id,
                        dst_module->id, address, fixed_address, req.data,
-                       req.data_length, req.burst, is_volatile);
+                       req.data_length, req.burst, extension_mask, is_volatile);
 }
 
-std::shared_ptr<RequestHandle>
-HWAccel::write_internal(uint32_t request_id, uint8_t src_module,
-                        uint8_t dst_chiplet, uint8_t dst_module,
-                        uint32_t address, bool fixed_address,
-                        unsigned char *data, unsigned data_length,
-                        ARM::AXI::Burst burst, bool is_volatile) {
+std::shared_ptr<RequestHandle> HWAccel::write_internal(
+    uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
+    uint8_t dst_module, uint32_t address, bool fixed_address,
+    unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
+    uint8_t extension_mask, bool is_volatile) {
   auto handle = std::make_shared<RequestHandle>();
 
   unsigned axi_bytes = axi_width / 8;
@@ -379,6 +381,7 @@ HWAccel::write_internal(uint32_t request_id, uint8_t src_module,
   user.src_module = src_module;
   user.dst_chiplet = dst_chiplet;
   user.dst_module = dst_module;
+  user.extension_mask = extension_mask;
   user.fixed_address = fixed_address;
 
   payload->id = request_id;
@@ -473,10 +476,14 @@ std::shared_ptr<RequestHandle> HWAccel::write(const AxiRequest &req) {
 
   uint32_t address = req.address.value_or(0x0);
   bool fixed_address = req.address.has_value();
+  uint8_t extension_mask = 0;
+  if (req.ext_id)
+    extension_mask = 1u << static_cast<uint8_t>(*req.ext_id);
   bool is_volatile =
       req.is_volatile || (dst_chiplet_id != chiplet_id) || !fixed_address;
 
   return write_internal(req.request_id, src_module->id, dst_chiplet_id,
                         dst_module->id, address, fixed_address, req.data,
-                        req.data_length, req.burst, is_volatile);
+                        req.data_length, req.burst, extension_mask,
+                        is_volatile);
 }
