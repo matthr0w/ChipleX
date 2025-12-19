@@ -75,8 +75,8 @@ struct MemoryChiplet : ChipletBase {
       const std::string ext_name = EXT_LAYER_MODULE_NAME + "_" + name;
 
       // Create extension layer
-      auto ext_layer =
-          std::make_unique<ExtensionLayer>(ext_name.c_str(), chiplet_config);
+      auto ext_layer = std::make_unique<ExtensionLayer>(
+          ext_name.c_str(), chiplet_config, nullptr);
       ext_layer->clk.bind(chiplet_clocks.get("extensions"));
 
       // Create interconnect

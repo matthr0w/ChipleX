@@ -3,6 +3,7 @@
 #include <memory>
 #include <systemc>
 
+#include "modules/DMAEngine.h"
 #include "modules/extensions/ExtensionBase.h"
 #include "modules/extensions/ExtensionIDs.h"
 #include "setup/Types.h"
@@ -10,7 +11,7 @@
 using namespace sc_core;
 using namespace tlm;
 
-SC_MODULE(ExtensionLayer) {
+SC_MODULE(ExtensionLayer), public DMAForwardInterface {
 private:
   // -------------------------------------------------------
   // Config
@@ -31,7 +32,8 @@ public:
   ARM::AXI::SimpleTargetSocket<ExtensionLayer> axi_in_down;
   ARM::AXI::SimpleInitiatorSocket<ExtensionLayer> axi_out_down;
 
-  ExtensionLayer(sc_module_name name, ChipletConfig chiplet_config);
+  ExtensionLayer(sc_module_name name, ChipletConfig chiplet_config,
+                 DMAEngine * dma_engine);
 
 private:
   // -------------------------------------------------------
@@ -98,7 +100,13 @@ private:
   AxiSide up;
   AxiSide down;
 
+  std::unordered_map<ARM::AXI::Payload *, int> payload_beat_index;
+
   std::array<std::unique_ptr<ExtensionBase>, SmartExtension::MAX> extensions{};
+
+  // DMA engine
+  DMAEngine *dma_engine = nullptr;
+  int dma_vm_id = -1;
 
   void clk_posedge();
 
@@ -114,6 +122,11 @@ public:
                                      ARM::AXI::Phase & phase);
   tlm_sync_enum nb_transport_bw_down(ARM::AXI::Payload & payload,
                                      ARM::AXI::Phase & phase);
+  // DMA engine
+  tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload & payload,
+                                    ARM::AXI::Phase & phase) override {
+    return nb_transport_bw_up(payload, phase);
+  };
 
 private:
   // -------------------------------------------------------
@@ -133,5 +146,9 @@ private:
   void route_extension_outputs();
 
   void process_in_queues(AxiSide & side);
-  void process_out_queues(AxiSide & side);
+  void process_out_queues(AxiSide & side, bool use_dma = false);
+
+  bool send_dma_request(ARM::AXI::Payload & payload, ARM::AXI4::Phase phase) {
+    return dma_engine->forward_from_virtual(dma_vm_id, payload, phase);
+  }
 };

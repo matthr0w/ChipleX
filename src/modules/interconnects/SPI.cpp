@@ -386,10 +386,12 @@ void SPI::send_axi_beats() {
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
     register_beat_count(*payload);
     active_links[link_req.link_id] = false;
-    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_AW)) {
+    bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 &&
+                   dma_vm_id != -1;
+    if (use_dma && !send_dma_request(*payload, phase)) {
       aw_state = CLEAR;
       active_links[link_req.link_id] = true;
-    } else if (dma_vm_id == -1) {
+    } else if (!use_dma) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
@@ -408,11 +410,13 @@ void SPI::send_axi_beats() {
         (get_beat_count(*payload) + 1 == payload->get_beat_count())
             ? ARM::AXI::W_VALID_LAST
             : ARM::AXI::W_VALID;
+    bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 &&
+                   dma_vm_id != -1;
     active_links[link_req.link_id] = false;
-    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_W)) {
+    if (use_dma && !send_dma_request(*payload, phase)) {
       w_state = CLEAR;
       active_links[link_req.link_id] = true;
-    } else if (dma_vm_id == -1) {
+    } else if (!use_dma) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
@@ -443,11 +447,13 @@ void SPI::send_axi_beats() {
     LinkRequest link_req = ar_queue_out.front();
     ARM::AXI::Payload *payload = link_req.payload;
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
+    bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 &&
+                   dma_vm_id != -1;
     active_links[link_req.link_id] = false;
-    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_AR)) {
+    if (use_dma && !send_dma_request(*payload, phase)) {
       ar_state = CLEAR;
       active_links[link_req.link_id] = true;
-    } else if (dma_vm_id == -1) {
+    } else if (!use_dma) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,

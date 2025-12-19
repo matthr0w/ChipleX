@@ -118,7 +118,7 @@ void HWAccel::clk_negedge() {
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
 
     aw_state = REQ;
-    if (send_dma_request(*payload, ARM::AXI4::CHANNEL_AW))
+    if (send_dma_request(*payload, phase))
       aw_state = ACK;
     else
       aw_state = CLEAR;
@@ -132,7 +132,7 @@ void HWAccel::clk_negedge() {
                                 : ARM::AXI::W_VALID;
 
     w_state = REQ;
-    if (send_dma_request(*payload, ARM::AXI4::CHANNEL_W))
+    if (send_dma_request(*payload, phase))
       w_state = ACK;
     else
       w_state = CLEAR;
@@ -156,7 +156,7 @@ void HWAccel::clk_negedge() {
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
 
     ar_state = REQ;
-    if (send_dma_request(*payload, ARM::AXI4::CHANNEL_AR))
+    if (send_dma_request(*payload, phase))
       ar_state = ACK;
     else
       ar_state = CLEAR;

@@ -187,8 +187,8 @@ struct ComputeChiplet : ChipletBase {
               : &dma_engine;
 
       // Create extension layer
-      auto ext_layer =
-          std::make_unique<ExtensionLayer>(ext_name.c_str(), chiplet_config);
+      auto ext_layer = std::make_unique<ExtensionLayer>(
+          ext_name.c_str(), chiplet_config, dma_engine_ptr);
       ext_layer->clk.bind(chiplet_clocks.get("extensions"));
 
       // Create interconnect

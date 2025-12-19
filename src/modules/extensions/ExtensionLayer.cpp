@@ -2,14 +2,14 @@
 #include "modules/extensions/NOOPExtension.h"
 
 // TODO:
-// + Beat index in AxiBeat struct
-// + DMA engine support
 // + Interrupts
 
 ExtensionLayer::ExtensionLayer(sc_module_name name,
-                               ChipletConfig chiplet_config)
+                               ChipletConfig chiplet_config,
+                               DMAEngine *dma_engine)
     : sc_module(name),
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
+      dma_engine(dma_engine),
       axi_in_up("axi_in_up", *this, &ExtensionLayer::nb_transport_fw_up,
                 ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out_up("axi_out_up", *this, &ExtensionLayer::nb_transport_bw_up,
@@ -18,6 +18,10 @@ ExtensionLayer::ExtensionLayer(sc_module_name name,
                   ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out_down("axi_out_down", *this, &ExtensionLayer::nb_transport_bw_down,
                    ARM::TLM::PROTOCOL_AXI4, axi_width) {
+  // Register in DMA engine
+  if (dma_engine)
+    dma_vm_id = dma_engine->register_virtual_initiator(this);
+
   // Register AXI sockets
   up.fw_out = &axi_out_up;
   up.bw_out = &axi_in_up;
@@ -25,7 +29,7 @@ ExtensionLayer::ExtensionLayer(sc_module_name name,
   down.bw_out = &axi_in_down;
 
   // Register extensions
-  extensions[SmartExtension::NOOP] = std::make_unique<NOOPExtension>();
+  extensions[SmartExtension::NOOP] = std::make_unique<NOOPExtension>(axi_width);
 
   SC_METHOD(clk_posedge);
   sensitive << clk.pos();
@@ -51,7 +55,7 @@ void ExtensionLayer::clk_posedge() {
   route_extension_outputs();
 
   // Process AXI outgoing queues
-  process_out_queues(up);
+  process_out_queues(up, true);
   process_out_queues(down);
 }
 
@@ -68,21 +72,30 @@ tlm_sync_enum ExtensionLayer::nb_transport_fw_up(ARM::AXI::Payload &payload,
 
   switch (phase) {
   case ARM::AXI::AW_VALID:
-    up.aw_in.push_back({&payload, ARM::AXI::AW_VALID, AxiDir::TO_IC});
+    payload_beat_index[&payload] = -1;
+    up.aw_in.push_back({&payload, ARM::AXI::AW_VALID, AxiDir::DOWNSTREAM,
+                        payload_beat_index[&payload]});
     break;
   case ARM::AXI::W_VALID:
-    up.w_in.push_back({&payload, ARM::AXI::W_VALID, AxiDir::TO_IC});
+    up.w_in.push_back({&payload, ARM::AXI::W_VALID, AxiDir::DOWNSTREAM,
+                       ++payload_beat_index[&payload]});
     break;
   case ARM::AXI::W_VALID_LAST:
-    up.w_in.push_back({&payload, ARM::AXI::W_VALID_LAST, AxiDir::TO_IC});
+    up.w_in.push_back({&payload, ARM::AXI::W_VALID_LAST, AxiDir::DOWNSTREAM,
+                       ++payload_beat_index[&payload]});
     break;
   case ARM::AXI::B_READY:
+    payload_beat_index.erase(&payload);
     up.b_state = up.b_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   case ARM::AXI::AR_VALID:
-    up.ar_in.push_back({&payload, ARM::AXI::AR_VALID, AxiDir::TO_IC});
+    payload_beat_index[&payload] = -1;
+    up.ar_in.push_back({&payload, ARM::AXI::AR_VALID, AxiDir::DOWNSTREAM,
+                        payload_beat_index[&payload]});
     break;
   case ARM::AXI::R_READY:
+    if (payload.get_beats_complete() == payload_beat_index[&payload] + 1)
+      payload_beat_index.erase(&payload);
     up.r_state = up.r_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   default:
@@ -109,16 +122,19 @@ tlm_sync_enum ExtensionLayer::nb_transport_bw_up(ARM::AXI::Payload &payload,
     up.w_state = up.w_state == REQ ? ACK : CLEAR;
     break;
   case ARM::AXI::B_VALID:
-    up.b_in.push_back({&payload, ARM::AXI::B_VALID, AxiDir::TO_IC});
+    up.b_in.push_back({&payload, ARM::AXI::B_VALID, AxiDir::DOWNSTREAM,
+                       payload_beat_index[&payload]});
     break;
   case ARM::AXI::AR_READY:
     up.ar_state = up.ar_state == REQ ? ACK : CLEAR;
     break;
   case ARM::AXI::R_VALID:
-    up.r_in.push_back({&payload, ARM::AXI::R_VALID, AxiDir::TO_IC});
+    up.r_in.push_back({&payload, ARM::AXI::R_VALID, AxiDir::DOWNSTREAM,
+                       ++payload_beat_index[&payload]});
     break;
   case ARM::AXI::R_VALID_LAST:
-    up.r_in.push_back({&payload, ARM::AXI::R_VALID_LAST, AxiDir::TO_IC});
+    up.r_in.push_back({&payload, ARM::AXI::R_VALID_LAST, AxiDir::DOWNSTREAM,
+                       ++payload_beat_index[&payload]});
     break;
   default:
     SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
@@ -138,21 +154,30 @@ tlm_sync_enum ExtensionLayer::nb_transport_fw_down(ARM::AXI::Payload &payload,
 
   switch (phase) {
   case ARM::AXI::AW_VALID:
-    down.aw_in.push_back({&payload, ARM::AXI::AW_VALID, AxiDir::TO_BUS});
+    payload_beat_index[&payload] = -1;
+    down.aw_in.push_back({&payload, ARM::AXI::AW_VALID, AxiDir::UPSTREAM,
+                          payload_beat_index[&payload]});
     break;
   case ARM::AXI::W_VALID:
-    down.w_in.push_back({&payload, ARM::AXI::W_VALID, AxiDir::TO_BUS});
+    down.w_in.push_back({&payload, ARM::AXI::W_VALID, AxiDir::UPSTREAM,
+                         ++payload_beat_index[&payload]});
     break;
   case ARM::AXI::W_VALID_LAST:
-    down.w_in.push_back({&payload, ARM::AXI::W_VALID_LAST, AxiDir::TO_BUS});
+    down.w_in.push_back({&payload, ARM::AXI::W_VALID_LAST, AxiDir::UPSTREAM,
+                         ++payload_beat_index[&payload]});
     break;
   case ARM::AXI::B_READY:
+    payload_beat_index.erase(&payload);
     down.b_state = down.b_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   case ARM::AXI::AR_VALID:
-    down.ar_in.push_back({&payload, ARM::AXI::AR_VALID, AxiDir::TO_BUS});
+    payload_beat_index[&payload] = -1;
+    down.ar_in.push_back({&payload, ARM::AXI::AR_VALID, AxiDir::UPSTREAM,
+                          payload_beat_index[&payload]});
     break;
   case ARM::AXI::R_READY:
+    if (payload.get_beats_complete() == payload_beat_index[&payload] + 1)
+      payload_beat_index.erase(&payload);
     down.r_state = down.r_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   default:
@@ -179,16 +204,19 @@ tlm_sync_enum ExtensionLayer::nb_transport_bw_down(ARM::AXI::Payload &payload,
     down.w_state = down.w_state == REQ ? ACK : CLEAR;
     break;
   case ARM::AXI::B_VALID:
-    down.b_in.push_back({&payload, ARM::AXI::B_VALID, AxiDir::TO_BUS});
+    down.b_in.push_back({&payload, ARM::AXI::B_VALID, AxiDir::UPSTREAM,
+                         payload_beat_index[&payload]});
     break;
   case ARM::AXI::AR_READY:
     down.ar_state = down.ar_state == REQ ? ACK : CLEAR;
     break;
   case ARM::AXI::R_VALID:
-    down.r_in.push_back({&payload, ARM::AXI::R_VALID, AxiDir::TO_BUS});
+    down.r_in.push_back({&payload, ARM::AXI::R_VALID, AxiDir::UPSTREAM,
+                         ++payload_beat_index[&payload]});
     break;
   case ARM::AXI::R_VALID_LAST:
-    down.r_in.push_back({&payload, ARM::AXI::R_VALID_LAST, AxiDir::TO_BUS});
+    down.r_in.push_back({&payload, ARM::AXI::R_VALID_LAST, AxiDir::UPSTREAM,
+                         ++payload_beat_index[&payload]});
     break;
   default:
     SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
@@ -207,7 +235,7 @@ void ExtensionLayer::route_extension_outputs() {
       continue;
 
     const AxiBeat &beat = ext->peek();
-    AxiSide &side = (beat.dir == AxiDir::TO_BUS) ? up : down;
+    AxiSide &side = (beat.dir == AxiDir::UPSTREAM) ? up : down;
 
     switch (beat.phase) {
     case ARM::AXI::AW_VALID:
@@ -281,7 +309,7 @@ void ExtensionLayer::process_in_queues(AxiSide &side) {
   push_ext(side.r_in, ARM::AXI::R_READY);
 }
 
-void ExtensionLayer::process_out_queues(AxiSide &side) {
+void ExtensionLayer::process_out_queues(AxiSide &side, bool use_dma) {
   auto send_fw = [&](ChannelState &state, std::deque<AxiBeat> &queue) {
     if (state != CLEAR || queue.empty())
       return;
@@ -290,7 +318,12 @@ void ExtensionLayer::process_out_queues(AxiSide &side) {
     AxiBeat &beat = queue.front();
     ARM::AXI::Phase phase = beat.phase;
 
-    if (side.fw_out->nb_transport_fw(*beat.payload, phase) == TLM_UPDATED)
+    use_dma = use_dma && dma_vm_id != -1;
+
+    if (use_dma && !send_dma_request(*beat.payload, beat.phase))
+      state = CLEAR;
+    else if (!use_dma &&
+             side.fw_out->nb_transport_fw(*beat.payload, phase) == TLM_UPDATED)
       state = ACK;
   };
 

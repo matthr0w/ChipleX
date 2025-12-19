@@ -7,13 +7,15 @@
 
 class NOOPExtension : public ExtensionBase {
 public:
+  explicit NOOPExtension(unsigned axi_width) : ExtensionBase(axi_width) {}
+
   uint8_t id() const override { return SmartExtension::NOOP; }
 
   bool can_accept() const override { return fifo.size() < 16; }
 
-  void push(const AxiBeat &b) override {
-    LOG_INFO("NOOP EXTENSION PUSH");
-    fifo.push_back(b);
+  void push(const AxiBeat &beat) override {
+    LOG_INFO("NOOP EXTENSION PUSH BEAT: " << beat.index);
+    fifo.push_back(beat);
   }
 
   bool has_output() const override { return !fifo.empty(); }

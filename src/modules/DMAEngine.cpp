@@ -45,7 +45,7 @@ void DMAEngine::unregister_virtual_initiator(int vm_id) {
 }
 
 bool DMAEngine::forward_from_virtual(int vm_id, ARM::AXI::Payload &payload,
-                                     ARM::AXI::Channel channel) {
+                                     ARM::AXI::Phase phase) {
   SC_LOG_ASSERT(this, vm_id >= 0 && vm_id < owners.size(),
                 "DMA Forward Request: Unregistered virtual");
   DMAForwardInterface *owner = owners[vm_id];
@@ -54,22 +54,23 @@ bool DMAEngine::forward_from_virtual(int vm_id, ARM::AXI::Payload &payload,
 
   payload_owner_map[&payload] = vm_id;
 
-  switch (channel) {
-  case ARM::AXI::Channel::CHANNEL_AW:
+  switch (phase) {
+  case ARM::AXI::Phase::AW_VALID:
     if (state == DMAEngineState::Idle) {
       state = DMAEngineState::WriteForward;
       aw_queue_out.push_back(&payload);
       return true;
     }
     break;
-  case ARM::AXI::Channel::CHANNEL_W:
+  case ARM::AXI::Phase::W_VALID:
+  case ARM::AXI::Phase::W_VALID_LAST:
     if (state == DMAEngineState::WriteForward) {
       state = DMAEngineState::WriteForward;
       w_queue_out.push_back(&payload);
       return true;
     }
     break;
-  case ARM::AXI::Channel::CHANNEL_AR:
+  case ARM::AXI::Phase::AR_VALID:
     if (state == DMAEngineState::Idle) {
       state = DMAEngineState::ReadForward;
       ar_queue_out.push_back(&payload);

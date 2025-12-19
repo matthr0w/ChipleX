@@ -137,5 +137,5 @@ public:
   void unregister_virtual_initiator(int vm_id);
 
   bool forward_from_virtual(int vm_id, ARM::AXI::Payload &payload,
-                            ARM::AXI::Channel channel);
+                            ARM::AXI::Phase phase);
 };

@@ -4,17 +4,21 @@
 
 #include "ARM/TLM/arm_axi4.h"
 
-enum class AxiDir : uint8_t { TO_BUS, TO_IC };
+enum class AxiDir : uint8_t { UPSTREAM, DOWNSTREAM };
 
 struct AxiBeat {
   ARM::AXI::Payload *payload;
   ARM::AXI::Phase phase;
   AxiDir dir;
+  int index;
 };
 
 class ExtensionBase {
 public:
+  ExtensionBase(unsigned axi_width) : axi_width(axi_width) {};
   virtual ~ExtensionBase() = default;
+
+  const unsigned axi_width;
 
   virtual uint8_t id() const = 0;
 
