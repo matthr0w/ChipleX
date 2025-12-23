@@ -1081,6 +1081,45 @@ ARM_TLM_EXPORT void Payload::write_out_beat_strobe(unsigned beat_index, uint8_t*
     }
 }
 
+ARM_TLM_EXPORT void Payload::modify_beat(unsigned beat_index, const uint8_t* data, const uint8_t* strobe)
+{
+    runtime_error_assert(beat_index < get_beat_count());
+
+    beat_index = BURST_BEAT(beat_index);
+    unsigned element_size = static_cast<unsigned>(get_beat_data_length());
+
+    payload_data->copy_in_data(data, beat_index * element_size, element_size);
+
+    if (element_size < 8)
+    {
+        uint8_t stored_strobe;
+        unsigned index = beat_index * element_size;
+        unsigned byte_index = index / 8;
+        unsigned bit_index = index % 8;
+
+        payload_data->copy_out_strobe(&stored_strobe, byte_index, 1);
+
+        uint8_t strobe_in;
+
+        if (strobe)
+            strobe_in = *strobe;
+        else
+            strobe_in = 0xFF;
+
+        stored_strobe = static_cast<uint8_t>(
+            stored_strobe | ((strobe_in & ((1 << element_size) - 1)) << bit_index));
+        payload_data->fill_strobe(stored_strobe, byte_index, 1);
+    } else
+    {
+        unsigned byte_index = (beat_index * element_size) / 8;
+
+        if (strobe)
+            payload_data->copy_in_strobe(strobe, byte_index, element_size / 8);
+        else
+            payload_data->fill_strobe(0xFF, byte_index, element_size / 8);
+    }
+}
+
 ARM_TLM_EXPORT void Payload::snoop_in_beat(const uint8_t* data)
 {
     runtime_error_assert(payload_data->beats_complete < get_beat_count());

@@ -1,7 +1,5 @@
 #pragma once
 
-#include "logging.h"
-
 #include "modules/extensions/ExtensionBase.h"
 #include "modules/extensions/ExtensionIDs.h"
 
@@ -13,10 +11,7 @@ public:
 
   bool can_accept() const override { return fifo.size() < 16; }
 
-  void push(const AxiBeat &beat) override {
-    LOG_INFO("NOOP EXTENSION PUSH BEAT: " << beat.index);
-    fifo.push_back(beat);
-  }
+  void push(const AxiBeat &beat) override { fifo.push_back(beat); }
 
   bool has_output() const override { return !fifo.empty(); }
 
