@@ -1,4 +1,5 @@
 #include "modules/extensions/ExtensionLayer.h"
+#include "modules/extensions/CryptoExtension.h"
 #include "modules/extensions/NOOPExtension.h"
 
 #include "common/IRQ.h"
@@ -33,6 +34,8 @@ ExtensionLayer::ExtensionLayer(sc_module_name name,
 
   // Register extensions
   extensions[SmartExtension::NOOP] = std::make_unique<NOOPExtension>(axi_width);
+  extensions[SmartExtension::CRYPTO] =
+      std::make_unique<CryptoExtension>(axi_width);
 
   SC_METHOD(clk_posedge);
   sensitive << clk.pos();
