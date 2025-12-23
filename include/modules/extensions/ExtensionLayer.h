@@ -16,6 +16,7 @@ private:
   // -------------------------------------------------------
   // Config
   // -------------------------------------------------------
+  const unsigned num_cores;
   const unsigned axi_width;
 
 public:
@@ -32,8 +33,11 @@ public:
   ARM::AXI::SimpleTargetSocket<ExtensionLayer> axi_in_down;
   ARM::AXI::SimpleInitiatorSocket<ExtensionLayer> axi_out_down;
 
+  simple_initiator_socket_tagged<ExtensionLayer> *irq_sockets;
+
   ExtensionLayer(sc_module_name name, ChipletConfig chiplet_config,
                  DMAEngine * dma_engine);
+  ~ExtensionLayer();
 
 private:
   // -------------------------------------------------------
@@ -151,4 +155,6 @@ private:
   bool send_dma_request(ARM::AXI::Payload & payload, ARM::AXI4::Phase phase) {
     return dma_engine->forward_from_virtual(dma_vm_id, payload, phase);
   }
+
+  void send_irq(ARM::AXI::Payload & payload, unsigned core_id);
 };

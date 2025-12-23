@@ -712,7 +712,10 @@ void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
 }
 
 void SLNetworkLayer::send_irq(ARM::AXI::Payload &payload) {
-  if (num_cores == 0)
+  // Don't send an IRQ if:
+  // - there are no cores
+  // - extension layer is used. It will send it.
+  if (num_cores == 0 || UserSignals::decode(payload.user).extension_mask != 0)
     return;
 
   UserSignals user = UserSignals::decode(payload.user);

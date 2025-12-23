@@ -99,7 +99,8 @@ struct ComputeChiplet : ChipletBase {
     for (unsigned i = 0; i < num_cores; ++i) {
       std::string core_name = CORE_MODULE_NAME + std::to_string(i);
       std::string cache_name = CACHE_MODULE_NAME + std::to_string(i);
-      unsigned num_irqs = chiplet_desc.num_interconnects() + 1; // + DMA Engine
+      unsigned num_irqs = chiplet_desc.num_interconnects() * 2 +
+                          1; // Interconnects + Extension Layers + DMA Engine
       cores.push_back(std::make_unique<Core>(core_name.c_str(), chiplet_id, i,
                                              chiplet_config, cycles, num_irqs));
       caches.push_back(std::make_unique<Cache>(cache_name.c_str(), chiplet_id,
@@ -216,7 +217,14 @@ struct ComputeChiplet : ChipletBase {
     // Interconnects
     unsigned irq_idx = 1;
     for (const auto &[name, config] : chiplet_config.interconnects) {
+      const std::string ext_name = EXT_LAYER_MODULE_NAME + "_" + name;
       for (unsigned i = 0; i < num_cores; ++i)
+        // Bind extension layer IRQ socket first
+        ext_layers[ext_name]->irq_sockets[i].bind(
+            cores[i]->irq_sockets[irq_idx]);
+      irq_idx++;
+      for (unsigned i = 0; i < num_cores; ++i)
+        // Then bind corresponding interconnect IRQ socket
         interconnects[name]->irq_ports[i]->bind(cores[i]->irq_sockets[irq_idx]);
       irq_idx++;
     }

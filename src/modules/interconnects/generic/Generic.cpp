@@ -518,8 +518,7 @@ void GenericInterconnect::handle_axi_channels() {
     b_queue_in.pop_front();
 
     // We also send the IRQ here
-    if (dma_vm_id == -1)
-      send_irq(*payload);
+    send_irq(*payload);
 
     // Set channel information
     axi_transaction.channel = B;
@@ -913,7 +912,12 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
 }
 
 void GenericInterconnect::send_irq(ARM::AXI::Payload &payload) {
-  if (num_cores == 0)
+  // Don't send an IRQ if:
+  // - there are no cores
+  // - DMA engine is used. It will send it.
+  // - extension layer is used. It will send it.
+  if (num_cores == 0 || dma_vm_id != -1 ||
+      UserSignals::decode(payload.user).extension_mask != 0)
     return;
 
   UserSignals user = UserSignals::decode(payload.user);

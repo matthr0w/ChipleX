@@ -180,8 +180,7 @@ void SPI::clk_posedge() {
       if (active_transfer) {
         b_queue_in.pop_front();
         // We also send the IRQ here
-        if (dma_vm_id == -1)
-          send_irq(*payload);
+        send_irq(*payload);
         ARM::AXI::Phase phase = ARM::AXI::B_READY;
         axi_out.nb_transport_fw(*payload, phase);
       }
@@ -484,7 +483,12 @@ void SPI::send_axi_beats() {
 }
 
 void SPI::send_irq(ARM::AXI::Payload &payload) {
-  if (num_cores == 0)
+  // Don't send an IRQ if:
+  // - there are no cores
+  // - DMA engine is used. It will send it.
+  // - extension layer is used. It will send it.
+  if (num_cores == 0 || dma_vm_id != -1 ||
+      UserSignals::decode(payload.user).extension_mask != 0)
     return;
 
   UserSignals user = UserSignals::decode(payload.user);

@@ -1,13 +1,13 @@
 #include "modules/extensions/ExtensionLayer.h"
 #include "modules/extensions/NOOPExtension.h"
 
-// TODO:
-// + Interrupts
+#include "common/IRQ.h"
 
 ExtensionLayer::ExtensionLayer(sc_module_name name,
                                ChipletConfig chiplet_config,
                                DMAEngine *dma_engine)
     : sc_module(name),
+      num_cores(chiplet_config.node["cores"]["num"].as<unsigned>()),
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
       dma_engine(dma_engine),
       axi_in_up("axi_in_up", *this, &ExtensionLayer::nb_transport_fw_up,
@@ -18,6 +18,9 @@ ExtensionLayer::ExtensionLayer(sc_module_name name,
                   ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out_down("axi_out_down", *this, &ExtensionLayer::nb_transport_bw_down,
                    ARM::TLM::PROTOCOL_AXI4, axi_width) {
+  // Create IRQ sockets
+  irq_sockets = new simple_initiator_socket_tagged<ExtensionLayer>[num_cores];
+
   // Register in DMA engine
   if (dma_engine)
     dma_vm_id = dma_engine->register_virtual_initiator(this);
@@ -34,6 +37,8 @@ ExtensionLayer::ExtensionLayer(sc_module_name name,
   SC_METHOD(clk_posedge);
   sensitive << clk.pos();
 }
+
+ExtensionLayer::~ExtensionLayer() { delete[] irq_sockets; }
 
 void ExtensionLayer::clk_posedge() {
   // Clear AXI states
@@ -124,6 +129,7 @@ tlm_sync_enum ExtensionLayer::nb_transport_bw_up(ARM::AXI::Payload &payload,
   case ARM::AXI::B_VALID:
     up.b_in.push_back({&payload, ARM::AXI::B_VALID, AxiDir::DOWNSTREAM,
                        payload_beat_index[&payload]});
+    send_irq(payload, 0);
     break;
   case ARM::AXI::AR_READY:
     up.ar_state = up.ar_state == REQ ? ACK : CLEAR;
@@ -344,4 +350,32 @@ void ExtensionLayer::process_out_queues(AxiSide &side, bool use_dma) {
   send_fw(side.ar_state, side.ar_out);
   send_bw(side.b_state, side.b_out);
   send_bw(side.r_state, side.r_out);
+}
+
+void ExtensionLayer::send_irq(ARM::AXI::Payload &payload, unsigned core_id) {
+  // Don't send an IRQ if:
+  // - there are no cores
+  // - DMA engine is used. It will send it.
+  if (num_cores == 0 || dma_vm_id != -1)
+    return;
+
+  UserSignals user = UserSignals::decode(payload.user);
+
+  auto *irq = new IRQ();
+  irq->request_id = payload.id;
+  irq->target_module = user.dst_module;
+  irq->target_address = payload.get_address();
+  irq->burst = payload.get_burst();
+  irq->data_length = payload.get_data_length();
+
+  tlm_phase phase = BEGIN_REQ;
+  sc_time delay = SC_ZERO_TIME;
+
+  tlm_generic_payload *transaction = new tlm_generic_payload;
+  transaction->set_data_ptr(reinterpret_cast<unsigned char *>(irq));
+  transaction->set_data_length(sizeof(IRQ));
+  transaction->set_command(TLM_WRITE_COMMAND);
+
+  SC_LOG_DEBUG(this, "Sending IRQ to Core" << core_id);
+  irq_sockets[core_id]->nb_transport_fw(*transaction, phase, delay);
 }
