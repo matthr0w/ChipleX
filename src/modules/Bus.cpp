@@ -1,5 +1,7 @@
 #include "modules/Bus.h"
 
+#include <unordered_set>
+
 #include "logging.h"
 
 #include "common/Router.h"
@@ -56,13 +58,18 @@ Bus::Bus(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
 Bus::~Bus() { delete[] beat_data; }
 
 void Bus::clk_posedge() {
+  std::unordered_set<unsigned> sub_used;
+  std::unordered_set<unsigned> mgr_used;
+
   for (auto &[key, conn] : connections) {
     auto [mgr_id, sub_id] = key;
     std::string util_name =
         "utilization_" + mgr_names[mgr_id] + "<->" + sub_names[sub_id];
 
     // Forward direction
-    if (!conn.fw_q.empty()) {
+    if (!conn.fw_q.empty() && !sub_used.count(sub_id)) {
+      sub_used.insert(sub_id);
+
       auto request = conn.fw_q.front();
       conn.fw_q.pop_front();
 
@@ -71,7 +78,7 @@ void Bus::clk_posedge() {
                                                          request.phase);
 
       if (reply == TLM_UPDATED)
-        conn.next_bw_q.push_back({request.payload, request.phase});
+        conn.bw_q.push_back({request.payload, request.phase});
 
       stats.mark_active_cycle(this->name(), util_name);
 
@@ -81,7 +88,9 @@ void Bus::clk_posedge() {
     }
 
     // Backward direction
-    if (!conn.bw_q.empty()) {
+    if (!conn.bw_q.empty() && !mgr_used.count(mgr_id)) {
+      mgr_used.insert(mgr_id);
+
       auto request = conn.bw_q.front();
       conn.bw_q.pop_front();
 
@@ -90,26 +99,13 @@ void Bus::clk_posedge() {
           managers[mgr_id]->nb_transport_bw(*request.payload, request.phase);
 
       if (reply == TLM_UPDATED)
-        conn.next_fw_q.push_back({request.payload, request.phase});
+        conn.fw_q.push_back({request.payload, request.phase});
 
       stats.mark_active_cycle(this->name(), util_name);
 
       print_payload(*request.payload, prev_phase, request.phase);
 
       stats.end_cycle(this->name(), util_name);
-    }
-  }
-
-  for (auto &[key, conn] : connections) {
-    if (!conn.next_fw_q.empty()) {
-      conn.fw_q.insert(conn.fw_q.end(), conn.next_fw_q.begin(),
-                       conn.next_fw_q.end());
-      conn.next_fw_q.clear();
-    }
-    if (!conn.next_bw_q.empty()) {
-      conn.bw_q.insert(conn.bw_q.end(), conn.next_bw_q.begin(),
-                       conn.next_bw_q.end());
-      conn.next_bw_q.clear();
     }
   }
 }

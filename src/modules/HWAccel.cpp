@@ -181,7 +181,7 @@ tlm_sync_enum HWAccel::nb_transport_fw(ARM::AXI::Payload &payload,
     phase = ARM::AXI::W_READY;
     return TLM_UPDATED;
   case ARM::AXI::B_READY:
-    b_state = b_state == REQ ? ACK : CLEAR;
+    b_state = b_state == REQ ? ACK : b_state;
     return TLM_ACCEPTED;
   default:
     SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase");
@@ -195,7 +195,7 @@ tlm_sync_enum HWAccel::nb_transport_bw_axi(ARM::AXI::Payload &payload,
 
   switch (phase) {
   case ARM::AXI::AR_READY:
-    ar_state = ar_state == REQ ? ACK : CLEAR;
+    ar_state = ar_state == REQ ? ACK : ar_state;
     return TLM_ACCEPTED;
   case ARM::AXI::R_VALID:
     phase = ARM::AXI::R_READY;
@@ -211,10 +211,10 @@ tlm_sync_enum HWAccel::nb_transport_bw_axi(ARM::AXI::Payload &payload,
     phase = ARM::AXI::R_READY;
     return TLM_UPDATED;
   case ARM::AXI::AW_READY:
-    aw_state = aw_state == REQ ? ACK : CLEAR;
+    aw_state = aw_state == REQ ? ACK : aw_state;
     return TLM_ACCEPTED;
   case ARM::AXI::W_READY:
-    w_state = w_state == REQ ? ACK : CLEAR;
+    w_state = w_state == REQ ? ACK : w_state;
     return TLM_ACCEPTED;
   case ARM::AXI::B_VALID:
     request_handles.erase(&payload);
