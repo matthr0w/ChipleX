@@ -122,9 +122,9 @@ private:
       bool ddr = config["ddr"].as<bool>();
       unsigned num_lanes = config["num_lanes"].as<unsigned>();
 
+      unsigned bits_per_cycle = num_lanes * (ddr ? 2 : 1);
       unsigned num_cycles =
-          ((module.axi_width + num_lanes - 1) / num_lanes + (ddr ? 1 : 0)) /
-          (ddr ? 2 : 1);
+          (module.axi_width + bits_per_cycle - 1) / bits_per_cycle;
 
       beat_transfer_delay = num_cycles * clk_cycle;
 
