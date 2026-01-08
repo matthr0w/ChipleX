@@ -169,7 +169,8 @@ void SPI::clk_posedge() {
         ARM::AXI::Phase phase = ARM::AXI::R_READY;
         axi_out.nb_transport_fw(*payload, phase);
       }
-    } else if (!b_queue_in.empty()) {
+    }
+    if (!b_queue_in.empty() && !active_transfer) {
       ARM::AXI::Payload *payload = b_queue_in.front();
       // Source becomes destination
       UserSignals user = UserSignals::decode(payload->user);
@@ -184,7 +185,8 @@ void SPI::clk_posedge() {
         ARM::AXI::Phase phase = ARM::AXI::B_READY;
         axi_out.nb_transport_fw(*payload, phase);
       }
-    } else if (!aw_queue_in.empty()) {
+    }
+    if (!aw_queue_in.empty() && !active_transfer) {
       ARM::AXI::Payload *payload = aw_queue_in.front();
       active_transfer = send_link_request(*payload);
       if (active_transfer) {
@@ -193,7 +195,8 @@ void SPI::clk_posedge() {
         ARM::AXI::Phase phase = ARM::AXI::AW_READY;
         axi_in.nb_transport_bw(*payload, phase);
       }
-    } else if (!ar_queue_in.empty()) {
+    }
+    if (!ar_queue_in.empty() && !active_transfer) {
       ARM::AXI::Payload *payload = ar_queue_in.front();
       active_transfer = send_link_request(*payload);
       if (active_transfer) {
@@ -202,7 +205,8 @@ void SPI::clk_posedge() {
         ARM::AXI::Phase phase = ARM::AXI::AR_READY;
         axi_in.nb_transport_bw(*payload, phase);
       }
-    } else if (!w_queue_in.empty()) {
+    }
+    if (!w_queue_in.empty() && !active_transfer) {
       ARM::AXI::Payload *payload = w_queue_in.front();
       active_transfer = send_link_request(*payload);
       if (active_transfer) {
