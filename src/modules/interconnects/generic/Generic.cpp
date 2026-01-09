@@ -518,8 +518,7 @@ void GenericInterconnect::handle_axi_channels() {
     b_queue_in.pop_front();
 
     // We also send the IRQ here
-    if (dma_vm_id == -1)
-      send_irq(*payload);
+    send_irq(*payload);
 
     // Set channel information
     axi_transaction.channel = B;
@@ -622,9 +621,11 @@ void GenericInterconnect::send_axi_beats() {
     aw_state = REQ;
     ARM::AXI::Payload *payload = aw_queue_out.front();
     ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
-    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_AW)) {
+    bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 &&
+                   dma_vm_id != -1;
+    if (use_dma && !send_dma_request(*payload, phase)) {
       aw_state = CLEAR;
-    } else if (dma_vm_id == -1) {
+    } else if (!use_dma) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
@@ -641,9 +642,11 @@ void GenericInterconnect::send_axi_beats() {
     ARM::AXI::Phase phase = (w_beat_count + 1 == payload->get_beat_count())
                                 ? ARM::AXI::W_VALID_LAST
                                 : ARM::AXI::W_VALID;
-    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_W)) {
+    bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 &&
+                   dma_vm_id != -1;
+    if (use_dma && !send_dma_request(*payload, phase)) {
       w_state = CLEAR;
-    } else if (dma_vm_id == -1) {
+    } else if (!use_dma) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
@@ -671,9 +674,11 @@ void GenericInterconnect::send_axi_beats() {
     ar_state = REQ;
     ARM::AXI::Payload *payload = ar_queue_out.front();
     ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
-    if (dma_vm_id != -1 && !send_dma_request(*payload, ARM::AXI4::CHANNEL_AR)) {
+    bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 &&
+                   dma_vm_id != -1;
+    if (use_dma && !send_dma_request(*payload, phase)) {
       ar_state = CLEAR;
-    } else if (dma_vm_id == -1) {
+    } else if (!use_dma) {
       tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
       if (reply == TLM_UPDATED) {
         SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,
@@ -907,7 +912,12 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
 }
 
 void GenericInterconnect::send_irq(ARM::AXI::Payload &payload) {
-  if (num_cores == 0)
+  // Don't send an IRQ if:
+  // - there are no cores
+  // - DMA engine is used. It will send it.
+  // - extension layer is used. It will send it.
+  if (num_cores == 0 || dma_vm_id != -1 ||
+      UserSignals::decode(payload.user).extension_mask != 0)
     return;
 
   UserSignals user = UserSignals::decode(payload.user);

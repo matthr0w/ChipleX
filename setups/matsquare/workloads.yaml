@@ -1,4 +1,4 @@
 workloads:
-  matmultiply:
+  matmul:
     cycles_count: 46
     source_hash: 8f7cb436ec20c40b3ddb56ad05a90f6aaeb463d1

@@ -7,6 +7,7 @@ struct UserSignals {
   uint8_t dst_chiplet = 0;
   uint8_t src_module = 0;
   uint8_t dst_module = 0;
+  uint8_t extension_mask = 0;
   bool fixed_address = true;
 
   uint64_t encode() const {
@@ -16,7 +17,8 @@ struct UserSignals {
     val |= (static_cast<uint64_t>(dst_chiplet) & 0xFF) << 40;
     val |= (static_cast<uint64_t>(src_module) & 0xFF) << 32;
     val |= (static_cast<uint64_t>(dst_module) & 0xFF) << 24;
-    val |= (static_cast<uint64_t>(fixed_address) & 0x1) << 23;
+    val |= (static_cast<uint64_t>(extension_mask) & 0xFF) << 16;
+    val |= (static_cast<uint64_t>(fixed_address) & 0x1) << 15;
     return val;
   }
 
@@ -27,7 +29,8 @@ struct UserSignals {
     user.dst_chiplet = static_cast<uint8_t>((val >> 40) & 0xFF);
     user.src_module = static_cast<uint8_t>((val >> 32) & 0xFF);
     user.dst_module = static_cast<uint8_t>((val >> 24) & 0xFF);
-    user.fixed_address = ((val >> 23) & 0x1) != 0;
+    user.extension_mask = static_cast<uint8_t>((val >> 16) & 0xFF);
+    user.fixed_address = ((val >> 15) & 0x1) != 0;
     return user;
   }
 };

@@ -245,7 +245,6 @@ class CycleEstimator:
 
         # Split into code regions
         section_pattern = re.compile(r'\[\d+\] Code Region - (\S+)', re.MULTILINE)
-        throughput_pattern = re.compile(r'Block RThroughput:\s*([\d\.]+)')
         resource_pattern = re.compile(r'Resource pressure per iteration:\s*\n(?:\[.*?\]\s*\n)([0-9\.\s\-]+)', re.MULTILINE)
 
         for section_match in section_pattern.finditer(output):
@@ -256,12 +255,7 @@ class CycleEstimator:
             end_idx = next_section.start() if next_section else len(output)
             section_text = output[start_idx:end_idx]
 
-            # Parse Block RThroughput
-            throughput_match = throughput_pattern.search(section_text)
-            if not throughput_match:
-                log_error(f"No Block RThroughput found for {section_name} in LLVM-MCA output.")
-            rthroughput = float(throughput_match.group(1))
-
+            # Parse resource pressure
             resource_match = resource_pattern.search(section_text)
             if not resource_match:
                 log_error(f"No resource pressure info found for {section_name} in LLVM-MCA output.")
@@ -286,15 +280,29 @@ class CycleEstimator:
             if params["speedup_factor"]:
                 speedup_factor = params["speedup_factor"]
             else:
-                speedup_factor = rthroughput / (
-                    + (p0 / params["num_alus"])
-                    + p1
-                    + (p2 / params["num_fpalus"])
-                    + (p3 / params["num_fpdivsqrt"])
-                    + (p4 / params["num_idiv"])
-                    + (p5 / params["num_imul"])
-                    + p6
+                # Baseline bottleneck (one unit per resource)
+                baseline_bottleneck = max(
+                    p0,  # Integer ALU
+                    p1,  # Branch
+                    p2,  # FP ALU
+                    p3,  # FP Div/Sqrt
+                    p4,  # Integer Div
+                    p5,  # Integer Mul
+                    p6,  # Memory
                 )
+
+                # New bottleneck after scaling resources
+                new_bottleneck = max(
+                    p0 / params["num_alus"],
+                    p1,  # unchanged
+                    p2 / params["num_fpalus"],
+                    p3 / params["num_fpdivsqrt"],
+                    p4 / params["num_idiv"],
+                    p5 / params["num_imul"],
+                    p6,  # unchanged
+                )
+
+                speedup_factor = baseline_bottleneck / new_bottleneck
 
             speedup_sections[section_name] = speedup_factor
 

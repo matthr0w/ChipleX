@@ -890,6 +890,11 @@ public:
     void write_out_beat_strobe(unsigned beat_index, uint8_t* strobe) const;
 
     /**
+     * Modify the data for one beat of a transaction.
+     */
+    void modify_beat(unsigned beat_index, const uint8_t* data, const uint8_t* strobe = nullptr);   
+
+    /**
      * Copy in the data for one beat of a snoop transaction from an array
      * get_beat_data_length() bytes long.
      */

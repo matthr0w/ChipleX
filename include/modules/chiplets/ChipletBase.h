@@ -5,6 +5,7 @@
 #include "modules/chiplets/ChipletDescriptor.h"
 #include "modules/chiplets/ChipletRegistry.h"
 #include "modules/chiplets/Clocks.h"
+#include "modules/extensions/ExtensionLayer.h"
 #include "modules/interconnects/InterconnectBase.h"
 #include "setup/Types.h"
 
@@ -38,6 +39,7 @@ public:
 
   virtual ~ChipletBase() = default;
 
+  std::map<std::string, std::unique_ptr<ExtensionLayer>> ext_layers;
   std::map<std::string, std::unique_ptr<InterconnectBase>> interconnects;
 
 protected:

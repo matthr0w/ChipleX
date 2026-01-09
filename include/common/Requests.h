@@ -4,6 +4,7 @@
 #include <systemc>
 
 #include "ARM/TLM/arm_axi4.h"
+#include "modules/extensions/ExtensionIDs.h"
 
 using namespace sc_core;
 
@@ -19,6 +20,7 @@ struct AxiRequest {
 
   bool is_volatile = false;
   ARM::AXI::Burst burst = ARM::AXI::BURST_INCR;
+  std::optional<SmartExtension::ID> ext_id;
 
   AxiRequest(uint32_t id, unsigned char *buf, unsigned len)
       : request_id(id), data(buf), data_length(len) {}
@@ -51,6 +53,11 @@ struct AxiRequest {
     is_volatile = val;
     return *this;
   }
+
+  AxiRequest &use_ext(SmartExtension::ID id) {
+    ext_id = id;
+    return *this;
+  }
 };
 
 struct AxiDMARequest {
@@ -68,6 +75,7 @@ struct AxiDMARequest {
 
   bool is_volatile = false;
   ARM::AXI::Burst burst = ARM::AXI::BURST_INCR;
+  std::optional<SmartExtension::ID> ext_id;
 
   AxiDMARequest(uint32_t id, unsigned len) : request_id(id), data_length(len) {}
 
@@ -115,6 +123,11 @@ struct AxiDMARequest {
 
   AxiDMARequest &skip_cache(bool val = true) {
     is_volatile = val;
+    return *this;
+  }
+
+  AxiDMARequest &use_ext(SmartExtension::ID id) {
+    ext_id = id;
     return *this;
   }
 };
