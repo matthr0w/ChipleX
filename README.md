@@ -96,6 +96,6 @@ make run ARGS="--help"
 
 - [x] Advanced estimation of processing time and acceleration speedup factor
 
-- [ ] Smart Chiplet Interconnect features
+- [x] Smart Chiplet Interconnect features
 
-- [ ] Additional applications using multi-core and accelerators
+- [x] Additional applications using multi-core and accelerators
