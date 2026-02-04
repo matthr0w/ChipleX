@@ -256,10 +256,8 @@ void Memory::deallocate_dynamic_address(uint32_t address, unsigned length) {
     --it;
   }
 
-  if (it == allocated_ranges.end() || address < it->first) {
-    SC_LOG_WARN(this, "Tried to deallocate an unallocated address range");
+  if (it == allocated_ranges.end() || address < it->first)
     return;
-  }
 
   uint32_t start = it->first;
   uint32_t end = start + it->second;
