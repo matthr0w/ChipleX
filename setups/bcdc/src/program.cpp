@@ -3,9 +3,10 @@
 #include "modules/Core.h"
 #include "modules/HWAccel.h"
 
-unsigned total_runs = 3;
-unsigned total_bytes = 512;
-unsigned chunk_bytes = 64;
+const size_t TOTAL_RUNS = 3;
+const size_t TOTAL_SIZE = 512;
+const size_t CHUNK_SIZE = 64;
+
 sc_event next_run;
 
 ModuleCodeMap *get_program_code() {
@@ -14,12 +15,12 @@ ModuleCodeMap *get_program_code() {
        {CPUCode{.main =
                     [](Core &core) {
                       static unsigned run = 0;
-                      while (run < total_runs) {
+                      while (run < TOTAL_RUNS) {
                         // For now, we just send dummy data
-                        size_t num_bytes = total_bytes;
+                        size_t num_bytes = TOTAL_SIZE;
                         uint8_t *data = new uint8_t[num_bytes];
                         for (size_t i = 0; i < num_bytes; ++i)
-                          data[i] = static_cast<uint8_t>(1);
+                          data[i] = static_cast<uint8_t>(0);
 
                         auto request =
                             AxiRequest(1,
@@ -40,7 +41,7 @@ ModuleCodeMap *get_program_code() {
                 .irq =
                     [](Core &core, const IRQ &irq) {
                       static unsigned run = 0;
-                      size_t num_bytes = total_bytes;
+                      size_t num_bytes = TOTAL_SIZE;
                       uint8_t *data = new uint8_t[num_bytes];
 
                       auto request =
@@ -67,7 +68,7 @@ ModuleCodeMap *get_program_code() {
                       next_run.notify(SC_ZERO_TIME);
                       run++;
 
-                      if (run == 3)
+                      if (run == TOTAL_RUNS)
                         sc_stop();
                     }}}},
       {{"chiplet1", "core0"},
@@ -101,8 +102,8 @@ ModuleCodeMap *get_program_code() {
                       case 6:
                         // Fetch next data and repeat until whole data
                         // processed
-                        if (total_buffer_size >= chunk_bytes) {
-                          offset += chunk_bytes;
+                        if (total_buffer_size >= CHUNK_SIZE) {
+                          offset += CHUNK_SIZE;
                           op = Operation::FetchFromMem;
                         }
                         break;
@@ -115,39 +116,49 @@ ModuleCodeMap *get_program_code() {
                         SC_LOG_INFO(&core, "FetchFromMem");
                         // Path 2: mem_chiplet1 -> SRAM with DMA Engine
                         auto dma =
-                            AxiDMARequest(2, chunk_bytes) // chunk by chunk
+                            AxiDMARequest(2, CHUNK_SIZE) // chunk by chunk
                                 .from_via("mem_chiplet1", "memory",
                                           0x0 + offset, "spi")
                                 .to("chiplet1", "memory", 0x0);
                         core.dma(dma);
-                        total_buffer_size -= chunk_bytes;
+                        total_buffer_size -= CHUNK_SIZE;
                       } break;
                       case Operation::TransToDFP: {
                         SC_LOG_INFO(&core, "TransToDFP");
                         // Path 3: SRAM -> DFP with DMA Engine
-                        auto dma = AxiDMARequest(3, chunk_bytes)
+                        auto dma = AxiDMARequest(3, CHUNK_SIZE)
                                        .from("chiplet1", "memory", 0x0)
                                        .to("chiplet1", "dfp", 0x0);
                         core.dma(dma);
                       } break;
                       case Operation::TransToAILC: {
                         SC_LOG_INFO(&core, "TransToAILC");
-                        // Path 5: SRAM -> AI-LC with DMA Engine
+                        // Path 5: SRAM -> GeMM with DMA Engine
                         auto dma =
-                            AxiDMARequest(5, chunk_bytes)
+                            AxiDMARequest(5, CHUNK_SIZE)
                                 .from("chiplet1", "memory", irq.target_address)
-                                .to("chiplet1", "ai-lc", 0x0);
+                                .to("chiplet1", "gemm", 0x0);
                         core.dma(dma);
                       } break;
                       default:
                         break;
                       }
                     }}}},
-      {{"chiplet1", "dfp"}, // DFP
+      {{"chiplet1", "dfp"},
        {AccelCode{.main =
                       [](HWAccel &accel, uint8_t *data, size_t size) {
-                        for (size_t i = 0; i < size; ++i)
-                          data[i] += 1;
+                        int accel_id = 0;
+                        for (size_t i = accel_id; i < size; i += 4) {
+                          int x = data[i];
+                          // Heavy ALU chain
+                          int a = x * 3 + 1;
+                          int b = x * 7 - 5;
+                          int c = x ^ (x << 1);
+                          int d = x ^ (x >> 2);
+                          data[i] = a + b + c + d;
+                        }
+
+                        accel.wait_cycles("matalu");
 
                         // Path 4: DFP -> SRAM with DMA Engine
                         auto request = AxiRequest(
@@ -155,18 +166,28 @@ ModuleCodeMap *get_program_code() {
                         auto handle = accel.write(request);
                         handle->wait();
                       }}}},
-      {{"chiplet1", "ai-lc"}, // AI-LC
+      {{"chiplet1", "gemm"},
        {AccelCode{.main =
                       [](HWAccel &accel, uint8_t *data, size_t size) {
-                        for (size_t i = 0; i < size; ++i)
-                          data[i] += 1;
+                        int accel_id = 1;
+                        for (size_t i = accel_id; i < size; i += 4) {
+                          int x = data[i];
+                          // Heavy ALU chain
+                          int a = x * 3 + 1;
+                          int b = x * 7 - 5;
+                          int c = x ^ (x << 1);
+                          int d = x ^ (x >> 2);
+                          data[i] = a + b + c + d;
+                        }
 
-                        // Path 6: AI-LC -> Chiplet 2 AI-LC with DMA Engine
+                        accel.wait_cycles("matalu");
+
+                        // Path 6: GeMM -> Chiplet 2 GeMM with DMA Engine
                         auto request =
                             AxiRequest(6,
                                        reinterpret_cast<unsigned char *>(data),
                                        size)
-                                .to_via("chiplet2", "ai-lc", "pulp");
+                                .to_via("chiplet2", "gemm", "pulp");
                         auto handle = accel.write(request);
                         handle->wait();
                       }}}},
@@ -182,7 +203,7 @@ ModuleCodeMap *get_program_code() {
                       };
                       Operation op = Operation::None;
 
-                      static unsigned total_buffer_size = total_bytes;
+                      static unsigned total_buffer_size = TOTAL_SIZE;
                       static unsigned offset = 0;
 
                       switch (irq.request_id) {
@@ -218,29 +239,39 @@ ModuleCodeMap *get_program_code() {
                                 .to_via("mem_chiplet2", "memory", 0x0 + offset,
                                         "spi");
                         core.dma(dma);
-                        total_buffer_size -= chunk_bytes;
-                        offset += chunk_bytes;
+                        total_buffer_size -= CHUNK_SIZE;
+                        offset += CHUNK_SIZE;
                       } break;
                       case Operation::FetchFromMem: {
                         SC_LOG_INFO(&core, "FetchFromMem");
                         // Path 11: mem_chiplet2 -> FPGA
                         auto dma =
-                            AxiDMARequest(11, total_bytes)
+                            AxiDMARequest(11, TOTAL_SIZE)
                                 .from_via("mem_chiplet2", "memory", 0x0, "spi")
                                 .to_via("fpga", "memory", 0x0, "pulp");
                         core.dma(dma);
-                        total_buffer_size = total_bytes;
+                        total_buffer_size = TOTAL_SIZE;
                         offset = 0;
                       } break;
                       default:
                         break;
                       }
                     }}}},
-      {{"chiplet2", "dfp"}, // DFP
+      {{"chiplet2", "dfp"},
        {AccelCode{.main =
                       [](HWAccel &accel, uint8_t *data, size_t size) {
-                        for (size_t i = 0; i < size; ++i)
-                          data[i] += 1;
+                        int accel_id = 3;
+                        for (size_t i = accel_id; i < size; i += 4) {
+                          int x = data[i];
+                          // Heavy ALU chain
+                          int a = x * 3 + 1;
+                          int b = x * 7 - 5;
+                          int c = x ^ (x << 1);
+                          int d = x ^ (x >> 2);
+                          data[i] = a + b + c + d;
+                        }
+
+                        accel.wait_cycles("matalu");
 
                         // Path 9: DFP -> SRAM with DMA Engine
                         auto request = AxiRequest(
@@ -248,12 +279,22 @@ ModuleCodeMap *get_program_code() {
                         auto handle = accel.write(request);
                         handle->wait();
                       }}}},
-      {{"chiplet2", "ai-lc"}, // AI-LC
+      {{"chiplet2", "gemm"},
        {AccelCode{.main = [](HWAccel &accel, uint8_t *data, size_t size) {
-         for (size_t i = 0; i < size; ++i)
-           data[i] += 1;
+         int accel_id = 2;
+         for (size_t i = accel_id; i < size; i += 4) {
+           int x = data[i];
+           // Heavy ALU chain
+           int a = x * 3 + 1;
+           int b = x * 7 - 5;
+           int c = x ^ (x << 1);
+           int d = x ^ (x >> 2);
+           data[i] = a + b + c + d;
+         }
 
-         // Path 7: AI-LC -> SRAM with DMA Engine
+         accel.wait_cycles("matalu");
+
+         // Path 7: GeMM -> SRAM with DMA Engine
          auto request =
              AxiRequest(7, reinterpret_cast<unsigned char *>(data), size);
          auto handle = accel.write(request);

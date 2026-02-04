@@ -9,9 +9,9 @@ chiplets:
     type: compute
     accelerators:
       - name: dfp
-        type: dfp
-      - name: ai-lc
-        type: ai-lc
+        type: generic
+      - name: gemm
+        type: generic
     interconnects:
       - name: pulp
         type: serial-link
@@ -28,9 +28,9 @@ chiplets:
     type: compute
     accelerators:
       - name: dfp
-        type: dfp
-      - name: ai-lc
-        type: ai-lc
+        type: generic
+      - name: gemm
+        type: generic
     interconnects:
       - name: pulp
         type: serial-link
