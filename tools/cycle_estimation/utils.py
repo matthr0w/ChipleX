@@ -51,11 +51,13 @@ def get_accel_params(setup: Setup, section_id: str):
         return {
             "accel_type": None,
             "speedup_factor": None,
-            "num_alus": 1,
-            "num_fpalus": 1,
+            "num_alu": 1,
+            "num_branch": 1,
+            "num_fpalu": 1,
             "num_fpdivsqrt": 1,
             "num_idiv": 1,
             "num_imul": 1,
+            "num_mem": 1
         }
 
     # Load system.yaml
@@ -85,11 +87,13 @@ def get_accel_params(setup: Setup, section_id: str):
         return {
             "accel_type": None,
             "speedup_factor": None,
-            "num_alus": 1,
-            "num_fpalus": 1,
+            "num_alu": 1,
+            "num_branch": 1,
+            "num_fpalu": 1,
             "num_fpdivsqrt": 1,
             "num_idiv": 1,
             "num_imul": 1,
+            "num_mem": 1
         }
 
     if len(found_types) > 1:
@@ -105,29 +109,35 @@ def get_accel_params(setup: Setup, section_id: str):
 
     # Extract parameters with defaults
     speedup_factor = accel_data.get("speedup_factor", None)
-    num_alus = accel_data.get("num_alus", 1)
-    num_fpalus = accel_data.get("num_fpalus", 1)
+    num_alu = accel_data.get("num_alu", 1)
+    num_branch = accel_data.get("num_branch", 1)
+    num_fpalu = accel_data.get("num_fpalu", 1)
     num_fpdivsqrt = accel_data.get("num_fpdivsqrt", 1)
     num_idiv = accel_data.get("num_idiv", 1)
     num_imul = accel_data.get("num_imul", 1)
+    num_mem = accel_data.get("num_mem", 1)
 
     # Warn if accelerator is useless
     if (
         speedup_factor is None
-        and num_alus == 1
-        and num_fpalus == 1
+        and num_alu == 1
+        and num_branch == 1
+        and num_fpalu == 1
         and num_fpdivsqrt == 1
         and num_idiv == 1
         and num_imul == 1
+        and num_mem == 1
     ):
         log_warn(f"Accelerator '{accel_type}' has no speedup factor and all unit counts = 1. This likely indicates a poorly configured accelerator.")
 
     return {
         "accel_type": accel_type,
         "speedup_factor": speedup_factor,
-        "num_alus": num_alus,
-        "num_fpalus": num_fpalus,
+        "num_alu": num_alu,
+        "num_branch": num_branch,
+        "num_fpalu": num_fpalu,
         "num_fpdivsqrt": num_fpdivsqrt,
         "num_idiv": num_idiv,
         "num_imul": num_imul,
+        "num_mem": num_mem
     }

@@ -2,7 +2,7 @@ from pathlib import Path
 
 # RISC-V Compiler
 RISCV_COMPILER = "riscv64-unknown-elf-gcc"
-RISCV_COMPILER_FLAGS = ["-lc", "-lstdc++", "-lsupc++"]
+RISCV_COMPILER_FLAGS = ["-O0", "-lc", "-lstdc++", "-lsupc++"]
 
 # LLVM-MCA
 LLVM_ANALYZER = "llvm-mca"

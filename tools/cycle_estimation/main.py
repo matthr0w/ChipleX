@@ -138,7 +138,7 @@ class CycleEstimator:
             # Cycle begin
             if BEGIN_CYCLE_ANNOT in line:
                 if cycle_open:
-                    log_error(f"{workload.source_path}: BEGIN_CYCLE_ANNOT on line {i} before previous CYCLE block closed.")
+                    log_error(f"{workload.source_path}: {BEGIN_CYCLE_ANNOT} on line {i} before previous CYCLE block closed.")
                 cycle_open = True
                 speedup_in_cycle = False
                 section_id += 1
@@ -148,7 +148,7 @@ class CycleEstimator:
             # Cycle end
             elif END_CYCLE_ANNOT in line:
                 if not cycle_open:
-                    log_error(f"{workload.source_path}: END_CYCLE_ANNOT on line {i} without matching BEGIN_CYCLE_ANNOT.")
+                    log_error(f"{workload.source_path}: {END_CYCLE_ANNOT} on line {i} without matching {BEGIN_CYCLE_ANNOT}.")
                 if speedup_open:
                     log_error(f"{workload.source_path}: CYCLE block closed on line {i} but SPEEDUP block still open.")
                 cycle_open = False
@@ -158,9 +158,9 @@ class CycleEstimator:
             # Speedup begin
             elif BEGIN_SPEEDUP_ANNOT in line:
                 if not cycle_open:
-                    log_error(f"{workload.source_path}: BEGIN_SPEEDUP_ANNOT on line {i} outside of CYCLE block.")
+                    log_error(f"{workload.source_path}: {BEGIN_SPEEDUP_ANNOT} on line {i} outside of CYCLE block.")
                 if speedup_open:
-                    log_error(f"{workload.source_path}: Nested BEGIN_SPEEDUP_ANNOT on line {i}.")
+                    log_error(f"{workload.source_path}: Nested {BEGIN_SPEEDUP_ANNOT} on line {i}.")
                 if speedup_in_cycle:
                     log_error(f"{workload.source_path}: Multiple SPEEDUP blocks in one CYCLE block on line {i}.")
                 speedup_open = True
@@ -169,7 +169,7 @@ class CycleEstimator:
             # Speedup end
             elif END_SPEEDUP_ANNOT in line:
                 if not speedup_open:
-                    log_error(f"{workload.source_path}: END_SPEEDUP_ANNOT on line {i} without matching BEGIN_SPEEDUP_ANNOT.")
+                    log_error(f"{workload.source_path}: {END_SPEEDUP_ANNOT} on line {i} without matching {BEGIN_SPEEDUP_ANNOT}.")
                 speedup_open = False
                 speedup_in_cycle = True
                 line = line.replace(END_SPEEDUP_ANNOT, f"END_SPEEDUP_MEASURE(SECTION{current_section_id})")
@@ -293,13 +293,13 @@ class CycleEstimator:
 
                 # New bottleneck after scaling resources
                 new_bottleneck = max(
-                    p0 / params["num_alus"],
-                    p1,  # unchanged
-                    p2 / params["num_fpalus"],
+                    p0 / params["num_alu"],
+                    p1 / params["num_branch"],
+                    p2 / params["num_fpalu"],
                     p3 / params["num_fpdivsqrt"],
                     p4 / params["num_idiv"],
                     p5 / params["num_imul"],
-                    p6,  # unchanged
+                    p6 / params["num_mem"],
                 )
 
                 speedup_factor = baseline_bottleneck / new_bottleneck
