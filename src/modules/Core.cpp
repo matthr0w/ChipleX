@@ -71,6 +71,22 @@ void Core::wait_cycles(const std::string &name) {
 }
 
 void Core::clk_posedge() {
+  // Notify requests
+  while (!request_notify_queue.empty()) {
+    ARM::AXI::Payload *payload = request_notify_queue.front();
+    request_notify_queue.pop_front();
+
+    std::shared_ptr<RequestHandle> h = request_handles.find(payload)->second;
+    request_handles.erase(payload);
+    h->notify(SC_ZERO_TIME);
+    stats.increment_counter(this->name(), "transaction_count");
+    stats.update_accum(this->name(), "transaction_total_latency_us",
+                       (sc_time_stamp() - h->time_stamp).to_seconds() * 1e6);
+    stats.update_minmax(this->name(), "transaction_latency_us",
+                        (sc_time_stamp() - h->time_stamp).to_seconds() * 1e6);
+  }
+
+  // AXI channel states
   if (aw_state == ACK) {
     aw_state = CLEAR;
     w_queue.push_back(aw_queue.front());
@@ -163,8 +179,6 @@ tlm_sync_enum Core::nb_transport_fw_irq(int id,
 
 tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
                                     ARM::AXI::Phase &phase) {
-  std::shared_ptr<RequestHandle> h = request_handles.find(&payload)->second;
-
   switch (phase) {
   case ARM::AXI::AR_READY:
     ar_state = ar_state == REQ ? ACK : CLEAR;
@@ -173,13 +187,7 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
     phase = ARM::AXI::R_READY;
     return TLM_UPDATED;
   case ARM::AXI::R_VALID_LAST:
-    request_handles.erase(&payload);
-    h->notify(SC_ZERO_TIME);
-    stats.increment_counter(this->name(), "transaction_count");
-    stats.update_accum(this->name(), "transaction_total_latency_us",
-                       (sc_time_stamp() - h->time_stamp).to_seconds() * 1e6);
-    stats.update_minmax(this->name(), "transaction_latency_us",
-                        (sc_time_stamp() - h->time_stamp).to_seconds() * 1e6);
+    request_notify_queue.push_back(&payload);
     phase = ARM::AXI::R_READY;
     return TLM_UPDATED;
   case ARM::AXI::AW_READY:
@@ -189,13 +197,7 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload,
     w_state = w_state == REQ ? ACK : CLEAR;
     return TLM_ACCEPTED;
   case ARM::AXI::B_VALID:
-    request_handles.erase(&payload);
-    h->notify(SC_ZERO_TIME);
-    stats.increment_counter(this->name(), "transaction_count");
-    stats.update_accum(this->name(), "transaction_total_latency_us",
-                       (sc_time_stamp() - h->time_stamp).to_seconds() * 1e6);
-    stats.update_minmax(this->name(), "transaction_latency_us",
-                        (sc_time_stamp() - h->time_stamp).to_seconds() * 1e6);
+    request_notify_queue.push_back(&payload);
     phase = ARM::AXI::B_READY;
     return TLM_UPDATED;
   default:

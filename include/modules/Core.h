@@ -105,6 +105,7 @@ private:
 
   std::unordered_map<ARM::AXI::Payload *, std::shared_ptr<RequestHandle>>
       request_handles;
+  std::deque<ARM::AXI::Payload *> request_notify_queue;
 
   std::deque<tlm_generic_payload *> irq_queue;
 
