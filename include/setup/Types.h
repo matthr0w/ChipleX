@@ -57,7 +57,7 @@ struct ChipletType {
 };
 
 struct AccelType {
-  enum class Type { Unknown, DFP, AILC };
+  enum class Type { Unknown, Generic, DFP };
 
   Type value;
 
@@ -66,20 +66,20 @@ struct AccelType {
 
   std::string to_string() const {
     switch (value) {
+    case Type::Generic:
+      return "generic";
     case Type::DFP:
       return "dfp";
-    case Type::AILC:
-      return "ai-lc";
     default:
       return "unknown";
     }
   }
 
   static Type parse(const std::string &str) {
+    if (str == "generic")
+      return Type::Generic;
     if (str == "dfp")
       return Type::DFP;
-    if (str == "ai-lc")
-      return Type::AILC;
     return Type::Unknown;
   }
 };

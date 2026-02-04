@@ -1,0 +1,8 @@
+clk_cycle: 1 # ns
+num_alu: 8
+num_branch: 1
+num_fpalu: 1
+num_fpdivsqrt: 1
+num_idiv: 1
+num_imul: 1
+num_mem: 1
