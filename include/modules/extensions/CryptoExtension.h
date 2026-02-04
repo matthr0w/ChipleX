@@ -6,6 +6,8 @@
 #include "modules/extensions/ExtensionBase.h"
 #include "modules/extensions/ExtensionIDs.h"
 
+const size_t FIFO_SIZE = 16;
+
 class CryptoExtension : public ExtensionBase {
 public:
   explicit CryptoExtension(unsigned axi_width)
@@ -13,25 +15,39 @@ public:
 
   uint8_t id() const override { return SmartExtension::CRYPTO; }
 
-  bool can_accept() const override { return fifo.size() < 16; }
+  bool can_accept() const override { return fifo_in.size() < FIFO_SIZE; }
 
-  void push(const AxiBeat &beat) override {
-    if (beat.dir == AxiDir::DOWNSTREAM) {
-      encrypt(beat);
-    } else {
-      decrypt(beat);
-    }
-    fifo.push_back(beat);
-  }
+  void push(const AxiBeat &beat) override { fifo_in.push_back(beat); }
 
-  bool has_output() const override { return !fifo.empty(); }
+  bool has_output() const override { return !fifo_out.empty(); }
 
-  AxiBeat peek() const override { return fifo.front(); }
+  AxiBeat peek() const override { return fifo_out.front(); }
 
   AxiBeat pop() override {
-    AxiBeat beat = fifo.front();
-    fifo.pop_front();
+    AxiBeat beat = fifo_out.front();
+    fifo_out.pop_front();
     return beat;
+  }
+
+  void tick() override {
+    // Phase 1: commit pipeline register to output
+    if (pipe_valid) {
+      fifo_out.push_back(pipe_reg);
+      pipe_valid = false;
+    }
+
+    // Phase 2: accept & process one beat into pipeline register
+    if (!pipe_valid && !fifo_in.empty()) {
+      pipe_reg = fifo_in.front();
+      fifo_in.pop_front();
+
+      if (pipe_reg.dir == AxiDir::DOWNSTREAM)
+        encrypt(pipe_reg);
+      else
+        decrypt(pipe_reg);
+
+      pipe_valid = true;
+    }
   }
 
 private:
@@ -91,6 +107,13 @@ private:
     std::cout << std::dec << "\n";
   }
 
-  std::deque<AxiBeat> fifo;
+  // FIFOs
+  std::deque<AxiBeat> fifo_in;
+  std::deque<AxiBeat> fifo_out;
+
+  // Pipeline
+  AxiBeat pipe_reg;
+  bool pipe_valid = false;
+
   const unsigned beat_bytes;
 };
