@@ -4,6 +4,8 @@
 
 #include "modules/chiplets/ChipletRegistry.h"
 
+// TODO: Fix zero and one store buffer entries behavior
+
 Cache::Cache(sc_module_name name, unsigned chiplet_id,
              ChipletConfig chiplet_config)
     : sc_module(name), chiplet_id(chiplet_id),
@@ -260,7 +262,7 @@ void Cache::clk_negedge() {
   }
 
   // W channel
-  if ((w_state == CLEAR || w_state == REQ) && !w_queue_out.empty()) {
+  if (w_state == CLEAR && !w_queue_out.empty()) {
     ARM::AXI::Payload *payload = w_queue_out.front();
     ARM::AXI::Phase phase = (w_beat_count_out + 1 == payload->get_beat_count())
                                 ? ARM::AXI::W_VALID_LAST
