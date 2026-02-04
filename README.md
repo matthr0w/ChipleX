@@ -94,4 +94,4 @@ make run ARGS="--help"
 
 ## TODO
 
-- [] Documentation
+- [ ] Documentation
