@@ -31,15 +31,21 @@ struct AxiBeat {
 struct AxiTrans_t {
   ARM::AXI::Payload *w_payload = nullptr;
   ARM::AXI::Payload *r_payload = nullptr;
-  ARM::AXI::Phase req_phase = ARM::AXI4::PHASE_UNINITIALIZED;
-  ARM::AXI::Phase rsp_phase = ARM::AXI4::PHASE_UNINITIALIZED;
-  bool rsp_sent = false;
+  ARM::AXI::Phase w_req_phase = ARM::AXI4::PHASE_UNINITIALIZED;
+  ARM::AXI::Phase w_rsp_phase = ARM::AXI4::PHASE_UNINITIALIZED;
+  ARM::AXI::Phase r_req_phase = ARM::AXI4::PHASE_UNINITIALIZED;
+  ARM::AXI::Phase r_rsp_phase = ARM::AXI4::PHASE_UNINITIALIZED;
+  bool w_rsp_sent = false;
+  bool r_rsp_sent = false;
   unsigned w_beat_count = 0;
   unsigned r_beat_count = 0;
 
   bool operator==(const AxiTrans_t &other) const {
     return w_payload == other.w_payload && r_payload == other.r_payload &&
-           req_phase == other.req_phase && rsp_phase == other.rsp_phase &&
+           w_req_phase == other.w_req_phase &&
+           w_rsp_phase == other.w_rsp_phase &&
+           r_req_phase == other.r_req_phase &&
+           r_rsp_phase == other.r_rsp_phase &&
            w_beat_count == other.w_beat_count &&
            r_beat_count == other.r_beat_count;
   }

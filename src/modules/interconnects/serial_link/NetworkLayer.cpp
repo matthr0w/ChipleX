@@ -210,10 +210,10 @@ void SLNetworkLayer::committer_thread() {
     switch (committer_state_q.read()) {
     case Committer::Idle: {
       std::vector<std::function<void()>> grants;
-      if (is_aw_valid(axi_in_trans.req_phase)) {
+      if (is_aw_valid(axi_in_trans.w_req_phase)) {
         grants.push_back([&]() { aw_gnt.write(true); });
       }
-      if (is_ar_valid(axi_in_trans.req_phase)) {
+      if (is_ar_valid(axi_in_trans.r_req_phase)) {
         grants.push_back([&]() { ar_gnt.write(true); });
       }
 
@@ -223,37 +223,37 @@ void SLNetworkLayer::committer_thread() {
       }
 
       if (!ar_gnt.read() && !aw_gnt.read() &&
-          (is_r_valid(axi_out_trans.req_phase) ||
-           is_r_valid_last(axi_out_trans.req_phase))) {
+          (is_r_valid(axi_out_trans.r_req_phase) ||
+           is_r_valid_last(axi_out_trans.r_req_phase))) {
         r_gnt.write(true);
       } else if (!ar_gnt.read() && !aw_gnt.read() &&
-                 is_b_valid(axi_out_trans.req_phase)) {
+                 is_b_valid(axi_out_trans.w_req_phase)) {
         b_gnt.write(true);
       }
 
-      if (aw_gnt.read() && is_aw_ready(axi_in_trans.rsp_phase)) {
+      if (aw_gnt.read() && is_aw_ready(axi_in_trans.w_rsp_phase)) {
         committer_state_d.write(Committer::AwPend);
       }
-      if (ar_gnt.read() && is_ar_ready(axi_in_trans.rsp_phase)) {
+      if (ar_gnt.read() && is_ar_ready(axi_in_trans.r_rsp_phase)) {
         committer_state_d.write(Committer::ArPend);
       }
       break;
     }
 
     case Committer::AwPend: {
-      if (is_ar_valid(axi_in_trans.req_phase)) {
+      if (is_ar_valid(axi_in_trans.r_req_phase)) {
         ar_gnt.write(true);
       } else {
         std::vector<std::function<void()>> grants;
-        if (is_w_valid(axi_in_trans.req_phase) ||
-            is_w_valid_last(axi_in_trans.req_phase)) {
+        if (is_w_valid(axi_in_trans.w_req_phase) ||
+            is_w_valid_last(axi_in_trans.w_req_phase)) {
           grants.push_back([&]() { w_gnt.write(true); });
         }
-        if (is_r_valid(axi_out_trans.req_phase) ||
-            is_r_valid_last(axi_out_trans.req_phase)) {
+        if (is_r_valid(axi_out_trans.r_req_phase) ||
+            is_r_valid_last(axi_out_trans.r_req_phase)) {
           grants.push_back([&]() { r_gnt.write(true); });
         }
-        if (is_b_valid(axi_out_trans.req_phase)) {
+        if (is_b_valid(axi_out_trans.w_req_phase)) {
           grants.push_back([&]() { b_gnt.write(true); });
         }
 
@@ -263,33 +263,35 @@ void SLNetworkLayer::committer_thread() {
         }
       }
 
-      if (is_w_valid_last(axi_in_trans.req_phase) &&
-          is_w_ready(axi_in_trans.rsp_phase)) {
-        committer_state_d.write((ar_gnt && is_ar_ready(axi_in_trans.req_phase))
-                                    ? Committer::ArPend
-                                    : Committer::Idle);
+      if (is_w_valid_last(axi_in_trans.w_req_phase) &&
+          is_w_ready(axi_in_trans.w_rsp_phase)) {
+        committer_state_d.write(
+            (ar_gnt && is_ar_ready(axi_in_trans.r_req_phase))
+                ? Committer::ArPend
+                : Committer::Idle);
       } else {
-        committer_state_d.write((ar_gnt && is_ar_ready(axi_in_trans.req_phase))
-                                    ? Committer::ArAwPend
-                                    : Committer::AwPend);
+        committer_state_d.write(
+            (ar_gnt && is_ar_ready(axi_in_trans.r_req_phase))
+                ? Committer::ArAwPend
+                : Committer::AwPend);
       }
       break;
     }
 
     case Committer::ArPend: {
-      if (is_aw_valid(axi_in_trans.req_phase)) {
+      if (is_aw_valid(axi_in_trans.w_req_phase)) {
         aw_gnt.write(true);
       } else {
         std::vector<std::function<void()>> grants;
-        if (is_r_valid(axi_out_trans.req_phase) ||
-            is_r_valid_last(axi_out_trans.req_phase)) {
+        if (is_r_valid(axi_out_trans.r_req_phase) ||
+            is_r_valid_last(axi_out_trans.r_req_phase)) {
           grants.push_back([&]() { r_gnt.write(true); });
         }
-        if (is_w_valid(axi_in_trans.req_phase) ||
-            is_w_valid_last(axi_in_trans.req_phase)) {
+        if (is_w_valid(axi_in_trans.w_req_phase) ||
+            is_w_valid_last(axi_in_trans.w_req_phase)) {
           grants.push_back([&]() { w_gnt.write(true); });
         }
-        if (is_b_valid(axi_out_trans.req_phase)) {
+        if (is_b_valid(axi_out_trans.w_req_phase)) {
           grants.push_back([&]() { b_gnt.write(true); });
         }
 
@@ -299,30 +301,32 @@ void SLNetworkLayer::committer_thread() {
         }
       }
 
-      if (is_r_valid_last(axi_in_trans.req_phase) &&
-          is_r_ready(axi_in_trans.rsp_phase)) {
-        committer_state_d.write((aw_gnt && is_aw_ready(axi_in_trans.req_phase))
-                                    ? Committer::AwPend
-                                    : Committer::Idle);
+      if (is_r_valid_last(axi_in_trans.r_req_phase) &&
+          is_r_ready(axi_in_trans.r_rsp_phase)) {
+        committer_state_d.write(
+            (aw_gnt && is_aw_ready(axi_in_trans.w_req_phase))
+                ? Committer::AwPend
+                : Committer::Idle);
       } else {
-        committer_state_d.write((aw_gnt && is_aw_ready(axi_in_trans.req_phase))
-                                    ? Committer::ArAwPend
-                                    : Committer::ArPend);
+        committer_state_d.write(
+            (aw_gnt && is_aw_ready(axi_in_trans.w_req_phase))
+                ? Committer::ArAwPend
+                : Committer::ArPend);
       }
       break;
     }
 
     case Committer::ArAwPend: {
       std::vector<std::function<void()>> grants;
-      if (is_w_valid(axi_in_trans.req_phase) ||
-          is_w_valid_last(axi_in_trans.req_phase)) {
+      if (is_w_valid(axi_in_trans.w_req_phase) ||
+          is_w_valid_last(axi_in_trans.w_req_phase)) {
         grants.push_back([&]() { w_gnt.write(true); });
       }
-      if (is_r_valid(axi_out_trans.req_phase) ||
-          is_r_valid_last(axi_out_trans.req_phase)) {
+      if (is_r_valid(axi_out_trans.r_req_phase) ||
+          is_r_valid_last(axi_out_trans.r_req_phase)) {
         grants.push_back([&]() { r_gnt.write(true); });
       }
-      if (is_b_valid(axi_out_trans.req_phase)) {
+      if (is_b_valid(axi_out_trans.w_req_phase)) {
         grants.push_back([&]() { b_gnt.write(true); });
       }
 
@@ -331,10 +335,10 @@ void SLNetworkLayer::committer_thread() {
         grants[idx]();
       }
 
-      bool aw_pend_idle = is_r_valid_last(axi_in_trans.req_phase) &&
-                          is_r_ready(axi_in_trans.rsp_phase);
-      bool ar_pend_idle = is_w_valid_last(axi_in_trans.req_phase) &&
-                          is_w_ready(axi_in_trans.rsp_phase);
+      bool aw_pend_idle = is_r_valid_last(axi_in_trans.r_req_phase) &&
+                          is_r_ready(axi_in_trans.r_rsp_phase);
+      bool ar_pend_idle = is_w_valid_last(axi_in_trans.w_req_phase) &&
+                          is_w_ready(axi_in_trans.w_rsp_phase);
 
       if (aw_pend_idle & ar_pend_idle) {
         committer_state_d.write(Committer::Idle);
@@ -463,22 +467,23 @@ void SLNetworkLayer::sender_thread() {
 
     if (axis_reg_valid_in.read() && axis_reg_ready_in.read()) {
       if (aw_gnt.read()) {
-        axi_in_trans.rsp_phase = ARM::AXI::AW_READY;
+        axi_in_trans.w_rsp_phase = ARM::AXI::AW_READY;
       }
       if (w_gnt.read()) {
-        axi_in_trans.rsp_phase = ARM::AXI::W_READY;
+        axi_in_trans.w_rsp_phase = ARM::AXI::W_READY;
       }
       if (b_gnt.read()) {
-        axi_out_trans.rsp_phase = ARM::AXI::B_READY;
+        axi_out_trans.w_rsp_phase = ARM::AXI::B_READY;
       }
       if (ar_gnt.read()) {
-        axi_in_trans.rsp_phase = ARM::AXI::AR_READY;
+        axi_in_trans.r_rsp_phase = ARM::AXI::AR_READY;
       }
       if (r_gnt.read()) {
-        axi_out_trans.rsp_phase = ARM::AXI::R_READY;
+        axi_out_trans.r_rsp_phase = ARM::AXI::R_READY;
       }
     } else {
-      axi_in_trans.rsp_phase = ARM::AXI::PHASE_UNINITIALIZED;
+      axi_in_trans.w_rsp_phase = ARM::AXI::PHASE_UNINITIALIZED;
+      axi_in_trans.r_rsp_phase = ARM::AXI::PHASE_UNINITIALIZED;
     }
 
     axi_in_sig.write(axi_in_trans);
@@ -498,11 +503,15 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
       return TLM_ACCEPTED;
     axi_in_trans.w_payload = &payload;
     axi_in_trans.w_beat_count = 0;
+    axi_in_trans.w_req_phase = phase;
+    axi_in_trans.w_rsp_sent = false;
     pending_write_responses.push_back(&payload);
     payload.ref();
     break;
   case ARM::AXI::W_VALID:
   case ARM::AXI::W_VALID_LAST:
+    axi_in_trans.w_req_phase = phase;
+    axi_in_trans.w_rsp_sent = false;
     break;
   case ARM::AXI::B_READY:
     b_state = b_state == REQ ? ACK : CLEAR;
@@ -513,6 +522,8 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
       return TLM_ACCEPTED;
     axi_in_trans.r_payload = &payload;
     axi_in_trans.r_beat_count = 0;
+    axi_in_trans.r_req_phase = phase;
+    axi_in_trans.r_rsp_sent = false;
     pending_read_responses.push_back(&payload);
     payload.ref();
     break;
@@ -524,9 +535,6 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload,
                            << get_axi_phase_string(phase));
   }
 
-  axi_in_trans.req_phase = phase;
-  axi_in_trans.rsp_sent = false;
-
   update_event.notify(SC_ZERO_TIME);
   return TLM_ACCEPTED;
 }
@@ -536,26 +544,29 @@ tlm_sync_enum SLNetworkLayer::nb_transport_bw(ARM::AXI::Payload &payload,
   switch (phase) {
   case ARM::AXI::AR_READY:
     ar_state = ar_state == REQ ? ACK : CLEAR;
+    axi_out_trans.r_req_phase = phase;
     break;
   case ARM::AXI::R_VALID:
   case ARM::AXI::R_VALID_LAST:
-    axi_out_trans.rsp_sent = false;
+    axi_out_trans.r_rsp_sent = false;
+    axi_out_trans.r_req_phase = phase;
     break;
   case ARM::AXI::AW_READY:
     aw_state = aw_state == REQ ? ACK : CLEAR;
+    axi_out_trans.w_req_phase = phase;
     break;
   case ARM::AXI::W_READY:
     w_state = w_state == REQ ? ACK : CLEAR;
+    axi_out_trans.w_req_phase = phase;
     break;
   case ARM::AXI::B_VALID:
-    axi_out_trans.rsp_sent = false;
+    axi_out_trans.w_rsp_sent = false;
+    axi_out_trans.w_req_phase = phase;
     break;
   default:
     SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
                            << get_axi_phase_string(phase));
   }
-
-  axi_out_trans.req_phase = phase;
 
   return TLM_ACCEPTED;
 }
@@ -673,42 +684,52 @@ void SLNetworkLayer::send_axi_beats() {
 }
 
 void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
-  if (trans.rsp_sent)
-    return;
+  auto send = [&](bool &rsp_sent, ARM::AXI::Phase &rsp_phase,
+                  ARM::AXI::Phase &req_phase) {
+    if (rsp_sent)
+      return;
 
-  ARM::AXI::Phase phase = trans.rsp_phase;
-  ARM::AXI::Payload *payload = nullptr;
+    ARM::AXI::Phase phase = rsp_phase;
+    ARM::AXI::Payload *payload = nullptr;
 
-  if (is_aw_ready(phase)) {
-    payload = trans.w_payload;
-  } else if (is_w_ready(phase)) {
-    payload = trans.w_payload;
-    trans.w_beat_count =
-        (trans.w_beat_count + 1 == trans.w_payload->get_beat_count())
-            ? 0
-            : trans.w_beat_count + 1;
-  } else if (is_master && is_b_ready(phase)) {
-    payload = trans.w_payload;
-    // We also send the IRQ here
-    send_irq(*payload);
-  } else if (is_ar_ready(phase)) {
-    payload = trans.r_payload;
-  } else if (is_master && is_r_ready(phase)) {
-    payload = trans.r_payload;
-    trans.r_beat_count =
-        (trans.r_beat_count + 1 == trans.r_payload->get_beat_count())
-            ? 0
-            : trans.r_beat_count + 1;
-  }
+    if (is_aw_ready(phase)) {
+      payload = trans.w_payload;
+    } else if (is_w_ready(phase)) {
+      payload = trans.w_payload;
+      trans.w_beat_count =
+          (trans.w_beat_count + 1 == trans.w_payload->get_beat_count())
+              ? 0
+              : trans.w_beat_count + 1;
+    } else if (is_master && is_b_ready(phase)) {
+      payload = trans.w_payload;
+      // We also send the IRQ here
+      send_irq(*payload);
+    } else if (is_ar_ready(phase)) {
+      payload = trans.r_payload;
+    } else if (is_master && is_r_ready(phase)) {
+      payload = trans.r_payload;
+      trans.r_beat_count =
+          (trans.r_beat_count + 1 == trans.r_payload->get_beat_count())
+              ? 0
+              : trans.r_beat_count + 1;
+    }
 
-  if (payload) {
+    if (!payload)
+      return;
+
     if (is_master)
       axi_out.nb_transport_fw(*payload, phase);
     else
       axi_in.nb_transport_bw(*payload, phase);
-    trans.rsp_sent = true;
-    trans.req_phase = ARM::AXI4::PHASE_UNINITIALIZED;
-  }
+
+    rsp_sent = true;
+    req_phase = ARM::AXI4::PHASE_UNINITIALIZED;
+  };
+
+  // Advance write side
+  send(trans.w_rsp_sent, trans.w_rsp_phase, trans.w_req_phase);
+  // Advance read side
+  send(trans.r_rsp_sent, trans.r_rsp_phase, trans.r_req_phase);
 }
 
 void SLNetworkLayer::send_irq(ARM::AXI::Payload &payload) {
