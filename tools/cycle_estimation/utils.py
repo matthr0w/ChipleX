@@ -30,7 +30,7 @@ def write_yaml(path: Path, data: dict):
         yaml.safe_dump(data, f, sort_keys=False)
 
 def get_accel_params(setup: Setup, section_id: str):
-    # TODO: Use overridden params from system.yaml 
+    # TODO: Use overwritten params from system.yaml 
     code = setup.program_file.read_text(encoding="utf-8")
     module_defs = set()
 
