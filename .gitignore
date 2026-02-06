@@ -10,3 +10,7 @@ build/
 
 # VSCode directory
 .vscode/
+
+# Binaries
+*.so
+sim
