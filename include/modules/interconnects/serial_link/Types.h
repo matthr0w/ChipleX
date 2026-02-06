@@ -69,16 +69,19 @@ enum Tag_e : uint8_t {
 };
 
 struct Payload_t {
+  // AXI beat
   AxiBeat axi_ch;
+
+  // Header
   Tag_e hdr = TagIdle;
   int credit = 0;
   uint32_t id = 0;
   uint64_t user = 0;
 
-  // Only for flow control
+  // Flow control
   int link_id = 0;
 
-  // Only for AXI TLM payload construction
+  // AXI TLM payload construction
   uint8_t len = 0;
   ARM::AXI::Burst burst = 0;
 
@@ -89,3 +92,26 @@ struct Payload_t {
 
   Payload_t(size_t axi_width) : axi_ch((axi_width + 7) / 8) {}
 };
+
+// Safe struct for memcpy
+struct PayloadWire_t {
+  // AXI beat
+  uint32_t addr;
+  // AXI data bytes are appended
+
+  // Header
+  Tag_e hdr;
+  int credit;
+  uint32_t id;
+  uint64_t user;
+
+  // Flow control
+  int link_id;
+
+  // AXI TLM payload construction
+  uint8_t len;
+  ARM::AXI::Burst burst;
+};
+
+constexpr size_t AXI_ADDR_WIRE_OFFSET = 0;
+constexpr size_t AXI_DATA_WIRE_OFFSET = sizeof(PayloadWire_t);

@@ -127,14 +127,49 @@ tlm_sync_enum SLDataLinkLayer::nb_transport_bw(int id,
 // -------------------------------------------------------
 void SLDataLinkLayer::pack_payload(tlm_generic_payload &transaction,
                                    Payload_t &payload) {
-  auto *buf = new unsigned char[sizeof(Payload_t)];
-  std::memcpy(buf, &payload, sizeof(Payload_t));
+  const size_t axi_bytes = (axi_width + 7) / 8;
+  const size_t size = sizeof(PayloadWire_t) + axi_bytes;
+  auto *buf = new unsigned char[size];
+  auto *wire = reinterpret_cast<PayloadWire_t *>(buf);
+  auto *axi_data = buf + sizeof(PayloadWire_t);
+
+  // Payload
+  wire->addr = payload.axi_ch.addr;
+  wire->hdr = payload.hdr;
+  wire->credit = payload.credit;
+  wire->id = payload.id;
+  wire->user = payload.user;
+  wire->link_id = payload.link_id;
+  wire->len = payload.len;
+  wire->burst = payload.burst;
+
+  // Append AXI data bytes
+  std::memcpy(axi_data, payload.axi_ch.data.data(), payload.axi_ch.data.size());
+
   transaction.set_data_ptr(buf);
-  transaction.set_data_length(sizeof(Payload_t));
+  transaction.set_data_length(size);
 }
 
 Payload_t *SLDataLinkLayer::unpack_payload(tlm_generic_payload &transaction) {
+  const size_t axi_bytes = (axi_width + 7) / 8;
+  auto *wire =
+      reinterpret_cast<const PayloadWire_t *>(transaction.get_data_ptr());
+  auto *axi_data =
+      reinterpret_cast<const uint8_t *>(wire) + sizeof(PayloadWire_t);
   auto *payload = new Payload_t(axi_width);
-  std::memcpy(payload, transaction.get_data_ptr(), sizeof(Payload_t));
+
+  // Payload
+  payload->axi_ch.addr = wire->addr;
+  payload->hdr = wire->hdr;
+  payload->credit = wire->credit;
+  payload->id = wire->id;
+  payload->user = wire->user;
+  payload->link_id = wire->link_id;
+  payload->len = wire->len;
+  payload->burst = wire->burst;
+
+  // Copy AXI data bytes
+  std::memcpy(payload->axi_ch.data.data(), axi_data, axi_bytes);
+
   return payload;
 }
