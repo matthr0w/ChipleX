@@ -13,7 +13,8 @@ struct ImageHeader {
   uint32_t channels;
 };
 
-static unsigned TOTAL_PASSES = 10;
+const std::string RESOLUTION = "32x24"; // see data directory
+const unsigned TOTAL_PASSES = 10;
 
 ModuleCodeMap *get_program_code() {
   static ModuleCodeMap code = {
@@ -27,7 +28,9 @@ ModuleCodeMap *get_program_code() {
 
                  int width = 0, height = 0, channels = 0;
                  unsigned char *input_image =
-                     stbi_load("setups/duckcam/data/duckiebot_input.jpg",
+                     stbi_load(("setups/duckcam/data/duckiebot_input_" +
+                                RESOLUTION + ".jpg")
+                                   .c_str(),
                                &width, &height, &channels, 3);
 
                  const size_t header_size = sizeof(ImageHeader);
@@ -79,23 +82,35 @@ ModuleCodeMap *get_program_code() {
            // Interrupt handler: Saves processed images
            .irq =
                [](Core &core, const IRQ &irq) {
+                 const unsigned interrupt_num =
+                     RESOLUTION == "160x120" ? 13 : 1;
+                 static unsigned interrupt_count = 0;
+                 static uint32_t base_addr = 0;
+                 static size_t total_len = 0;
+
+                 if (interrupt_count == 0)
+                   base_addr = irq.target_address;
+
+                 total_len += irq.data_length;
+                 ++interrupt_count;
+
+                 if (interrupt_count != interrupt_num)
+                   return;
+
                  static unsigned pass = 0;
 
-                 uint32_t addr = irq.target_address;
-                 size_t length = irq.data_length;
-
-                 auto *read_buf = new unsigned char[length];
+                 auto *read_buf = new unsigned char[total_len];
 
                  size_t max_size = core.MAX_INCR_BURST_SIZE;
                  size_t offset = 0;
                  int req_id = 0;
                  std::shared_ptr<RequestHandle> handle = nullptr;
 
-                 while (offset < length) {
-                   size_t chunk_size = std::min(length - offset, max_size);
+                 while (offset < total_len) {
+                   size_t chunk_size = std::min(total_len - offset, max_size);
 
                    auto reqr = AxiRequest(req_id, read_buf + offset, chunk_size)
-                                   .set_addr(addr + offset)
+                                   .set_addr(base_addr + offset)
                                    .skip_cache();
 
                    handle = core.read(reqr);
@@ -117,6 +132,10 @@ ModuleCodeMap *get_program_code() {
                  delete[] read_buf;
                  ++pass;
 
+                 interrupt_count = 0;
+                 base_addr = 0;
+                 total_len = 0;
+
                  if (pass == TOTAL_PASSES)
                    sc_stop();
                }}}},
@@ -125,6 +144,8 @@ ModuleCodeMap *get_program_code() {
        {CPUCode{.main = [](Core &core) {},
                 .irq =
                     [](Core &core, const IRQ &irq) {
+                      const unsigned interrupt_num =
+                          RESOLUTION == "160x120" ? 57 : 3;
                       static unsigned interrupt_count = 0;
                       static uint32_t base_addr = 0;
                       static size_t total_len = 0;
@@ -135,7 +156,7 @@ ModuleCodeMap *get_program_code() {
                       total_len += irq.data_length;
                       ++interrupt_count;
 
-                      if (interrupt_count != 3)
+                      if (interrupt_count != interrupt_num)
                         return;
 
                       auto *read_buf = new unsigned char[total_len];
@@ -163,7 +184,7 @@ ModuleCodeMap *get_program_code() {
                       const size_t header_size = sizeof(ImageHeader);
                       auto *header = reinterpret_cast<ImageHeader *>(read_buf);
 
-                      const int crop_margin = 12;
+                      const int crop_margin = RESOLUTION == "160x120" ? 40 : 12;
                       uint32_t new_width = header->width;
                       uint32_t new_height = header->height - crop_margin;
                       uint32_t channels = header->channels;
@@ -217,6 +238,8 @@ ModuleCodeMap *get_program_code() {
        {CPUCode{.main = [](Core &core) {},
                 .irq =
                     [](Core &core, const IRQ &irq) {
+                      const unsigned interrupt_num =
+                          RESOLUTION == "160x120" ? 38 : 2;
                       static unsigned interrupt_count = 0;
                       static uint32_t base_addr = 0;
                       static size_t total_len = 0;
@@ -227,7 +250,7 @@ ModuleCodeMap *get_program_code() {
                       total_len += irq.data_length;
                       ++interrupt_count;
 
-                      if (interrupt_count != 2)
+                      if (interrupt_count != interrupt_num)
                         return;
 
                       auto *read_buf = new unsigned char[total_len];
