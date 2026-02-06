@@ -98,11 +98,6 @@ private:
   // -------------------------------------------------------
   // Delay Model
   // -------------------------------------------------------
-  struct Transfer {
-    sc_time delay;
-    bool success;
-  };
-
   struct DelayModel {
   private:
     const SPI &module;
@@ -110,7 +105,7 @@ private:
   public:
     DelayModel(const SPI &m) : module(m) {}
 
-    Transfer transfer_delay(int id, tlm_generic_payload &transaction) const {
+    sc_time transfer_delay(int id, tlm_generic_payload &transaction) const {
       ConnectionConfig connection = module.connections[id];
       YAML::Node config = connection.node;
 
@@ -142,11 +137,15 @@ private:
       bool transfer_successful =
           (bit_error_dist(bit_error_gen) >= prob_bad_transfer);
 
-      if (!transfer_successful)
-        SC_LOG_ERROR(&module, "Transfer failed");
+      if (!transfer_successful) {
+        SC_LOG_WARN(&module, "Transmission error detected: flit corrupted and "
+                             "payload invalidated.");
+        // Drop flit by zeroing AXI beat bytes
+        // TODO: SPI needs a rewrite to allow correct data zeroing here
+      }
 
       SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
-      return {delay, transfer_successful};
+      return delay;
     }
   };
 

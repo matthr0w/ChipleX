@@ -352,20 +352,16 @@ GenericInterconnect::nb_transport_fw_phy(int id,
     if (rx_ptrs[id] + flit_size > rx_buffers[id].size())
       return TLM_ACCEPTED; // Backpressure
 
-    Transfer transfer = delays.transfer_delay(id, transaction);
-    delay += transfer.delay;
+    delay += delays.transfer_delay(id, transaction);
 
-    // Drop bad transfers
-    if (transfer.success) {
-      sc_spawn([this, id, &transaction, delay]() {
-        stats.set_active(this->name());
-        wait(delay);
-        stats.set_idle(this->name());
-        stats.increment_counter(this->name(), "transmission_count_in_link" +
-                                                  std::to_string(id));
-        phy_queue.push_back({id, &transaction});
-      });
-    }
+    sc_spawn([this, id, &transaction, delay]() {
+      stats.set_active(this->name());
+      wait(delay);
+      stats.set_idle(this->name());
+      stats.increment_counter(this->name(), "transmission_count_in_link" +
+                                                std::to_string(id));
+      phy_queue.push_back({id, &transaction});
+    });
 
     phase = END_REQ;
     return TLM_UPDATED;

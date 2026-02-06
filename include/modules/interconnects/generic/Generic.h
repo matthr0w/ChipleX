@@ -127,11 +127,6 @@ private:
   // -------------------------------------------------------
   // Delay Model
   // -------------------------------------------------------
-  struct Transfer {
-    sc_time delay;
-    bool success;
-  };
-
   struct DelayModel {
   private:
     const GenericInterconnect &module;
@@ -139,7 +134,7 @@ private:
   public:
     DelayModel(const GenericInterconnect &m) : module(m) {}
 
-    Transfer transfer_delay(int id, tlm_generic_payload &transaction) const {
+    sc_time transfer_delay(int id, tlm_generic_payload &transaction) const {
       ConnectionConfig connection = module.connections[id];
       YAML::Node config = connection.node;
 
@@ -183,9 +178,6 @@ private:
           break;
         }
 
-        SC_LOG_ERROR(&module,
-                     "Bit error on attempt " + std::to_string(attempt + 1));
-
         switch (module.interconnect_type.value) {
         case InterconnectType::Type::PCIe:
           // FEC penalty
@@ -201,11 +193,17 @@ private:
         }
       }
 
-      if (!transfer_successful)
-        SC_LOG_ERROR(&module, "Transfer failed");
+      if (!transfer_successful) {
+        SC_LOG_WARN(&module, "Transmission error detected: flit corrupted and "
+                             "payload invalidated.");
+        unsigned char *data = transaction.get_data_ptr();
+        size_t offset = module.overhead_size + Flit::header_size();
+        // Drop flit by zeroing AXI beat bytes
+        std::memset(data + offset, 0x00, module.flit_data_bytes);
+      }
 
       SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
-      return {delay, transfer_successful};
+      return delay;
     }
   };
 

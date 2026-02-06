@@ -44,11 +44,6 @@ private:
   // -------------------------------------------------------
   // Delay Model
   // -------------------------------------------------------
-  struct Transfer {
-    sc_time delay;
-    bool success;
-  };
-
   struct DelayModel {
   private:
     const SLChannelAllocater &module;
@@ -56,7 +51,7 @@ private:
   public:
     DelayModel(const SLChannelAllocater &m) : module(m) {}
 
-    Transfer transfer_delay(int id, tlm_generic_payload &transaction) const {
+    sc_time transfer_delay(int id, tlm_generic_payload &transaction) const {
       ConnectionConfig connection = module.connections[id];
       YAML::Node config = connection.node;
 
@@ -89,11 +84,17 @@ private:
       bool transfer_successful =
           (bit_error_dist(bit_error_gen) >= prob_bad_transfer);
 
-      if (!transfer_successful)
-        SC_LOG_ERROR(&module, "Transfer failed");
+      if (!transfer_successful) {
+        SC_LOG_WARN(&module, "Transmission error detected: flit corrupted and "
+                             "payload invalidated.");
+        unsigned char *data = transaction.get_data_ptr();
+        // Drop flit by zeroing AXI beat bytes
+        *reinterpret_cast<uint32_t *>(data + AXI_ADDR_WIRE_OFFSET) = 0;
+        std::memset(data + AXI_DATA_WIRE_OFFSET, 0, (module.axi_width + 7) / 8);
+      }
 
       SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
-      return {delay, transfer_successful};
+      return delay;
     }
   };
 

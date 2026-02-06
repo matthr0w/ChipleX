@@ -5,8 +5,7 @@ SLChannelAllocater::SLChannelAllocater(sc_module_name name, unsigned link_id,
                                        unsigned num_links, unsigned num_cores,
                                        unsigned axi_width)
     : sc_module(name), link_id(link_id),
-      connections(interconnect_config.connections),
-      axi_width(axi_width) {
+      connections(interconnect_config.connections), axi_width(axi_width) {
   data_in_tsocket.register_nb_transport_fw(
       this, &SLChannelAllocater::nb_transport_fw_data_in, 0);
   data_in_isocket.register_nb_transport_bw(
@@ -24,8 +23,7 @@ tlm_sync_enum
 SLChannelAllocater::nb_transport_fw_data_in(int id,
                                             tlm_generic_payload &transaction,
                                             tlm_phase &phase, sc_time &delay) {
-  Transfer transfer = delays.transfer_delay(link_id, transaction);
-  delay += transfer.delay;
+  delay += delays.transfer_delay(link_id, transaction);
   return data_in_isocket->nb_transport_fw(transaction, phase, delay);
 }
 

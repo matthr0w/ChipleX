@@ -286,26 +286,22 @@ tlm_sync_enum SPI::nb_transport_fw_link(int id,
 
     active_links[id] = true;
 
-    Transfer transfer = delays.transfer_delay(id, transaction);
-    delay += transfer.delay;
+    delay += delays.transfer_delay(id, transaction);
 
-    // Drop bad transfers
-    if (transfer.success) {
-      sc_spawn([this, id, &transaction, delay]() {
-        stats.set_active(this->name());
-        wait(delay);
-        stats.set_idle(this->name());
-        stats.increment_counter(this->name(), "transmission_count_in_link" +
-                                                  std::to_string(id));
+    sc_spawn([this, id, &transaction, delay]() {
+      stats.set_active(this->name());
+      wait(delay);
+      stats.set_idle(this->name());
+      stats.increment_counter(this->name(), "transmission_count_in_link" +
+                                                std::to_string(id));
 
-        ARM::AXI::Payload *payload =
-            reinterpret_cast<ARM::AXI::Payload *>(transaction.get_data_ptr());
-        links_queue.push_back({id, payload});
-        tlm_phase resp_phase = BEGIN_RESP;
-        sc_time resp_delay = SC_ZERO_TIME;
-        links_in[id]->nb_transport_bw(transaction, resp_phase, resp_delay);
-      });
-    }
+      ARM::AXI::Payload *payload =
+          reinterpret_cast<ARM::AXI::Payload *>(transaction.get_data_ptr());
+      links_queue.push_back({id, payload});
+      tlm_phase resp_phase = BEGIN_RESP;
+      sc_time resp_delay = SC_ZERO_TIME;
+      links_in[id]->nb_transport_bw(transaction, resp_phase, resp_delay);
+    });
 
     phase = END_REQ;
     return TLM_UPDATED;
