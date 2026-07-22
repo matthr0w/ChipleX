@@ -10,7 +10,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
 
 # -----------------------
-# Build type (default to Release for an optimized simulator build)
+# Build type
 # -----------------------
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING
@@ -25,7 +25,6 @@ option(ENABLE_LTO "Enable link-time optimization (Release only)" OFF)
 option(ENABLE_ASAN "Build with AddressSanitizer + UBSan (verification builds)" OFF)
 
 if(ENABLE_ASAN)
-  # Sanitizer builds override optimization to keep stack traces usable.
   add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g)
   add_link_options(-fsanitize=address,undefined)
   message(STATUS "AddressSanitizer + UndefinedBehaviorSanitizer enabled")
@@ -35,9 +34,6 @@ if(ENABLE_LTO AND NOT ENABLE_ASAN)
   include(CheckIPOSupported)
   check_ipo_supported(RESULT ipo_supported OUTPUT ipo_output)
   if(ipo_supported)
-    # Applied per-target below. The dlopen'd setup libraries call back into the
-    # sim executable (see -rdynamic), so LTO must not internalize those
-    # cross-module symbols; keep this opt-in and verify setups still load.
     message(STATUS "LTO/IPO supported and enabled")
   else()
     message(WARNING "LTO requested but not supported: ${ipo_output}")
@@ -55,8 +51,7 @@ set(BUILD_SETUP "" CACHE STRING "Name of setup library to build (default: build 
 # -----------------------
 include(FetchContent)
 
-# SystemC: prefer the SYSTEMC_PATH env var (README/Makefile flow); otherwise
-# fall back to an installed SystemC CMake package (SystemCLanguage).
+# SystemC: from SYSTEMC_PATH, else an installed CMake package
 set(SYSTEMC_PATH $ENV{SYSTEMC_PATH})
 set(SYSTEMC_INCLUDE_DIR "")
 if(EXISTS "${SYSTEMC_PATH}/lib/libsystemc.so")
@@ -78,7 +73,7 @@ else()
   endif()
 endif()
 
-# YAML (pinned to a tagged release rather than a moving master branch)
+# yaml-cpp (pinned release)
 set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
