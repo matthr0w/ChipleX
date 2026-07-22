@@ -3,279 +3,268 @@
 #include "modules/Core.h"
 
 struct MatrixHeader {
-  uint32_t rows;
-  uint32_t cols;
+	uint32_t rows;
+	uint32_t cols;
 };
 
-void inline print_matrix(const int *matrix, int rows, int cols,
-                         const std::string &label = "") {
-  if (!label.empty()) {
-    std::cout << label << std::endl;
-  }
+void inline print_matrix(const int *matrix, int rows, int cols, const std::string &label = "") {
+	if (!label.empty()) {
+		std::cout << label << std::endl;
+	}
 
-  for (int i = 0; i < rows; ++i) {
-    std::cout << "[ ";
-    for (int j = 0; j < cols; ++j) {
-      std::cout << matrix[i * cols + j] << " ";
-    }
-    std::cout << "]" << std::endl;
-  }
+	for (int i = 0; i < rows; ++i) {
+		std::cout << "[ ";
+		for (int j = 0; j < cols; ++j) {
+			std::cout << matrix[i * cols + j] << " ";
+		}
+		std::cout << "]" << std::endl;
+	}
 }
 
 ModuleCodeMap *get_program_code() {
-  static ModuleCodeMap code = {
-      {{"fpga", "core0"},
-       {CPUCode{
-           .main =
-               [](Core &core) {
-                 const unsigned MATRIX_ROWS = 10;
-                 const unsigned MATRIX_COLS = 10;
+	static ModuleCodeMap code = {
+	    {{"fpga", "core0"},
+	     {CPUCode{
+	         .main =
+	             [](Core &core) {
+		             const unsigned MATRIX_ROWS = 10;
+		             const unsigned MATRIX_COLS = 10;
 
-                 size_t header_size = sizeof(MatrixHeader);
-                 size_t matrix_size = MATRIX_ROWS * MATRIX_COLS * sizeof(int);
-                 size_t buffer_size = header_size + matrix_size;
+		             size_t header_size = sizeof(MatrixHeader);
+		             size_t matrix_size = MATRIX_ROWS * MATRIX_COLS * sizeof(int);
+		             size_t buffer_size = header_size + matrix_size;
 
-                 auto *data = new unsigned char[buffer_size];
+		             auto *data = new unsigned char[buffer_size];
 
-                 MatrixHeader *header = reinterpret_cast<MatrixHeader *>(data);
-                 header->rows = MATRIX_ROWS;
-                 header->cols = MATRIX_COLS;
+		             MatrixHeader *header = reinterpret_cast<MatrixHeader *>(data);
+		             header->rows         = MATRIX_ROWS;
+		             header->cols         = MATRIX_COLS;
 
-                 int *matrix = reinterpret_cast<int *>(data + header_size);
-                 for (int i = 0; i < MATRIX_ROWS * MATRIX_COLS; ++i)
-                   matrix[i] = i + 1;
+		             int *matrix = reinterpret_cast<int *>(data + header_size);
+		             for (int i = 0; i < MATRIX_ROWS * MATRIX_COLS; ++i) {
+			             matrix[i] = i + 1;
+		             }
 
-                 print_matrix(matrix, MATRIX_ROWS, MATRIX_COLS, "Input");
+		             print_matrix(matrix, MATRIX_ROWS, MATRIX_COLS, "Input");
 
-                 auto reqw = AxiRequest(0, data, buffer_size)
-                                 .to_via("chiplet0", "memory", "interconnect")
-                                 .skip_cache();
+		             auto reqw =
+		                 AxiRequest(0, data, buffer_size).to_via("chiplet0", "memory", "interconnect").skip_cache();
 
-                 auto handle = core.write(reqw);
+		             auto handle = core.write(reqw);
 
-                 handle->wait();
+		             handle->wait();
 
-                 delete[] data;
-               },
-           .irq =
-               [](Core &core, const IRQ &irq) {
-                 auto addr = irq.target_address;
-                 auto len = irq.data_length;
+		             delete[] data;
+	             },
+	         .irq =
+	             [](Core &core, const IRQ &irq) {
+		             auto addr = irq.target_address;
+		             auto len  = irq.data_length;
 
-                 // Read from FPGA RAM
-                 auto *data = new unsigned char[len];
-                 auto reqr =
-                     AxiRequest(0, data, len).set_addr(addr).skip_cache();
-                 auto handle = core.read(reqr);
-                 handle->wait();
+		             // Read from FPGA RAM
+		             auto *data   = new unsigned char[len];
+		             auto  reqr   = AxiRequest(0, data, len).set_addr(addr).skip_cache();
+		             auto  handle = core.read(reqr);
+		             handle->wait();
 
-                 // Matrix header
-                 size_t header_size = sizeof(MatrixHeader);
-                 MatrixHeader *header = reinterpret_cast<MatrixHeader *>(data);
-                 uint32_t rows = header->rows;
-                 uint32_t cols = header->cols;
+		             // Matrix header
+		             size_t        header_size = sizeof(MatrixHeader);
+		             MatrixHeader *header      = reinterpret_cast<MatrixHeader *>(data);
+		             uint32_t      rows        = header->rows;
+		             uint32_t      cols        = header->cols;
 
-                 // Matrix
-                 int *matrix = reinterpret_cast<int *>(data + header_size);
+		             // Matrix
+		             int *matrix = reinterpret_cast<int *>(data + header_size);
 
-                 print_matrix(matrix, rows, cols, "Output");
+		             print_matrix(matrix, rows, cols, "Output");
 
-                 delete[] data;
+		             delete[] data;
 
-                 sc_stop();
-               }}}},
+		             sc_stop();
+	             }}}     },
 
-      {{"chiplet0", "core0"},
-       {CPUCode{
-           .main = [](Core &core) {},
-           .irq =
-               [](Core &core, const IRQ &irq) {
-                 auto addr = irq.target_address;
-                 auto len = irq.data_length;
+	    {{"chiplet0", "core0"},
+	     {CPUCode{.main = [](Core &core) {},
+	              .irq =
+	                  [](Core &core, const IRQ &irq) {
+		                  auto addr = irq.target_address;
+		                  auto len  = irq.data_length;
 
-                 // Read from Chiplet0 RAM
-                 auto *read_buf = new unsigned char[len];
-                 auto reqr =
-                     AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
-                 auto handle = core.read(reqr);
-                 handle->wait();
+		                  // Read from Chiplet0 RAM
+		                  auto *read_buf = new unsigned char[len];
+		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
+		                  auto  handle   = core.read(reqr);
+		                  handle->wait();
 
-                 // Matrix header
-                 size_t header_size = sizeof(MatrixHeader);
-                 MatrixHeader *header =
-                     reinterpret_cast<MatrixHeader *>(read_buf);
-                 uint32_t rows = header->rows;
-                 uint32_t cols = header->cols;
+		                  // Matrix header
+		                  size_t        header_size = sizeof(MatrixHeader);
+		                  MatrixHeader *header      = reinterpret_cast<MatrixHeader *>(read_buf);
+		                  uint32_t      rows        = header->rows;
+		                  uint32_t      cols        = header->cols;
 
-                 // Matrix
-                 int *matrix = reinterpret_cast<int *>(read_buf + header_size);
+		                  // Matrix
+		                  int *matrix = reinterpret_cast<int *>(read_buf + header_size);
 
-                 // Add +1
-                 for (int i = 0; i < rows * cols; ++i)
-                   matrix[i] += 1;
+		                  // Add +1
+		                  for (int i = 0; i < rows * cols; ++i) {
+			                  matrix[i] += 1;
+		                  }
 
-                 core.wait_cycles("add");
+		                  core.wait_cycles("add");
 
-                 print_matrix(matrix, rows, cols, "Add");
+		                  print_matrix(matrix, rows, cols, "Add");
 
-                 // Write to Chiplet2 RAM
-                 auto *write_buf = new unsigned char[len];
-                 memcpy(write_buf, read_buf, len);
+		                  // Write to Chiplet2 RAM
+		                  auto *write_buf = new unsigned char[len];
+		                  memcpy(write_buf, read_buf, len);
 
-                 auto reqw = AxiRequest(0, write_buf, len)
-                                 .to_via("chiplet1", "memory", "interconnect")
-                                 .skip_cache();
-                 handle = core.write(reqw);
-                 handle->wait();
+		                  auto reqw =
+		                      AxiRequest(0, write_buf, len).to_via("chiplet1", "memory", "interconnect").skip_cache();
+		                  handle = core.write(reqw);
+		                  handle->wait();
 
-                 delete[] read_buf;
-                 delete[] write_buf;
-               }}}},
+		                  delete[] read_buf;
+		                  delete[] write_buf;
+	                  }}}},
 
-      {{"chiplet1", "core0"},
-       {CPUCode{
-           .main = [](Core &core) {},
-           .irq =
-               [](Core &core, const IRQ &irq) {
-                 auto addr = irq.target_address;
-                 auto len = irq.data_length;
+	    {{"chiplet1", "core0"},
+	     {CPUCode{.main = [](Core &core) {},
+	              .irq =
+	                  [](Core &core, const IRQ &irq) {
+		                  auto addr = irq.target_address;
+		                  auto len  = irq.data_length;
 
-                 // Read from Chiplet1 RAM
-                 auto *read_buf = new unsigned char[len];
-                 auto reqr =
-                     AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
-                 auto handle = core.read(reqr);
-                 handle->wait();
+		                  // Read from Chiplet1 RAM
+		                  auto *read_buf = new unsigned char[len];
+		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
+		                  auto  handle   = core.read(reqr);
+		                  handle->wait();
 
-                 // Matrix header
-                 size_t header_size = sizeof(MatrixHeader);
-                 MatrixHeader *header =
-                     reinterpret_cast<MatrixHeader *>(read_buf);
-                 uint32_t rows = header->rows;
-                 uint32_t cols = header->cols;
+		                  // Matrix header
+		                  size_t        header_size = sizeof(MatrixHeader);
+		                  MatrixHeader *header      = reinterpret_cast<MatrixHeader *>(read_buf);
+		                  uint32_t      rows        = header->rows;
+		                  uint32_t      cols        = header->cols;
 
-                 // Matrix
-                 int *matrix = reinterpret_cast<int *>(read_buf + header_size);
+		                  // Matrix
+		                  int *matrix = reinterpret_cast<int *>(read_buf + header_size);
 
-                 // Multiply by 2
-                 for (int i = 0; i < rows * cols; ++i)
-                   matrix[i] *= 2;
+		                  // Multiply by 2
+		                  for (int i = 0; i < rows * cols; ++i) {
+			                  matrix[i] *= 2;
+		                  }
 
-                 core.wait_cycles("multiply");
+		                  core.wait_cycles("multiply");
 
-                 print_matrix(matrix, rows, cols, "Multiply");
+		                  print_matrix(matrix, rows, cols, "Multiply");
 
-                 // write to Chiplet2 RAM
-                 auto *write_buf = new unsigned char[len];
-                 memcpy(write_buf, read_buf, len);
+		                  // write to Chiplet2 RAM
+		                  auto *write_buf = new unsigned char[len];
+		                  memcpy(write_buf, read_buf, len);
 
-                 auto reqw = AxiRequest(0, write_buf, len)
-                                 .to_via("chiplet2", "memory", "interconnect")
-                                 .skip_cache();
-                 handle = core.write(reqw);
-                 handle->wait();
+		                  auto reqw =
+		                      AxiRequest(0, write_buf, len).to_via("chiplet2", "memory", "interconnect").skip_cache();
+		                  handle = core.write(reqw);
+		                  handle->wait();
 
-                 delete[] read_buf;
-                 delete[] write_buf;
-               }}}},
+		                  delete[] read_buf;
+		                  delete[] write_buf;
+	                  }}}},
 
-      {{"chiplet2", "core0"},
-       {CPUCode{
-           .main = [](Core &core) {},
-           .irq =
-               [](Core &core, const IRQ &irq) {
-                 auto addr = irq.target_address;
-                 auto len = irq.data_length;
+	    {{"chiplet2", "core0"},
+	     {CPUCode{.main = [](Core &core) {},
+	              .irq =
+	                  [](Core &core, const IRQ &irq) {
+		                  auto addr = irq.target_address;
+		                  auto len  = irq.data_length;
 
-                 // Read from Chiplet2 RAM
-                 auto *read_buf = new unsigned char[len];
-                 auto reqr =
-                     AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
-                 auto handle = core.read(reqr);
-                 handle->wait();
+		                  // Read from Chiplet2 RAM
+		                  auto *read_buf = new unsigned char[len];
+		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
+		                  auto  handle   = core.read(reqr);
+		                  handle->wait();
 
-                 // Matrix header
-                 size_t header_size = sizeof(MatrixHeader);
-                 MatrixHeader *header =
-                     reinterpret_cast<MatrixHeader *>(read_buf);
-                 uint32_t rows = header->rows;
-                 uint32_t cols = header->cols;
+		                  // Matrix header
+		                  size_t        header_size = sizeof(MatrixHeader);
+		                  MatrixHeader *header      = reinterpret_cast<MatrixHeader *>(read_buf);
+		                  uint32_t      rows        = header->rows;
+		                  uint32_t      cols        = header->cols;
 
-                 // Matrix
-                 int *matrix = reinterpret_cast<int *>(read_buf + header_size);
+		                  // Matrix
+		                  int *matrix = reinterpret_cast<int *>(read_buf + header_size);
 
-                 // Transpose
-                 int temp[rows * cols];
-                 for (int i = 0; i < rows; ++i)
-                   for (int j = 0; j < cols; ++j)
-                     temp[j * rows + i] = matrix[i * cols + j];
+		                  // Transpose
+		                  int temp[rows * cols];
+		                  for (int i = 0; i < rows; ++i) {
+			                  for (int j = 0; j < cols; ++j) {
+				                  temp[j * rows + i] = matrix[i * cols + j];
+			                  }
+		                  }
 
-                 for (int i = 0; i < rows * cols; ++i)
-                   matrix[i] = temp[i];
+		                  for (int i = 0; i < rows * cols; ++i) {
+			                  matrix[i] = temp[i];
+		                  }
 
-                 core.wait_cycles("transpose");
+		                  core.wait_cycles("transpose");
 
-                 print_matrix(matrix, rows, cols, "Transpose");
+		                  print_matrix(matrix, rows, cols, "Transpose");
 
-                 // Write to Chiplet3 RAM
-                 auto *write_buf = new unsigned char[len];
-                 memcpy(write_buf, read_buf, len);
+		                  // Write to Chiplet3 RAM
+		                  auto *write_buf = new unsigned char[len];
+		                  memcpy(write_buf, read_buf, len);
 
-                 auto reqw = AxiRequest(0, write_buf, len)
-                                 .to_via("chiplet3", "memory", "interconnect")
-                                 .skip_cache();
-                 handle = core.write(reqw);
-                 handle->wait();
+		                  auto reqw =
+		                      AxiRequest(0, write_buf, len).to_via("chiplet3", "memory", "interconnect").skip_cache();
+		                  handle = core.write(reqw);
+		                  handle->wait();
 
-                 delete[] read_buf;
-                 delete[] write_buf;
-               }}}},
+		                  delete[] read_buf;
+		                  delete[] write_buf;
+	                  }}}},
 
-      {{"chiplet3", "core0"},
-       {CPUCode{
-           .main = [](Core &core) {},
-           .irq =
-               [](Core &core, const IRQ &irq) {
-                 auto addr = irq.target_address;
-                 auto len = irq.data_length;
+	    {{"chiplet3", "core0"},
+	     {CPUCode{.main = [](Core &core) {},
+	              .irq =
+	                  [](Core &core, const IRQ &irq) {
+		                  auto addr = irq.target_address;
+		                  auto len  = irq.data_length;
 
-                 // Read from Chiplet3 RAM
-                 auto *read_buf = new unsigned char[len];
-                 auto reqr =
-                     AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
-                 auto handle = core.read(reqr);
-                 handle->wait();
+		                  // Read from Chiplet3 RAM
+		                  auto *read_buf = new unsigned char[len];
+		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
+		                  auto  handle   = core.read(reqr);
+		                  handle->wait();
 
-                 // Matrix header
-                 size_t header_size = sizeof(MatrixHeader);
-                 MatrixHeader *header =
-                     reinterpret_cast<MatrixHeader *>(read_buf);
-                 uint32_t rows = header->rows;
-                 uint32_t cols = header->cols;
+		                  // Matrix header
+		                  size_t        header_size = sizeof(MatrixHeader);
+		                  MatrixHeader *header      = reinterpret_cast<MatrixHeader *>(read_buf);
+		                  uint32_t      rows        = header->rows;
+		                  uint32_t      cols        = header->cols;
 
-                 // Matrix
-                 int *matrix = reinterpret_cast<int *>(read_buf + header_size);
+		                  // Matrix
+		                  int *matrix = reinterpret_cast<int *>(read_buf + header_size);
 
-                 // Subtract -5
-                 for (int i = 0; i < rows * cols; ++i)
-                   matrix[i] -= 5;
+		                  // Subtract -5
+		                  for (int i = 0; i < rows * cols; ++i) {
+			                  matrix[i] -= 5;
+		                  }
 
-                 core.wait_cycles("subtract");
+		                  core.wait_cycles("subtract");
 
-                 print_matrix(matrix, rows, cols, "Subtract");
+		                  print_matrix(matrix, rows, cols, "Subtract");
 
-                 // Write to FPGA RAM
-                 auto *write_buf = new unsigned char[len];
-                 memcpy(write_buf, read_buf, len);
+		                  // Write to FPGA RAM
+		                  auto *write_buf = new unsigned char[len];
+		                  memcpy(write_buf, read_buf, len);
 
-                 auto reqw = AxiRequest(0, write_buf, len)
-                                 .to_via("fpga", "memory", "interconnect")
-                                 .skip_cache();
-                 handle = core.write(reqw);
-                 handle->wait();
+		                  auto reqw =
+		                      AxiRequest(0, write_buf, len).to_via("fpga", "memory", "interconnect").skip_cache();
+		                  handle = core.write(reqw);
+		                  handle->wait();
 
-                 delete[] read_buf;
-                 delete[] write_buf;
-               }}}}};
-  return &code;
+		                  delete[] read_buf;
+		                  delete[] write_buf;
+	                  }}}}
+    };
+	return &code;
 }

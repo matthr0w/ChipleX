@@ -1,0 +1,81 @@
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++17
+
+# -------------------------------------------------------
+# Layout
+# -------------------------------------------------------
+ColumnLimit: 120
+UseTab: ForIndentation
+IndentWidth: 4
+TabWidth: 4
+ContinuationIndentWidth: 4
+NamespaceIndentation: None
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+SeparateDefinitionBlocks: Always
+
+# -------------------------------------------------------
+# Braces
+# -------------------------------------------------------
+BreakBeforeBraces: Attach
+InsertBraces: true
+RemoveBracesLLVM: false
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortEnumsOnASingleLine: false
+
+# -------------------------------------------------------
+# Alignment
+# -------------------------------------------------------
+AlignAfterOpenBracket: Align
+AlignOperands: Align
+AlignEscapedNewlines: Left
+AlignArrayOfStructures: Left
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 0
+AlignConsecutiveAssignments:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCompound: true
+  PadOperators: true
+AlignConsecutiveDeclarations:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+AlignConsecutiveBitFields:
+  Enabled: true
+
+# -------------------------------------------------------
+# Spacing / Pointers
+# -------------------------------------------------------
+PointerAlignment: Right
+ReferenceAlignment: Right
+SpaceBeforeParens: ControlStatements
+SpaceAfterCStyleCast: false
+SpacesBeforeTrailingComments: 1
+
+# -------------------------------------------------------
+# Wrapping
+# -------------------------------------------------------
+BinPackArguments: true
+BinPackParameters: true
+PackConstructorInitializers: NextLine
+AllowAllParametersOfDeclarationOnNextLine: true
+BreakConstructorInitializers: BeforeColon
+EmptyLineBeforeAccessModifier: LogicalBlock
+
+# -------------------------------------------------------
+# Includes
+# -------------------------------------------------------
+SortIncludes: CaseInsensitive
+IncludeBlocks: Preserve

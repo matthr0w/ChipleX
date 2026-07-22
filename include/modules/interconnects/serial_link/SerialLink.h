@@ -15,22 +15,21 @@ using namespace tlm;
 using namespace tlm_utils;
 
 SC_MODULE(SerialLink), public InterconnectBase {
-public:
-  SerialLink(sc_module_name name, unsigned chiplet_id,
-             ChipletConfig chiplet_config, unsigned interconnect_id,
-             InterconnectConfig interconnect_config);
-  ~SerialLink();
+  public:
+	SerialLink(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config, unsigned interconnect_id,
+	           InterconnectConfig interconnect_config);
+	~SerialLink();
 
-  // InterconnectBase
-  void bind_clocks(Clocks & clocks) override;
+	// InterconnectBase
+	void bind_clocks(Clocks & clocks) override;
 
-private:
-  SLNetworkLayer network_layer;
-  SLDataLinkLayer datalink_layer;
-  std::vector<SLChannelAllocater *> channel_allocaters;
+  private:
+	SLNetworkLayer                    network_layer;
+	SLDataLinkLayer                   datalink_layer;
+	std::vector<SLChannelAllocater *> channel_allocaters;
 
-  StreamFifo stream_fifo_out;
-  StreamFifo stream_fifo_in;
+	StreamFifo stream_fifo_out;
+	StreamFifo stream_fifo_in;
 
-  unsigned compute_fifo_depth();
+	unsigned compute_fifo_depth();
 };
