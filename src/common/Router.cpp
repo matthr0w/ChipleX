@@ -6,7 +6,8 @@ void Router::build_table() {
   unsigned num_chiplets = static_cast<int>(sysconf_.chiplets.size());
   routing_table_.assign(num_chiplets, std::vector<RouteInfo>(num_chiplets));
 
-  // Build adjacency list
+  // Build adjacency list and the O(1) reverse table used by get_dest_id.
+  dest_table_.clear();
   std::unordered_map<int, std::vector<std::tuple<int, int, int>>> adj;
   // (neighbor_chiplet_id, interconnect_id, link_id)
   for (const auto &conn : sysconf_.connections) {
@@ -17,6 +18,13 @@ void Router::build_table() {
     adj[conn.endpoint1.chiplet_id].push_back({conn.endpoint0.chiplet_id,
                                               conn.endpoint1.interconnect_id,
                                               conn.endpoint1.link_id});
+
+    dest_table_[encode_link(conn.endpoint0.chiplet_id,
+                            conn.endpoint0.interconnect_id,
+                            conn.endpoint0.link_id)] = conn.endpoint1.chiplet_id;
+    dest_table_[encode_link(conn.endpoint1.chiplet_id,
+                            conn.endpoint1.interconnect_id,
+                            conn.endpoint1.link_id)] = conn.endpoint0.chiplet_id;
   }
 
   // Run BFS from each source
@@ -68,18 +76,6 @@ int Router::get_link_id(int src_id, int interconnect_id, int dst_id) const {
 }
 
 int Router::get_dest_id(int src_id, int interconnect_id, int link_id) const {
-  for (const auto &conn : sysconf_.connections) {
-    // Case 1: source is endpoint0
-    if (conn.endpoint0.chiplet_id == src_id &&
-        conn.endpoint0.interconnect_id == interconnect_id &&
-        conn.endpoint0.link_id == link_id)
-      return conn.endpoint1.chiplet_id;
-
-    // Case 2: source is endpoint1
-    if (conn.endpoint1.chiplet_id == src_id &&
-        conn.endpoint1.interconnect_id == interconnect_id &&
-        conn.endpoint1.link_id == link_id)
-      return conn.endpoint0.chiplet_id;
-  }
-  return -1;
+  auto it = dest_table_.find(encode_link(src_id, interconnect_id, link_id));
+  return it != dest_table_.end() ? it->second : -1;
 }

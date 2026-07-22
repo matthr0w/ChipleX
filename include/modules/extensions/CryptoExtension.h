@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <iostream>
 
+#include "globals.h"
 #include "modules/extensions/ExtensionBase.h"
 #include "modules/extensions/ExtensionIDs.h"
 
@@ -100,6 +101,10 @@ private:
   }
 
   void dump_data(const char *tag, const std::vector<uint8_t> &data) const {
+    // Debug-only: this ran unconditionally on every W/R beat, printing hex to
+    // stdout even under SILENT (a real hot-path cost when crypto is enabled).
+    if (log_level > LogLevel::DEBUG)
+      return;
     std::cout << tag << ": ";
     for (auto b : data)
       std::cout << std::hex << std::setw(2) << std::setfill('0')

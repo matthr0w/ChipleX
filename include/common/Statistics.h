@@ -1,10 +1,10 @@
 #pragma once
 
 #include <chrono>
-#include <map>
 #include <memory>
 #include <string>
 #include <systemc>
+#include <unordered_map>
 
 using namespace sc_core;
 using namespace std::chrono;
@@ -108,15 +108,22 @@ public:
     return inst;
   }
 
-  void register_value(const std::string &module, const std::string &name);
-  void register_counter(const std::string &module, const std::string &name);
-  void register_accum(const std::string &module, const std::string &name);
-  void register_minmax(const std::string &module, const std::string &name);
-  void register_usage(const std::string &module, const std::string &name);
-  void register_utilization(const std::string &module,
-                            const sc_time clk_cycle = sc_time(0, SC_NS));
-  void register_utilization(const std::string &module, const std::string &name,
-                            const sc_time clk_cycle = sc_time(0, SC_NS));
+  // Registration resolves (creating if needed) the stat and returns a typed
+  // handle. Hot-path callers can cache the handle and update it directly,
+  // avoiding the per-call map lookup entirely (see Core/HWAccel/Generic).
+  StatValue *register_value(const std::string &module, const std::string &name);
+  StatCounter *register_counter(const std::string &module,
+                                const std::string &name);
+  StatAccum *register_accum(const std::string &module, const std::string &name);
+  StatMinMax *register_minmax(const std::string &module,
+                              const std::string &name);
+  StatUsage *register_usage(const std::string &module, const std::string &name);
+  StatUtilization *
+  register_utilization(const std::string &module,
+                       const sc_time clk_cycle = sc_time(0, SC_NS));
+  StatUtilization *
+  register_utilization(const std::string &module, const std::string &name,
+                       const sc_time clk_cycle = sc_time(0, SC_NS));
 
   void set_value(const std::string &module, const std::string &name,
                  double value);
@@ -153,7 +160,10 @@ public:
   void dump_to_file(const std::string &filename);
 
 private:
-  std::map<std::string, std::map<std::string, std::unique_ptr<StatBase>>>
+  // Hash maps for O(1) hot-path access; dump_to_file() sorts keys so the
+  // emitted stats.json remains deterministically ordered.
+  std::unordered_map<std::string,
+                     std::unordered_map<std::string, std::unique_ptr<StatBase>>>
       module_stats_;
 
   time_point<high_resolution_clock> time_wall_start_;
