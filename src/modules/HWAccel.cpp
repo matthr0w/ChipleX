@@ -265,6 +265,7 @@ std::shared_ptr<RequestHandle> HWAccel::read_internal(
 
   handle->payload = payload;
   handle->data = data;
+  handle->data_length = data_length;
   handle->time_stamp = sc_time_stamp();
   request_handles[payload] = handle;
 
@@ -389,10 +390,20 @@ std::shared_ptr<RequestHandle> HWAccel::write_internal(
   payload->cache = is_volatile ? ARM::AXI::CACHE_AW_DEVICE_NB
                                : ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
-  payload->write_in(data);
+  // See Core::write_internal: pad non-beat-aligned writes so write_in does not
+  // read past the caller's buffer.
+  const unsigned aligned_length = beats * axi_bytes;
+  if (data_length == aligned_length) {
+    payload->write_in(data);
+  } else {
+    std::vector<uint8_t> padded(aligned_length, 0);
+    std::memcpy(padded.data(), data, data_length);
+    payload->write_in(padded.data());
+  }
 
   handle->payload = payload;
   handle->data = data;
+  handle->data_length = data_length;
   handle->time_stamp = sc_time_stamp();
   request_handles[payload] = handle;
 

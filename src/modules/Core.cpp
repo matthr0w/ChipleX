@@ -241,6 +241,7 @@ Core::read_internal(uint32_t request_id, uint8_t src_module,
 
   handle->payload = payload;
   handle->data = data;
+  handle->data_length = data_length;
   handle->time_stamp = sc_time_stamp();
   request_handles[payload] = handle;
 
@@ -367,10 +368,23 @@ Core::write_internal(uint32_t request_id, uint8_t src_module,
   payload->cache = is_volatile ? ARM::AXI::CACHE_AW_DEVICE_NB
                                : ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
-  payload->write_in(data);
+  // write_in reads whole AXI beats (get_data_length() bytes). When data_length
+  // is not a multiple of the beat width, reading directly from the caller's
+  // buffer over-reads past its end (heap-buffer-overflow). Pad a zero-filled
+  // beat-aligned scratch buffer in that case; the aligned common case is
+  // unchanged.
+  const unsigned aligned_length = beats * axi_bytes;
+  if (data_length == aligned_length) {
+    payload->write_in(data);
+  } else {
+    std::vector<uint8_t> padded(aligned_length, 0);
+    std::memcpy(padded.data(), data, data_length);
+    payload->write_in(padded.data());
+  }
 
   handle->payload = payload;
   handle->data = data;
+  handle->data_length = data_length;
   handle->time_stamp = sc_time_stamp();
   request_handles[payload] = handle;
 

@@ -4,7 +4,15 @@
 
 #include "modules/chiplets/ChipletRegistry.h"
 
-// TODO: Fix zero and one store buffer entries behavior
+namespace {
+// Cache indexing relies on power-of-two block size and line count (address
+// masking + bit-shift indexing). These helpers replace the previous
+// float-based (unsigned)log2(x), which truncates incorrectly for values whose
+// log2 lands just below an integer, and the preconditions are validated in the
+// constructor below.
+inline bool is_power_of_two(unsigned x) { return x != 0 && (x & (x - 1)) == 0; }
+inline unsigned log2_pow2(unsigned x) { return __builtin_ctz(x); }
+} // namespace
 
 Cache::Cache(sc_module_name name, unsigned chiplet_id,
              ChipletConfig chiplet_config)
@@ -30,6 +38,16 @@ Cache::Cache(sc_module_name name, unsigned chiplet_id,
   stats.register_utilization(this->name(), clk_cycle);
 
   num_lines = cache_size / cache_block_size;
+
+  LOG_ASSERT(is_power_of_two(cache_block_size),
+             "Parameter Error: Cache block_size must be a power of two");
+  LOG_ASSERT(is_power_of_two(num_lines),
+             "Parameter Error: Cache line count (size / block_size) must be a "
+             "power of two");
+  LOG_ASSERT(cache_store_buffer_size >= 2,
+             "Parameter Error: Cache store_buffer_size must be at least 2 (the "
+             "store buffer reserves one slot to distinguish full from empty)");
+
   cache_lines.resize(num_lines);
   store_buffer.resize(cache_store_buffer_size);
 
@@ -123,10 +141,10 @@ void Cache::clk_posedge() {
         uint32_t block_address = beat_addr & ~(cache_block_size - 1);
         uint32_t block_offset = beat_addr & (cache_block_size - 1);
 
-        uint32_t tag = block_address >>
-                       ((unsigned)(log2(cache_block_size) + log2(num_lines)));
+        uint32_t tag =
+            block_address >> (log2_pow2(cache_block_size) + log2_pow2(num_lines));
         uint32_t index =
-            (block_address >> (unsigned)log2(cache_block_size)) % num_lines;
+            (block_address >> log2_pow2(cache_block_size)) % num_lines;
 
         uint32_t copy_len =
             std::min(cache_block_size - block_offset, remaining);
@@ -193,10 +211,9 @@ void Cache::clk_posedge() {
       uint32_t block_address = beat_addr & ~(cache_block_size - 1);
       uint32_t block_offset = beat_addr & (cache_block_size - 1);
 
-      uint32_t tag = block_address >>
-                     ((unsigned)(log2(cache_block_size) + log2(num_lines)));
-      uint32_t index =
-          (block_address >> (unsigned)log2(cache_block_size)) % num_lines;
+      uint32_t tag =
+          block_address >> (log2_pow2(cache_block_size) + log2_pow2(num_lines));
+      uint32_t index = (block_address >> log2_pow2(cache_block_size)) % num_lines;
 
       uint32_t copy_len = std::min(cache_block_size - block_offset, remaining);
 

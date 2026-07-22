@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstring>
 #include <optional>
 #include <systemc>
+#include <vector>
 
 #include "ARM/TLM/arm_axi4.h"
 #include "modules/extensions/ExtensionIDs.h"
@@ -135,6 +137,7 @@ struct AxiDMARequest {
 struct RequestHandle {
   ARM::AXI::Payload *payload;
   unsigned char *data;
+  unsigned data_length = 0;
 
   bool completed = false;
   sc_time time_stamp;
@@ -144,8 +147,20 @@ struct RequestHandle {
 
   void notify(sc_time delay) {
     completed = true;
-    if (payload->get_command() == ARM::AXI::COMMAND_READ)
-      payload->read_out(data);
+    if (payload->get_command() == ARM::AXI::COMMAND_READ) {
+      // read_out writes whole AXI beats (get_data_length() bytes). When the
+      // caller's buffer is not beat-aligned, copy back only data_length bytes
+      // via a scratch buffer so we never write past its end.
+      const unsigned aligned =
+          static_cast<unsigned>(payload->get_data_length());
+      if (data_length == aligned) {
+        payload->read_out(data);
+      } else {
+        std::vector<uint8_t> bounce(aligned);
+        payload->read_out(bounce.data());
+        std::memcpy(data, bounce.data(), data_length);
+      }
+    }
     done.notify(delay);
   }
 
