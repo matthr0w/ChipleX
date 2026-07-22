@@ -1,9 +1,0 @@
-ALU Results:
-Sum = 49999995000000
-Cycles = 100000019
-Cycles per iteration = 10.0000
-
-Load Results:
-Sum = 1230000000
-Cycles = 100000019
-Cycles per iteration = 10.0000

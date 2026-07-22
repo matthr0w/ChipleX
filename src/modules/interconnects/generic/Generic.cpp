@@ -4,1000 +4,915 @@
 
 #include "common/Router.h"
 
-GenericInterconnect::GenericInterconnect(sc_module_name name,
-                                         unsigned chiplet_id,
-                                         ChipletConfig chiplet_config,
-                                         unsigned interconnect_id,
-                                         InterconnectConfig interconnect_config,
+GenericInterconnect::GenericInterconnect(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
+                                         unsigned interconnect_id, InterconnectConfig interconnect_config,
                                          DMAEngine *dma_engine)
-    : InterconnectBase(chiplet_id, chiplet_config, interconnect_id,
-                       interconnect_config),
+    : InterconnectBase(chiplet_id, chiplet_config, interconnect_id, interconnect_config),
       sc_module(name),
-      flit_size(
-          interconnect_config.node["protocol"]["flit_size"].as<unsigned>()),
-      overhead_size(
-          interconnect_config.node["protocol"]["overhead_size"].as<unsigned>()),
-      staging_buffer_size(
-          interconnect_config.node["protocol"]["staging_buffer_size"]
-              .as<unsigned>()),
-      link_buffer_size(
-          interconnect_config.node["phy"]["link_buffer_size"].as<unsigned>()),
+      flit_size(interconnect_config.node["protocol"]["flit_size"].as<unsigned>()),
+      overhead_size(interconnect_config.node["protocol"]["overhead_size"].as<unsigned>()),
+      staging_buffer_size(interconnect_config.node["protocol"]["staging_buffer_size"].as<unsigned>()),
+      link_buffer_size(interconnect_config.node["phy"]["link_buffer_size"].as<unsigned>()),
       dma_engine(dma_engine),
-      axi_in("axi_in", *this, &GenericInterconnect::nb_transport_fw_axi,
-             ARM::TLM::PROTOCOL_AXI4, axi_width),
-      axi_out("axi_out", *this, &GenericInterconnect::nb_transport_bw_axi,
-              ARM::TLM::PROTOCOL_AXI4, axi_width) {
-  // Assertions
-  unsigned min_flit_size = overhead_size + Flit::header_size() + axi_width / 8;
-  LOG_ASSERT(flit_size >= min_flit_size,
-             "Parameter Error: Flit size must be at least " << min_flit_size
-                                                            << " bytes");
+      axi_in("axi_in", *this, &GenericInterconnect::nb_transport_fw_axi, ARM::TLM::PROTOCOL_AXI4, axi_width),
+      axi_out("axi_out", *this, &GenericInterconnect::nb_transport_bw_axi, ARM::TLM::PROTOCOL_AXI4, axi_width) {
+	// Assertions
+	unsigned min_flit_size = overhead_size + Flit::header_size() + axi_width / 8;
+	LOG_ASSERT(flit_size >= min_flit_size, "Parameter Error: Flit size must be at least " << min_flit_size << " bytes");
+	// The Tx/Rx buffers are sized to link_buffer_size and hold whole flits; a
+	// buffer smaller than one flit can never satisfy room >= flit_size and would
+	// deadlock the PHY, so reject it at construction.
+	LOG_ASSERT(link_buffer_size >= flit_size, "Parameter Error: link_buffer_size ("
+	                                              << link_buffer_size << ") must be >= flit_size (" << flit_size
+	                                              << ")");
 
-  stats.register_utilization(this->name());
-  stats.register_usage(this->name(), "staging_buffer_usage");
+	stats.register_utilization(this->name());
+	stats.register_usage(this->name(), "staging_buffer_usage");
 
-  if (dma_engine)
-    dma_vm_id = dma_engine->register_virtual_initiator(this);
+	if (dma_engine) {
+		dma_vm_id = dma_engine->register_virtual_initiator(this);
+	}
 
-  phy_in = new simple_target_socket_tagged<GenericInterconnect>[num_links];
-  phy_out = new simple_initiator_socket_tagged<GenericInterconnect>[num_links];
+	phy_in  = new simple_target_socket_tagged<GenericInterconnect>[num_links];
+	phy_out = new simple_initiator_socket_tagged<GenericInterconnect>[num_links];
 
-  for (int i = 0; i < num_links; ++i) {
-    phy_in[i].register_nb_transport_fw(
-        this, &GenericInterconnect::nb_transport_fw_phy, i);
-    phy_out[i].register_nb_transport_bw(
-        this, &GenericInterconnect::nb_transport_bw_phy, i);
-  }
+	for (int i = 0; i < num_links; ++i) {
+		phy_in[i].register_nb_transport_fw(this, &GenericInterconnect::nb_transport_fw_phy, i);
+		phy_out[i].register_nb_transport_bw(this, &GenericInterconnect::nb_transport_bw_phy, i);
+	}
 
-  irq_sockets =
-      new simple_initiator_socket_tagged<GenericInterconnect>[num_cores];
+	irq_sockets = new simple_initiator_socket_tagged<GenericInterconnect>[num_cores];
 
-  // Register ports in InterconnectBase
-  axi_in_port =
-      reinterpret_cast<ARM::AXI::SimpleTargetSocket<InterconnectBase> *>(
-          &axi_in);
-  axi_out_port =
-      reinterpret_cast<ARM::AXI::SimpleInitiatorSocket<InterconnectBase> *>(
-          &axi_out);
-  for (int i = 0; i < num_links; ++i) {
-    link_in_ports[i] =
-        reinterpret_cast<simple_target_socket_tagged<InterconnectBase> *>(
-            &phy_in[i]);
-    link_out_ports[i] =
-        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
-            &phy_out[i]);
-  }
-  for (int i = 0; i < num_cores; ++i)
-    irq_ports[i] =
-        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
-            &irq_sockets[i]);
+	// Register ports in InterconnectBase
+	axi_in_port  = &axi_in;
+	axi_out_port = &axi_out;
+	for (unsigned i = 0; i < num_links; ++i) {
+		link_in_ports[i]  = &phy_in[i];
+		link_out_ports[i] = &phy_out[i];
+	}
+	for (unsigned i = 0; i < num_cores; ++i) {
+		irq_ports[i] = &irq_sockets[i];
+	}
 
-  staging_buffer.resize(staging_buffer_size, 0);
+	staging_buffer.resize(staging_buffer_size, 0);
 
-  tx_buffers.resize(num_links, std::vector<uint8_t>(link_buffer_size, 0));
-  rx_buffers.resize(num_links, std::vector<uint8_t>(link_buffer_size, 0));
+	tx_buffers.resize(num_links, std::vector<uint8_t>(link_buffer_size, 0));
+	rx_buffers.resize(num_links, std::vector<uint8_t>(link_buffer_size, 0));
 
-  tx_ptrs.resize(tx_buffers.size(), 0);
-  rx_ptrs.resize(rx_buffers.size(), 0);
+	tx_ptrs.resize(tx_buffers.size(), 0);
+	rx_ptrs.resize(rx_buffers.size(), 0);
 
-  phy_active_tx.resize(tx_buffers.size(), false);
+	phy_active_tx.resize(tx_buffers.size(), false);
 
-  flit_header_bytes = overhead_size + Flit::header_size();
-  flit_data_bytes = flit_size - flit_header_bytes;
+	flit_header_bytes = overhead_size + Flit::header_size();
+	flit_data_bytes   = flit_size - flit_header_bytes;
 
-  SC_METHOD(clk_posedge_axi);
-  sensitive << protocol_clk.pos();
-  dont_initialize();
+	SC_METHOD(clk_posedge_axi);
+	sensitive << protocol_clk.pos();
+	dont_initialize();
 
-  SC_METHOD(clk_posedge_protocol);
-  sensitive << protocol_clk.pos();
-  dont_initialize();
+	SC_METHOD(clk_posedge_protocol);
+	sensitive << protocol_clk.pos();
+	dont_initialize();
 
-  SC_METHOD(clk_posedge_phy);
-  sensitive << phy_clk.pos();
-  dont_initialize();
+	SC_METHOD(clk_posedge_phy);
+	sensitive << phy_clk.pos();
+	dont_initialize();
 }
 
 GenericInterconnect::~GenericInterconnect() {
-  delete[] phy_in;
-  delete[] phy_out;
-  delete[] irq_sockets;
+	delete[] phy_in;
+	delete[] phy_out;
+	delete[] irq_sockets;
 }
 
 void GenericInterconnect::end_of_simulation() {
-  stats.set_value(this->name(), "staging_buffer_size_bytes",
-                  staging_buffer_size);
-  stats.set_value(this->name(), "flit_size_bytes", flit_size);
-  stats.set_value(this->name(), "overhead_size_bytes", overhead_size);
+	stats.set_value(this->name(), "staging_buffer_size_bytes", staging_buffer_size);
+	stats.set_value(this->name(), "flit_size_bytes", flit_size);
+	stats.set_value(this->name(), "overhead_size_bytes", overhead_size);
 
-  for (size_t id = 0; id < connections.size(); ++id) {
-    ConnectionConfig connection = connections[id];
-    YAML::Node config = connection.node;
+	for (size_t id = 0; id < connections.size(); ++id) {
+		ConnectionConfig connection = connections[id];
+		YAML::Node       config     = connection.node;
 
-    stats.set_value(this->name(),
-                    "link_buffer_size_bytes_link" + std::to_string(id),
-                    config["phy"]["link_buffer_size"].as<unsigned>());
-    stats.set_value(this->name(), "bandwidth_GB_s_link" + std::to_string(id),
-                    config["phy"]["bandwidth"].as<double>());
-    stats.set_value(this->name(), "efficiency_pJ_bit_link" + std::to_string(id),
-                    config["phy"]["efficiency"].as<double>());
-  }
+		stats.set_value(this->name(), "link_buffer_size_bytes_link" + std::to_string(id),
+		                config["phy"]["link_buffer_size"].as<unsigned>());
+		stats.set_value(this->name(), "bandwidth_GB_s_link" + std::to_string(id),
+		                config["phy"]["bandwidth"].as<double>());
+		stats.set_value(this->name(), "efficiency_pJ_bit_link" + std::to_string(id),
+		                config["phy"]["efficiency"].as<double>());
+	}
 }
 
 void GenericInterconnect::bind_clocks(Clocks &clocks) {
-  protocol_clk.bind(clocks.get("protocol"));
-  phy_clk.bind(clocks.get("phy"));
+	protocol_clk.bind(clocks.get("protocol"));
+	phy_clk.bind(clocks.get("phy"));
 }
 
 void GenericInterconnect::clk_posedge_axi() {
-  clear_axi_states();
-  handle_axi_channels();
-  send_axi_beats();
+	clear_axi_states();
+	handle_axi_channels();
+	send_axi_beats();
 }
 
 void GenericInterconnect::clk_posedge_protocol() {
-  // Process staging buffer
-  if (staging_buffer_ptr > 0) {
-    size_t flit_payload_bytes = 0;
+	// Process staging buffer
+	if (staging_buffer_ptr > 0) {
+		size_t flit_payload_bytes = 0;
 
-    auto align_down = [&](size_t val) {
-      const unsigned axi_width_bytes = axi_width / 8;
-      return static_cast<size_t>(val / axi_width_bytes) * axi_width_bytes;
-    };
+		auto align_down = [&](size_t val) {
+			const unsigned axi_width_bytes = axi_width / 8;
+			return static_cast<size_t>(val / axi_width_bytes) * axi_width_bytes;
+		};
 
-    if (staging_buffer_ptr >= flit_data_bytes)
-      flit_payload_bytes = align_down(flit_data_bytes);
-    else if (flush_staging_buffer)
-      flit_payload_bytes = align_down(staging_buffer_ptr);
+		if (staging_buffer_ptr >= flit_data_bytes) {
+			flit_payload_bytes = align_down(flit_data_bytes);
+		} else if (flush_staging_buffer) {
+			flit_payload_bytes = align_down(staging_buffer_ptr);
+		}
 
-    size_t flit_padding_bytes = flit_data_bytes - flit_payload_bytes;
+		size_t flit_padding_bytes = flit_data_bytes - flit_payload_bytes;
 
-    if (flit_payload_bytes > 0) {
-      Flit flit(flit_data_bytes);
+		if (flit_payload_bytes > 0) {
+			Flit flit(flit_data_bytes);
 
-      // Fill flit payload
-      std::fill(flit.axi_data.data.begin(), flit.axi_data.data.end(), 0);
-      std::memcpy(flit.axi_data.data.data(), staging_buffer.data(),
-                  flit_payload_bytes);
+			// Fill flit payload
+			std::fill(flit.axi_data.data.begin(), flit.axi_data.data.end(), 0);
+			std::memcpy(flit.axi_data.data.data(), staging_buffer.data(), flit_payload_bytes);
 
-      // Fill header
-      flit.axi_ch = axi_transaction.channel;
-      flit.len = axi_transaction.payload->get_len();
-      flit.burst = axi_transaction.payload->get_burst();
-      flit.id = axi_transaction.payload->id;
-      flit.user = axi_transaction.payload->user;
+			// Fill header
+			flit.axi_ch = axi_transaction.channel;
+			flit.len    = axi_transaction.payload->get_len();
+			flit.burst  = axi_transaction.payload->get_burst();
+			flit.id     = axi_transaction.payload->id;
+			flit.user   = axi_transaction.payload->user;
 
-      // Determine Tx buffer
-      uint8_t destination_id =
-          UserSignals::decode(axi_transaction.payload->user).dst_chiplet;
-      const unsigned tx_idx = Router::instance().get_link_id(
-          chiplet_id, interconnect_id, destination_id);
-      if (tx_idx == -1)
-        SC_LOG_ERROR(this, "No valid routing path from "
-                               << chiplet_id << " to " << int(destination_id));
+			// Determine Tx buffer
+			uint8_t        destination_id = UserSignals::decode(axi_transaction.payload->user).dst_chiplet;
+			const unsigned tx_idx         = Router::instance().get_link_id(chiplet_id, interconnect_id, destination_id);
+			if (tx_idx == -1) {
+				SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to " << int(destination_id));
+			}
 
-      const size_t tail = tx_ptrs[tx_idx];
-      const size_t room = tx_buffers[tx_idx].size() - tail;
+			const size_t tail = tx_ptrs[tx_idx];
+			const size_t room = tx_buffers[tx_idx].size() - tail;
 
-      if (room >= flit_size) {
-        write_flit_to_buffer(tx_buffers[tx_idx].data() + tail, flit,
-                             flit_payload_bytes, flit_padding_bytes);
-        tx_ptrs[tx_idx] += flit_size;
-        stats.update_usage(this->name(),
-                           "tx_buffer_usage_link" + std::to_string(tx_idx),
-                           tx_ptrs[tx_idx]);
+			if (room >= flit_size) {
+				write_flit_to_buffer(tx_buffers[tx_idx].data() + tail, flit, flit_payload_bytes, flit_padding_bytes);
+				tx_ptrs[tx_idx] += flit_size;
+				stats.update_usage(this->name(), "tx_buffer_usage_link" + std::to_string(tx_idx), tx_ptrs[tx_idx]);
 
-        // Consume from staging buffer
-        std::memmove(staging_buffer.data(),
-                     staging_buffer.data() + flit_payload_bytes,
-                     staging_buffer_ptr - flit_payload_bytes);
-        staging_buffer_ptr -= flit_payload_bytes;
-        stats.update_usage(this->name(), "staging_buffer_usage",
-                           staging_buffer_ptr);
+				// Consume from staging buffer
+				std::memmove(staging_buffer.data(), staging_buffer.data() + flit_payload_bytes,
+				             staging_buffer_ptr - flit_payload_bytes);
+				staging_buffer_ptr -= flit_payload_bytes;
+				stats.update_usage(this->name(), "staging_buffer_usage", staging_buffer_ptr);
 
-        // Reset if done
-        if (flush_staging_buffer && staging_buffer_ptr == 0)
-          flush_staging_buffer = false;
+				// Reset if done
+				if (flush_staging_buffer && staging_buffer_ptr == 0) {
+					flush_staging_buffer = false;
+				}
 
-        if (reset_axi_channel && staging_buffer_ptr == 0) {
-          axi_transaction.payload = nullptr;
-          axi_transaction.channel = None;
-          axi_transaction.beat_idx = 0;
-          reset_axi_channel = false;
-        }
-      }
-    }
-  }
+				if (reset_axi_channel && staging_buffer_ptr == 0) {
+					axi_transaction.payload  = nullptr;
+					axi_transaction.channel  = None;
+					axi_transaction.beat_idx = 0;
+					reset_axi_channel        = false;
+				}
+			}
+		}
+	}
 
-  // Process Rx buffers
-  for (size_t rx_idx = 0; rx_idx < rx_buffers.size(); ++rx_idx) {
-    if (rx_ptrs[rx_idx] < flit_size)
-      continue;
+	// Process Rx buffers
+	for (size_t rx_idx = 0; rx_idx < rx_buffers.size(); ++rx_idx) {
+		if (rx_ptrs[rx_idx] < flit_size) {
+			continue;
+		}
 
-    Flit flit = read_flit_from_buffer(rx_buffers[rx_idx].data());
+		Flit flit = read_flit_from_buffer(rx_buffers[rx_idx].data());
 
-    UserSignals user = UserSignals::decode(flit.user);
-    int link_id = Router::instance().get_link_id(chiplet_id, interconnect_id,
-                                                 user.dst_chiplet);
+		UserSignals user    = UserSignals::decode(flit.user);
+		int         link_id = Router::instance().get_link_id(chiplet_id, interconnect_id, user.dst_chiplet);
 
-    // Forward flit if not for this chiplet and there is valid link
-    if (link_id != -1) {
-      forward_flit(rx_idx, user.dst_chiplet);
-      continue;
-    }
+		// Forward flit if not for this chiplet and there is valid link
+		if (link_id != -1) {
+			forward_flit(rx_idx, user.dst_chiplet);
+			continue;
+		}
 
-    // Process local flit
-    process_flit(rx_idx, flit);
-  }
+		// Process local flit
+		process_flit(rx_idx, flit);
+	}
 }
 
 void GenericInterconnect::clk_posedge_phy() {
-  // Send from Tx buffers
-  for (size_t tx_idx = 0; tx_idx < tx_buffers.size(); ++tx_idx) {
-    if (tx_ptrs[tx_idx] < flit_size || phy_active_tx[tx_idx])
-      continue;
+	// Send from Tx buffers
+	for (size_t tx_idx = 0; tx_idx < tx_buffers.size(); ++tx_idx) {
+		if (tx_ptrs[tx_idx] < flit_size || phy_active_tx[tx_idx]) {
+			continue;
+		}
 
-    // Construct flit payload
-    auto *flit = new tlm_generic_payload;
-    flit->set_data_ptr(tx_buffers[tx_idx].data());
-    flit->set_data_length(flit_size);
+		// Construct flit payload
+		auto *flit = new tlm_generic_payload;
+		flit->set_data_ptr(tx_buffers[tx_idx].data());
+		flit->set_data_length(flit_size);
 
-    tlm_phase phase = BEGIN_REQ;
-    sc_time delay = SC_ZERO_TIME;
-    tlm_sync_enum reply = phy_out[tx_idx]->nb_transport_fw(*flit, phase, delay);
+		tlm_phase     phase = BEGIN_REQ;
+		sc_time       delay = SC_ZERO_TIME;
+		tlm_sync_enum reply = phy_out[tx_idx]->nb_transport_fw(*flit, phase, delay);
 
-    if (reply == TLM_UPDATED) {
-      stats.set_active(this->name());
-      stats.increment_counter(this->name(), "transmission_count_out_link" +
-                                                std::to_string(tx_idx));
-      stats.update_accum(this->name(),
-                         "transmission_duration_out_us_link" +
-                             std::to_string(tx_idx),
-                         delay.to_seconds() * 1e6);
-      phy_active_tx[tx_idx] = true;
-    } else {
-      delete flit;
-    }
-  }
+		if (reply == TLM_UPDATED) {
+			stats.set_active(this->name());
+			stats.increment_counter(this->name(), "transmission_count_out_link" + std::to_string(tx_idx));
+			stats.update_accum(this->name(), "transmission_duration_out_us_link" + std::to_string(tx_idx),
+			                   delay.to_seconds() * 1e6);
+			phy_active_tx[tx_idx] = true;
+		} else {
+			delete flit;
+		}
+	}
 
-  // Receive into Rx buffers
-  while (!phy_queue.empty()) {
-    PhyRequest request = phy_queue.front();
-    phy_queue.pop_front();
+	// Receive into Rx buffers
+	while (!phy_queue.empty()) {
+		PhyRequest request = phy_queue.front();
 
-    const int rx_idx = request.link_id;
-    const size_t tail = rx_ptrs[rx_idx];
-    const size_t room = rx_buffers[rx_idx].size() - tail;
+		const int    rx_idx = request.link_id;
+		const size_t tail   = rx_ptrs[rx_idx];
+		const size_t room   = rx_buffers[rx_idx].size() - tail;
 
-    if (room >= flit_size) {
-      std::memcpy(&rx_buffers[rx_idx][tail],
-                  request.transaction->get_data_ptr(), flit_size);
-      rx_ptrs[rx_idx] += flit_size;
-      stats.update_usage(this->name(),
-                         "rx_buffer_usage_link" + std::to_string(rx_idx),
-                         rx_ptrs[rx_idx]);
+		if (room < flit_size) {
+			break;
+		}
 
-      tlm_phase phase = BEGIN_RESP;
-      sc_time delay = SC_ZERO_TIME;
-      phy_in[rx_idx]->nb_transport_bw(*request.transaction, phase, delay);
-    }
-  }
+		phy_queue.pop_front();
+		std::memcpy(&rx_buffers[rx_idx][tail], request.transaction->get_data_ptr(), flit_size);
+		rx_ptrs[rx_idx] += flit_size;
+		stats.update_usage(this->name(), "rx_buffer_usage_link" + std::to_string(rx_idx), rx_ptrs[rx_idx]);
+
+		tlm_phase phase = BEGIN_RESP;
+		sc_time   delay = SC_ZERO_TIME;
+		phy_in[rx_idx]->nb_transport_bw(*request.transaction, phase, delay);
+	}
 }
 
 // -------------------------------------------------------
 // Transport Functions
 // -------------------------------------------------------
-tlm_sync_enum
-GenericInterconnect::nb_transport_fw_axi(ARM::AXI::Payload &payload,
-                                         ARM::AXI::Phase &phase) {
-  switch (phase) {
-  case ARM::AXI::AW_VALID:
-    aw_queue_in.push_back(&payload);
-    break;
-  case ARM::AXI::W_VALID:
-  case ARM::AXI::W_VALID_LAST:
-    w_queue_in.push_back(&payload);
-    break;
-  case ARM::AXI::B_READY:
-    b_state = b_state == REQ ? ACK : CLEAR;
-    return TLM_ACCEPTED;
-  case ARM::AXI::AR_VALID:
-    ar_queue_in.push_back(&payload);
-    break;
-  case ARM::AXI::R_READY:
-    r_state = r_state == REQ ? ACK : CLEAR;
-    return TLM_ACCEPTED;
-  default:
-    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
-                           << get_axi_phase_string(phase));
-  }
+tlm_sync_enum GenericInterconnect::nb_transport_fw_axi(ARM::AXI::Payload &payload, ARM::AXI::Phase &phase) {
+	switch (phase) {
+	case ARM::AXI::AW_VALID:
+		aw_queue_in.push_back(&payload);
+		break;
+	case ARM::AXI::W_VALID:
+	case ARM::AXI::W_VALID_LAST:
+		w_queue_in.push_back(&payload);
+		break;
+	case ARM::AXI::B_READY:
+		b_state = b_state == REQ ? ACK : CLEAR;
+		return TLM_ACCEPTED;
+	case ARM::AXI::AR_VALID:
+		ar_queue_in.push_back(&payload);
+		break;
+	case ARM::AXI::R_READY:
+		r_state = r_state == REQ ? ACK : CLEAR;
+		return TLM_ACCEPTED;
+	default:
+		SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: " << get_axi_phase_string(phase));
+	}
 
-  return TLM_ACCEPTED;
+	return TLM_ACCEPTED;
 }
 
-tlm_sync_enum
-GenericInterconnect::nb_transport_bw_axi(ARM::AXI::Payload &payload,
-                                         ARM::AXI::Phase &phase) {
-  switch (phase) {
-  case ARM::AXI::AW_READY:
-    aw_state = aw_state == REQ ? ACK : CLEAR;
-    break;
-  case ARM::AXI::W_READY:
-    w_state = w_state == REQ ? ACK : CLEAR;
-    break;
-  case ARM::AXI::B_VALID:
-    b_queue_in.push_back(&payload);
-    break;
-  case ARM::AXI::AR_READY:
-    ar_state = ar_state == REQ ? ACK : CLEAR;
-    break;
-  case ARM::AXI::R_VALID:
-  case ARM::AXI::R_VALID_LAST:
-    r_queue_in.push_back(&payload);
-    break;
-  default:
-    SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: "
-                           << get_axi_phase_string(phase));
-  }
+tlm_sync_enum GenericInterconnect::nb_transport_bw_axi(ARM::AXI::Payload &payload, ARM::AXI::Phase &phase) {
+	switch (phase) {
+	case ARM::AXI::AW_READY:
+		aw_state = aw_state == REQ ? ACK : CLEAR;
+		break;
+	case ARM::AXI::W_READY:
+		w_state = w_state == REQ ? ACK : CLEAR;
+		break;
+	case ARM::AXI::B_VALID:
+		b_queue_in.push_back(&payload);
+		break;
+	case ARM::AXI::AR_READY:
+		ar_state = ar_state == REQ ? ACK : CLEAR;
+		break;
+	case ARM::AXI::R_VALID:
+	case ARM::AXI::R_VALID_LAST:
+		r_queue_in.push_back(&payload);
+		break;
+	default:
+		SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: " << get_axi_phase_string(phase));
+	}
 
-  return TLM_ACCEPTED;
+	return TLM_ACCEPTED;
 }
 
-tlm_sync_enum
-GenericInterconnect::nb_transport_fw_phy(int id,
-                                         tlm_generic_payload &transaction,
-                                         tlm_phase &phase, sc_time &delay) {
-  switch (phase) {
-  case BEGIN_REQ:
-    if (rx_ptrs[id] + flit_size > rx_buffers[id].size())
-      return TLM_ACCEPTED; // Backpressure
+tlm_sync_enum GenericInterconnect::nb_transport_fw_phy(int id, tlm_generic_payload &transaction, tlm_phase &phase,
+                                                       sc_time &delay) {
+	switch (phase) {
+	case BEGIN_REQ:
+		if (rx_ptrs[id] + flit_size > rx_buffers[id].size()) {
+			return TLM_ACCEPTED; // Backpressure
+		}
 
-    delay += delays.transfer_delay(id, transaction);
+		delay += delays.transfer_delay(id, transaction);
 
-    sc_spawn([this, id, &transaction, delay]() {
-      stats.set_active(this->name());
-      wait(delay);
-      stats.set_idle(this->name());
-      stats.increment_counter(this->name(), "transmission_count_in_link" +
-                                                std::to_string(id));
-      phy_queue.push_back({id, &transaction});
-    });
+		sc_spawn([this, id, &transaction, delay]() {
+			stats.set_active(this->name());
+			wait(delay);
+			stats.set_idle(this->name());
+			stats.increment_counter(this->name(), "transmission_count_in_link" + std::to_string(id));
+			phy_queue.push_back({id, &transaction});
+		});
 
-    phase = END_REQ;
-    return TLM_UPDATED;
-  }
+		phase = END_REQ;
+		return TLM_UPDATED;
+	}
 
-  return TLM_ACCEPTED;
+	return TLM_ACCEPTED;
 }
 
-tlm_sync_enum
-GenericInterconnect::nb_transport_bw_phy(int id,
-                                         tlm_generic_payload &transaction,
-                                         tlm_phase &phase, sc_time &delay) {
-  switch (phase) {
-  case BEGIN_RESP:
-    // Consume from Tx buffer
-    std::memmove(tx_buffers[id].data(), tx_buffers[id].data() + flit_size,
-                 tx_ptrs[id] - flit_size);
-    tx_ptrs[id] -= flit_size;
-    stats.update_usage(
-        this->name(), "tx_buffer_usage_link" + std::to_string(id), tx_ptrs[id]);
+tlm_sync_enum GenericInterconnect::nb_transport_bw_phy(int id, tlm_generic_payload &transaction, tlm_phase &phase,
+                                                       sc_time &delay) {
+	switch (phase) {
+	case BEGIN_RESP:
+		// Consume from Tx buffer
+		std::memmove(tx_buffers[id].data(), tx_buffers[id].data() + flit_size, tx_ptrs[id] - flit_size);
+		tx_ptrs[id] -= flit_size;
+		stats.update_usage(this->name(), "tx_buffer_usage_link" + std::to_string(id), tx_ptrs[id]);
 
-    stats.set_idle(this->name());
-    phy_active_tx[id] = false;
-    delete &transaction;
+		stats.set_idle(this->name());
+		phy_active_tx[id] = false;
+		delete &transaction;
 
-    phase = END_RESP;
-    return TLM_COMPLETED;
-  }
+		phase = END_RESP;
+		return TLM_COMPLETED;
+	}
 
-  return TLM_ACCEPTED;
+	return TLM_ACCEPTED;
 }
 
 // -------------------------------------------------------
 // Helper Functions
 // -------------------------------------------------------
 void GenericInterconnect::clear_axi_states() {
-  // AW channel
-  if (aw_state == ACK) {
-    aw_state = CLEAR;
-    aw_queue_out.pop_front();
-  }
+	// AW channel
+	if (aw_state == ACK) {
+		aw_state = CLEAR;
+		aw_queue_out.pop_front();
+	}
 
-  // W channel
-  if (w_state == ACK) {
-    w_state = CLEAR;
-    w_beat_count++;
-    if (w_beat_count == w_queue_out.front()->get_beat_count()) {
-      w_beat_count = 0;
-      flit_w_beat_count = 0;
-      erase_payload(manager_payloads, w_queue_out.front());
-    }
-    w_queue_out.pop_front();
-  }
+	// W channel
+	if (w_state == ACK) {
+		w_state = CLEAR;
+		w_beat_count++;
+		if (w_beat_count == w_queue_out.front()->get_beat_count()) {
+			w_beat_count      = 0;
+			flit_w_beat_count = 0;
+			erase_payload(manager_payloads, w_queue_out.front());
+		}
+		w_queue_out.pop_front();
+	}
 
-  // B channel
-  if (b_state == ACK) {
-    b_state = CLEAR;
-    erase_payload(subordinate_payloads, b_queue_out.front());
-    b_queue_out.pop_front();
-  }
+	// B channel
+	if (b_state == ACK) {
+		b_state = CLEAR;
+		erase_payload(subordinate_payloads, b_queue_out.front());
+		b_queue_out.pop_front();
+	}
 
-  // AR channel
-  if (ar_state == ACK) {
-    ar_state = CLEAR;
-    ar_queue_out.pop_front();
-  }
+	// AR channel
+	if (ar_state == ACK) {
+		ar_state = CLEAR;
+		ar_queue_out.pop_front();
+	}
 
-  // R channel
-  if (r_state == ACK) {
-    r_state = CLEAR;
-    r_beat_count++;
-    if (r_beat_count == r_queue_out.front()->get_beat_count()) {
-      r_beat_count = 0;
-      flit_r_beat_count = 0;
-      erase_payload(subordinate_payloads, r_queue_out.front());
-    }
-    r_queue_out.pop_front();
-  }
+	// R channel
+	if (r_state == ACK) {
+		r_state = CLEAR;
+		r_beat_count++;
+		if (r_beat_count == r_queue_out.front()->get_beat_count()) {
+			r_beat_count      = 0;
+			flit_r_beat_count = 0;
+			erase_payload(subordinate_payloads, r_queue_out.front());
+		}
+		r_queue_out.pop_front();
+	}
 }
 
 void GenericInterconnect::handle_axi_channels() {
-  if (staging_buffer_ptr + axi_width > staging_buffer_size ||
-      flush_staging_buffer)
-    return;
+	if (staging_buffer_ptr + axi_width > staging_buffer_size || flush_staging_buffer) {
+		return;
+	}
 
-  // AW channel
-  if (!aw_queue_in.empty() && axi_transaction.channel == None) {
-    auto *payload = aw_queue_in.front();
-    aw_queue_in.pop_front();
+	const AxiChannel active = axi_transaction.channel;
 
-    // Set channel information
-    axi_transaction.channel = AW;
-    axi_transaction.payload = payload;
+	// AW channel (single address flit)
+	if (!aw_queue_in.empty() && active == None) {
+		auto *payload = aw_queue_in.front();
+		aw_queue_in.pop_front();
 
-    // Save payload for response
-    UserSignals user = UserSignals::decode(payload->user);
-    PayloadKey key = {payload->id, user.core, user.src_chiplet};
-    subordinate_payloads[key] = payload;
+		// Set channel information
+		axi_transaction.channel = AW;
+		axi_transaction.payload = payload;
 
-    // Write address to staging buffer
-    if (staging_buffer.size() - staging_buffer_ptr >= sizeof(uint32_t)) {
-      uint32_t address = payload->get_address();
-      std::memcpy(&staging_buffer[staging_buffer_ptr], &address,
-                  sizeof(uint32_t));
-      staging_buffer_ptr += sizeof(uint32_t);
-      stats.update_usage(this->name(), "staging_buffer_usage",
-                         staging_buffer_ptr);
-    }
+		// Save payload for response
+		UserSignals user          = UserSignals::decode(payload->user);
+		PayloadKey  key           = {payload->id, user.core, user.src_chiplet};
+		subordinate_payloads[key] = payload;
 
-    // Respond on AXI port
-    ARM::AXI::Phase phase = ARM::AXI::AW_READY;
-    axi_in.nb_transport_bw(*payload, phase);
-    // Set flags
-    flush_staging_buffer = true;
-  }
+		// Write address to staging buffer
+		if (staging_buffer.size() - staging_buffer_ptr >= sizeof(uint32_t)) {
+			uint32_t address = payload->get_address();
+			std::memcpy(&staging_buffer[staging_buffer_ptr], &address, sizeof(uint32_t));
+			staging_buffer_ptr += sizeof(uint32_t);
+			stats.update_usage(this->name(), "staging_buffer_usage", staging_buffer_ptr);
+		}
 
-  // W channel
-  if (!w_queue_in.empty()) {
-    auto *payload = w_queue_in.front();
-    w_queue_in.pop_front();
+		// Respond on AXI port
+		ARM::AXI::Phase phase = ARM::AXI::AW_READY;
+		axi_in.nb_transport_bw(*payload, phase);
+		// Set flags: flush this address flit and release the channel.
+		flush_staging_buffer = true;
+		reset_axi_channel    = true;
+		return;
+	}
 
-    // Set channel information
-    axi_transaction.channel = W;
-    axi_transaction.payload = payload;
+	// W channel (accumulates beats into a flit while the channel stays claimed)
+	if (!w_queue_in.empty() && (active == None || active == W)) {
+		auto *payload = w_queue_in.front();
+		w_queue_in.pop_front();
 
-    // Write data to staging buffer
-    size_t beat_bytes = payload->get_beat_data_length();
-    if (staging_buffer.size() - staging_buffer_ptr >= beat_bytes) {
-      payload->write_out_beat(axi_transaction.beat_idx,
-                              &staging_buffer[staging_buffer_ptr]);
-      axi_transaction.beat_idx += 1;
-      staging_buffer_ptr += beat_bytes;
-      stats.update_usage(this->name(), "staging_buffer_usage",
-                         staging_buffer_ptr);
-    }
+		// Set channel information
+		axi_transaction.channel = W;
+		axi_transaction.payload = payload;
 
-    // Respond on AXI port
-    ARM::AXI::Phase phase = ARM::AXI::W_READY;
-    axi_in.nb_transport_bw(*payload, phase);
-    // Set flags
-    if (axi_transaction.beat_idx == payload->get_beat_count()) {
-      flush_staging_buffer = true;
-      reset_axi_channel = true;
-    }
-  }
+		// Write data to staging buffer
+		size_t beat_bytes = payload->get_beat_data_length();
+		if (staging_buffer.size() - staging_buffer_ptr >= beat_bytes) {
+			payload->write_out_beat(axi_transaction.beat_idx, &staging_buffer[staging_buffer_ptr]);
+			axi_transaction.beat_idx += 1;
+			staging_buffer_ptr       += beat_bytes;
+			stats.update_usage(this->name(), "staging_buffer_usage", staging_buffer_ptr);
+		}
 
-  // B channel
-  if (!b_queue_in.empty()) {
-    auto *payload = b_queue_in.front();
-    b_queue_in.pop_front();
+		// Respond on AXI port
+		ARM::AXI::Phase phase = ARM::AXI::W_READY;
+		axi_in.nb_transport_bw(*payload, phase);
+		// Set flags
+		if (axi_transaction.beat_idx == payload->get_beat_count()) {
+			flush_staging_buffer = true;
+			reset_axi_channel    = true;
+		}
+		return;
+	}
 
-    // We also send the IRQ here
-    send_irq(*payload);
+	// B channel (single response flit)
+	if (!b_queue_in.empty() && active == None) {
+		auto *payload = b_queue_in.front();
+		b_queue_in.pop_front();
 
-    // Set channel information
-    axi_transaction.channel = B;
-    axi_transaction.payload = payload;
+		// We also send the IRQ here
+		send_irq(*payload);
 
-    // Source becomes destination
-    UserSignals user = UserSignals::decode(axi_transaction.payload->user);
-    user.dst_chiplet = user.src_chiplet;
-    axi_transaction.payload->user = user.encode();
+		// Set channel information
+		axi_transaction.channel = B;
+		axi_transaction.payload = payload;
 
-    // Write response to staging buffer
-    if (staging_buffer.size() - staging_buffer_ptr >=
-        sizeof(ARM::AXI4::RespEnum)) {
-      ARM::AXI4::RespEnum resp = payload->get_resp();
-      std::memcpy(&staging_buffer[staging_buffer_ptr], &resp,
-                  sizeof(ARM::AXI4::RespEnum));
-      staging_buffer_ptr += sizeof(ARM::AXI4::RespEnum);
-      stats.update_usage(this->name(), "staging_buffer_usage",
-                         staging_buffer_ptr);
-    }
+		// Source becomes destination
+		UserSignals user              = UserSignals::decode(axi_transaction.payload->user);
+		user.dst_chiplet              = user.src_chiplet;
+		axi_transaction.payload->user = user.encode();
 
-    // Respond on AXI port
-    ARM::AXI::Phase phase = ARM::AXI::B_READY;
-    axi_out.nb_transport_fw(*payload, phase);
-    // Set flags
-    flush_staging_buffer = true;
-    reset_axi_channel = true;
-  }
+		// Write response to staging buffer
+		if (staging_buffer.size() - staging_buffer_ptr >= sizeof(ARM::AXI4::RespEnum)) {
+			ARM::AXI4::RespEnum resp = payload->get_resp();
+			std::memcpy(&staging_buffer[staging_buffer_ptr], &resp, sizeof(ARM::AXI4::RespEnum));
+			staging_buffer_ptr += sizeof(ARM::AXI4::RespEnum);
+			stats.update_usage(this->name(), "staging_buffer_usage", staging_buffer_ptr);
+		}
 
-  // AR channel
-  if (!ar_queue_in.empty() && axi_transaction.channel == None) {
-    auto *payload = ar_queue_in.front();
-    ar_queue_in.pop_front();
+		// Respond on AXI port
+		ARM::AXI::Phase phase = ARM::AXI::B_READY;
+		axi_out.nb_transport_fw(*payload, phase);
+		// Set flags
+		flush_staging_buffer = true;
+		reset_axi_channel    = true;
+		return;
+	}
 
-    // Set channel information
-    axi_transaction.channel = AR;
-    axi_transaction.payload = payload;
+	// AR channel (single address flit)
+	if (!ar_queue_in.empty() && active == None) {
+		auto *payload = ar_queue_in.front();
+		ar_queue_in.pop_front();
 
-    // Save payload for response
-    UserSignals user = UserSignals::decode(payload->user);
-    PayloadKey key = {payload->id, user.core, user.src_chiplet};
-    subordinate_payloads[key] = payload;
+		// Set channel information
+		axi_transaction.channel = AR;
+		axi_transaction.payload = payload;
 
-    // Write address to staging buffer
-    if (staging_buffer.size() - staging_buffer_ptr >= sizeof(uint32_t)) {
-      uint32_t address = payload->get_address();
-      std::memcpy(&staging_buffer[staging_buffer_ptr], &address,
-                  sizeof(uint32_t));
-      staging_buffer_ptr += sizeof(uint32_t);
-      stats.update_usage(this->name(), "staging_buffer_usage",
-                         staging_buffer_ptr);
-    }
+		// Save payload for response
+		UserSignals user          = UserSignals::decode(payload->user);
+		PayloadKey  key           = {payload->id, user.core, user.src_chiplet};
+		subordinate_payloads[key] = payload;
 
-    // Respond on AXI port
-    ARM::AXI::Phase phase = ARM::AXI::AR_READY;
-    axi_in.nb_transport_bw(*payload, phase);
-    // Set flags
-    flush_staging_buffer = true;
-  }
+		// Write address to staging buffer
+		if (staging_buffer.size() - staging_buffer_ptr >= sizeof(uint32_t)) {
+			uint32_t address = payload->get_address();
+			std::memcpy(&staging_buffer[staging_buffer_ptr], &address, sizeof(uint32_t));
+			staging_buffer_ptr += sizeof(uint32_t);
+			stats.update_usage(this->name(), "staging_buffer_usage", staging_buffer_ptr);
+		}
 
-  // R channel
-  if (!r_queue_in.empty()) {
-    auto *payload = r_queue_in.front();
-    r_queue_in.pop_front();
+		// Respond on AXI port
+		ARM::AXI::Phase phase = ARM::AXI::AR_READY;
+		axi_in.nb_transport_bw(*payload, phase);
+		// Set flags: flush this address flit and release the channel.
+		flush_staging_buffer = true;
+		reset_axi_channel    = true;
+		return;
+	}
 
-    // Set channel information
-    axi_transaction.channel = R;
-    axi_transaction.payload = payload;
+	// R channel (accumulates beats into a flit while the channel stays claimed)
+	if (!r_queue_in.empty() && (active == None || active == R)) {
+		auto *payload = r_queue_in.front();
+		r_queue_in.pop_front();
 
-    // Source becomes destination
-    UserSignals user = UserSignals::decode(axi_transaction.payload->user);
-    user.dst_chiplet = user.src_chiplet;
-    axi_transaction.payload->user = user.encode();
+		// Set channel information
+		axi_transaction.channel = R;
+		axi_transaction.payload = payload;
 
-    // Write data to staging buffer
-    size_t beat_bytes = payload->get_beat_data_length();
-    if (staging_buffer.size() - staging_buffer_ptr >= beat_bytes) {
-      payload->read_out_beat(axi_transaction.beat_idx,
-                             &staging_buffer[staging_buffer_ptr]);
-      axi_transaction.beat_idx += 1;
-      staging_buffer_ptr += beat_bytes;
-      stats.update_usage(this->name(), "staging_buffer_usage",
-                         staging_buffer_ptr);
-    }
+		// Source becomes destination
+		UserSignals user              = UserSignals::decode(axi_transaction.payload->user);
+		user.dst_chiplet              = user.src_chiplet;
+		axi_transaction.payload->user = user.encode();
 
-    // Respond on AXI port
-    ARM::AXI::Phase phase = ARM::AXI::R_READY;
-    axi_out.nb_transport_fw(*payload, phase);
-    // Set flags
-    if (axi_transaction.beat_idx == payload->get_beat_count()) {
-      flush_staging_buffer = true;
-      reset_axi_channel = true;
-    }
-  }
+		// Write data to staging buffer
+		size_t beat_bytes = payload->get_beat_data_length();
+		if (staging_buffer.size() - staging_buffer_ptr >= beat_bytes) {
+			payload->read_out_beat(axi_transaction.beat_idx, &staging_buffer[staging_buffer_ptr]);
+			axi_transaction.beat_idx += 1;
+			staging_buffer_ptr       += beat_bytes;
+			stats.update_usage(this->name(), "staging_buffer_usage", staging_buffer_ptr);
+		}
+
+		// Respond on AXI port
+		ARM::AXI::Phase phase = ARM::AXI::R_READY;
+		axi_out.nb_transport_fw(*payload, phase);
+		// Set flags
+		if (axi_transaction.beat_idx == payload->get_beat_count()) {
+			flush_staging_buffer = true;
+			reset_axi_channel    = true;
+		}
+		return;
+	}
 }
 
 void GenericInterconnect::send_axi_beats() {
-  // AW channel
-  if (aw_state == CLEAR && !aw_queue_out.empty()) {
-    aw_state = REQ;
-    ARM::AXI::Payload *payload = aw_queue_out.front();
-    ARM::AXI::Phase phase = ARM::AXI::AW_VALID;
-    bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 &&
-                   dma_vm_id != -1;
-    if (use_dma && !send_dma_request(*payload, phase)) {
-      aw_state = CLEAR;
-    } else if (!use_dma) {
-      tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
-      if (reply == TLM_UPDATED) {
-        SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY,
-                      "AXI TLM Protocol: Unexpected phase");
-        aw_state = ACK;
-      }
-    }
-  }
+	// AW channel
+	if (aw_state == CLEAR && !aw_queue_out.empty()) {
+		aw_state                   = REQ;
+		ARM::AXI::Payload *payload = aw_queue_out.front();
+		ARM::AXI::Phase    phase   = ARM::AXI::AW_VALID;
+		bool               use_dma = UserSignals::decode(payload->user).extension_mask == 0 && dma_vm_id != -1;
+		if (use_dma && !send_dma_request(*payload, phase)) {
+			aw_state = CLEAR;
+		} else if (!use_dma) {
+			tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
+			if (reply == TLM_UPDATED) {
+				SC_LOG_ASSERT(this, phase == ARM::AXI::AW_READY, "AXI TLM Protocol: Unexpected phase");
+				aw_state = ACK;
+			}
+		}
+	}
 
-  // W channel
-  if (w_state == CLEAR && !w_queue_out.empty()) {
-    w_state = REQ;
-    ARM::AXI::Payload *payload = w_queue_out.front();
-    ARM::AXI::Phase phase = (w_beat_count + 1 == payload->get_beat_count())
-                                ? ARM::AXI::W_VALID_LAST
-                                : ARM::AXI::W_VALID;
-    bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 &&
-                   dma_vm_id != -1;
-    if (use_dma && !send_dma_request(*payload, phase)) {
-      w_state = CLEAR;
-    } else if (!use_dma) {
-      tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
-      if (reply == TLM_UPDATED) {
-        SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY,
-                      "AXI TLM Protocol: Unexpected phase");
-        w_state = ACK;
-      }
-    }
-  }
+	// W channel
+	if (w_state == CLEAR && !w_queue_out.empty()) {
+		w_state                    = REQ;
+		ARM::AXI::Payload *payload = w_queue_out.front();
+		ARM::AXI::Phase    phase =
+		    (w_beat_count + 1 == payload->get_beat_count()) ? ARM::AXI::W_VALID_LAST : ARM::AXI::W_VALID;
+		bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 && dma_vm_id != -1;
+		if (use_dma && !send_dma_request(*payload, phase)) {
+			w_state = CLEAR;
+		} else if (!use_dma) {
+			tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
+			if (reply == TLM_UPDATED) {
+				SC_LOG_ASSERT(this, phase == ARM::AXI::W_READY, "AXI TLM Protocol: Unexpected phase");
+				w_state = ACK;
+			}
+		}
+	}
 
-  // B channel
-  if (b_state == CLEAR && !b_queue_out.empty()) {
-    b_state = REQ;
-    ARM::AXI::Payload *payload = b_queue_out.front();
-    ARM::AXI::Phase phase = ARM::AXI::B_VALID;
-    tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
-    if (reply == TLM_UPDATED) {
-      SC_LOG_ASSERT(this, phase == ARM::AXI::B_READY,
-                    "AXI TLM Protocol: Unexpected phase");
-      b_state = ACK;
-    }
-  }
+	// B channel
+	if (b_state == CLEAR && !b_queue_out.empty()) {
+		b_state                    = REQ;
+		ARM::AXI::Payload *payload = b_queue_out.front();
+		ARM::AXI::Phase    phase   = ARM::AXI::B_VALID;
+		tlm_sync_enum      reply   = axi_in.nb_transport_bw(*payload, phase);
+		if (reply == TLM_UPDATED) {
+			SC_LOG_ASSERT(this, phase == ARM::AXI::B_READY, "AXI TLM Protocol: Unexpected phase");
+			b_state = ACK;
+		}
+	}
 
-  // AR channel
-  if (ar_state == CLEAR && !ar_queue_out.empty()) {
-    ar_state = REQ;
-    ARM::AXI::Payload *payload = ar_queue_out.front();
-    ARM::AXI::Phase phase = ARM::AXI::AR_VALID;
-    bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 &&
-                   dma_vm_id != -1;
-    if (use_dma && !send_dma_request(*payload, phase)) {
-      ar_state = CLEAR;
-    } else if (!use_dma) {
-      tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
-      if (reply == TLM_UPDATED) {
-        SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY,
-                      "AXI TLM Protocol: Unexpected phase");
-        ar_state = ACK;
-      }
-    }
-  }
+	// AR channel
+	if (ar_state == CLEAR && !ar_queue_out.empty()) {
+		ar_state                   = REQ;
+		ARM::AXI::Payload *payload = ar_queue_out.front();
+		ARM::AXI::Phase    phase   = ARM::AXI::AR_VALID;
+		bool               use_dma = UserSignals::decode(payload->user).extension_mask == 0 && dma_vm_id != -1;
+		if (use_dma && !send_dma_request(*payload, phase)) {
+			ar_state = CLEAR;
+		} else if (!use_dma) {
+			tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
+			if (reply == TLM_UPDATED) {
+				SC_LOG_ASSERT(this, phase == ARM::AXI::AR_READY, "AXI TLM Protocol: Unexpected phase");
+				ar_state = ACK;
+			}
+		}
+	}
 
-  // R channel
-  if (r_state == CLEAR && !r_queue_out.empty()) {
-    r_state = REQ;
-    ARM::AXI::Payload *payload = r_queue_out.front();
-    ARM::AXI::Phase phase = (r_beat_count + 1 == payload->get_beat_count())
-                                ? ARM::AXI::R_VALID_LAST
-                                : ARM::AXI::R_VALID;
-    tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
-    if (reply == TLM_UPDATED) {
-      SC_LOG_ASSERT(this, phase == ARM::AXI::R_READY,
-                    "AXI TLM Protocol: Unexpected phase");
-      r_state = ACK;
-    }
-  }
+	// R channel
+	if (r_state == CLEAR && !r_queue_out.empty()) {
+		r_state                    = REQ;
+		ARM::AXI::Payload *payload = r_queue_out.front();
+		ARM::AXI::Phase    phase =
+		    (r_beat_count + 1 == payload->get_beat_count()) ? ARM::AXI::R_VALID_LAST : ARM::AXI::R_VALID;
+		tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
+		if (reply == TLM_UPDATED) {
+			SC_LOG_ASSERT(this, phase == ARM::AXI::R_READY, "AXI TLM Protocol: Unexpected phase");
+			r_state = ACK;
+		}
+	}
 }
 
 Flit GenericInterconnect::read_flit_from_buffer(const uint8_t *src) {
-  size_t offset = overhead_size;
-  Flit flit(flit_data_bytes);
+	size_t offset = overhead_size;
+	Flit   flit(flit_data_bytes);
 
-  std::memcpy(&flit.axi_ch, src + offset, sizeof(flit.axi_ch));
-  offset += sizeof(flit.axi_ch);
-  std::memcpy(&flit.len, src + offset, sizeof(flit.len));
-  offset += sizeof(flit.len);
-  std::memcpy(&flit.burst, src + offset, sizeof(flit.burst));
-  offset += sizeof(flit.burst);
-  std::memcpy(&flit.id, src + offset, sizeof(flit.id));
-  offset += sizeof(flit.id);
-  std::memcpy(&flit.user, src + offset, sizeof(flit.user));
-  offset += sizeof(flit.user);
-  std::memcpy(flit.axi_data.data.data(), src + offset, flit_data_bytes);
+	std::memcpy(&flit.axi_ch, src + offset, sizeof(flit.axi_ch));
+	offset += sizeof(flit.axi_ch);
+	std::memcpy(&flit.len, src + offset, sizeof(flit.len));
+	offset += sizeof(flit.len);
+	std::memcpy(&flit.burst, src + offset, sizeof(flit.burst));
+	offset += sizeof(flit.burst);
+	std::memcpy(&flit.id, src + offset, sizeof(flit.id));
+	offset += sizeof(flit.id);
+	std::memcpy(&flit.user, src + offset, sizeof(flit.user));
+	offset += sizeof(flit.user);
+	std::memcpy(flit.axi_data.data.data(), src + offset, flit_data_bytes);
 
-  return flit;
+	return flit;
 }
 
-void GenericInterconnect::write_flit_to_buffer(uint8_t *dest, const Flit &flit,
-                                               size_t flit_payload_bytes,
+void GenericInterconnect::write_flit_to_buffer(uint8_t *dest, const Flit &flit, size_t flit_payload_bytes,
                                                size_t flit_padding_bytes) {
-  size_t offset = 0;
+	size_t offset = 0;
 
-  // Protocol overhead
-  std::memset(dest + offset, 0xFF, overhead_size);
-  offset += overhead_size;
+	// Protocol overhead
+	std::memset(dest + offset, 0xFF, overhead_size);
+	offset += overhead_size;
 
-  // Header
-  std::memcpy(dest + offset, &flit.axi_ch, sizeof(flit.axi_ch));
-  offset += sizeof(flit.axi_ch);
-  std::memcpy(dest + offset, &flit.len, sizeof(flit.len));
-  offset += sizeof(flit.len);
-  std::memcpy(dest + offset, &flit.burst, sizeof(flit.burst));
-  offset += sizeof(flit.burst);
-  std::memcpy(dest + offset, &flit.id, sizeof(flit.id));
-  offset += sizeof(flit.id);
-  std::memcpy(dest + offset, &flit.user, sizeof(flit.user));
-  offset += sizeof(flit.user);
+	// Header
+	std::memcpy(dest + offset, &flit.axi_ch, sizeof(flit.axi_ch));
+	offset += sizeof(flit.axi_ch);
+	std::memcpy(dest + offset, &flit.len, sizeof(flit.len));
+	offset += sizeof(flit.len);
+	std::memcpy(dest + offset, &flit.burst, sizeof(flit.burst));
+	offset += sizeof(flit.burst);
+	std::memcpy(dest + offset, &flit.id, sizeof(flit.id));
+	offset += sizeof(flit.id);
+	std::memcpy(dest + offset, &flit.user, sizeof(flit.user));
+	offset += sizeof(flit.user);
 
-  // Payload + padding
-  std::memcpy(dest + offset, flit.axi_data.data.data(), flit_payload_bytes);
-  offset += flit_payload_bytes;
-  std::memset(dest + offset, 0, flit_padding_bytes);
+	// Payload + padding
+	std::memcpy(dest + offset, flit.axi_data.data.data(), flit_payload_bytes);
+	offset += flit_payload_bytes;
+	std::memset(dest + offset, 0, flit_padding_bytes);
 }
 
 void GenericInterconnect::forward_flit(unsigned rx_idx, uint8_t dest_id) {
-  const unsigned tx_idx =
-      Router::instance().get_link_id(chiplet_id, interconnect_id, dest_id);
-  if (tx_idx == -1)
-    SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to "
-                                                     << int(dest_id));
+	const unsigned tx_idx = Router::instance().get_link_id(chiplet_id, interconnect_id, dest_id);
+	if (tx_idx == -1) {
+		SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to " << int(dest_id));
+	}
 
-  const size_t tail = tx_ptrs[tx_idx];
-  const size_t room = tx_buffers[tx_idx].size() - tail;
+	const size_t tail = tx_ptrs[tx_idx];
+	const size_t room = tx_buffers[tx_idx].size() - tail;
 
-  if (room >= flit_size) {
-    // Copy to Tx buffer
-    std::memcpy(&tx_buffers[tx_idx][tail], rx_buffers[rx_idx].data(),
-                flit_size);
-    tx_ptrs[tx_idx] += flit_size;
-    stats.update_usage(this->name(),
-                       "tx_buffer_usage_link" + std::to_string(tx_idx),
-                       tx_ptrs[tx_idx]);
-    // Consume from Rx buffer
-    std::memmove(rx_buffers[rx_idx].data(),
-                 rx_buffers[rx_idx].data() + flit_size,
-                 rx_ptrs[rx_idx] - flit_size);
-    rx_ptrs[rx_idx] -= flit_size;
-    stats.update_usage(this->name(),
-                       "rx_buffer_usage_link" + std::to_string(rx_idx),
-                       rx_ptrs[rx_idx]);
-  }
+	if (room >= flit_size) {
+		// Copy to Tx buffer
+		std::memcpy(&tx_buffers[tx_idx][tail], rx_buffers[rx_idx].data(), flit_size);
+		tx_ptrs[tx_idx] += flit_size;
+		stats.update_usage(this->name(), "tx_buffer_usage_link" + std::to_string(tx_idx), tx_ptrs[tx_idx]);
+		// Consume from Rx buffer
+		std::memmove(rx_buffers[rx_idx].data(), rx_buffers[rx_idx].data() + flit_size, rx_ptrs[rx_idx] - flit_size);
+		rx_ptrs[rx_idx] -= flit_size;
+		stats.update_usage(this->name(), "rx_buffer_usage_link" + std::to_string(rx_idx), rx_ptrs[rx_idx]);
+	}
 }
 
 void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
-  switch (flit.axi_ch) {
-  case AW: {
-    uint32_t address;
-    std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
-    ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
-        ARM::AXI::COMMAND_WRITE, address, get_axi_size(axi_width), flit.len,
-        flit.burst);
-    payload->id = flit.id;
-    payload->user = flit.user;
-    // Save payload for later beats
-    UserSignals user = UserSignals::decode(payload->user);
-    PayloadKey key = {payload->id, user.core, user.src_chiplet};
-    manager_payloads[key] = payload;
-    if (aw_state == CLEAR) {
-      aw_queue_out.push_back(payload);
-      // Consume from Rx buffer
-      std::memmove(rx_buffers[rx_idx].data(),
-                   rx_buffers[rx_idx].data() + flit_size,
-                   rx_ptrs[rx_idx] - flit_size);
-      rx_ptrs[rx_idx] -= flit_size;
-      stats.update_usage(this->name(),
-                         "rx_buffer_usage_link" + std::to_string(rx_idx),
-                         rx_ptrs[rx_idx]);
-    }
-    break;
-  }
-  case W: {
-    ARM::AXI::Payload *payload = nullptr;
-    UserSignals user = UserSignals::decode(flit.user);
-    auto it = manager_payloads.find({flit.id, user.core, user.src_chiplet});
-    if (it != manager_payloads.end())
-      payload = it->second;
-    else
-      SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown W payload");
-    if (w_state == CLEAR) {
-      payload->write_in_beat(flit.axi_data.data.data() +
-                             flit_w_beat_count * axi_width / 8);
-      flit_w_beat_count++;
-      w_queue_out.push_back(payload);
-      // Remove if transaction is done or no more data in this flit
-      if (w_beat_count + 1 == payload->get_beat_count() ||
-          (flit_w_beat_count + 1) * axi_width / 8 > flit_data_bytes) {
-        flit_w_beat_count = 0;
-        // Consume from Rx buffer
-        std::memmove(rx_buffers[rx_idx].data(),
-                     rx_buffers[rx_idx].data() + flit_size,
-                     rx_ptrs[rx_idx] - flit_size);
-        rx_ptrs[rx_idx] -= flit_size;
-        stats.update_usage(this->name(),
-                           "rx_buffer_usage_link" + std::to_string(rx_idx),
-                           rx_ptrs[rx_idx]);
-      }
-    }
-    break;
-  }
-  case B: {
-    ARM::AXI::Payload *payload = nullptr;
-    UserSignals user = UserSignals::decode(flit.user);
-    auto it = subordinate_payloads.find({flit.id, user.core, user.src_chiplet});
-    if (it != subordinate_payloads.end())
-      payload = it->second;
-    else
-      SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown B payload");
-    if (b_state == CLEAR) {
-      b_queue_out.push_back(payload);
-      // Consume from Rx buffer
-      std::memmove(rx_buffers[rx_idx].data(),
-                   rx_buffers[rx_idx].data() + flit_size,
-                   rx_ptrs[rx_idx] - flit_size);
-      rx_ptrs[rx_idx] -= flit_size;
-      stats.update_usage(this->name(),
-                         "rx_buffer_usage_link" + std::to_string(rx_idx),
-                         rx_ptrs[rx_idx]);
-    }
-    break;
-  }
-  case AR: {
-    uint32_t address;
-    std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
-    ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
-        ARM::AXI::COMMAND_READ, address, get_axi_size(axi_width), flit.len,
-        flit.burst);
-    payload->id = flit.id;
-    payload->user = flit.user;
-    if (ar_state == CLEAR) {
-      ar_queue_out.push_back(payload);
-      // Consume from Rx buffer
-      std::memmove(rx_buffers[rx_idx].data(),
-                   rx_buffers[rx_idx].data() + flit_size,
-                   rx_ptrs[rx_idx] - flit_size);
-      rx_ptrs[rx_idx] -= flit_size;
-      stats.update_usage(this->name(),
-                         "rx_buffer_usage_link" + std::to_string(rx_idx),
-                         rx_ptrs[rx_idx]);
-    }
-    break;
-  }
-  case R: {
-    ARM::AXI::Payload *payload = nullptr;
-    UserSignals user = UserSignals::decode(flit.user);
-    auto it = subordinate_payloads.find({flit.id, user.core, user.src_chiplet});
-    if (it != subordinate_payloads.end())
-      payload = it->second;
-    else
-      SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown R payload");
-    if (r_state == CLEAR) {
-      payload->read_in_beat(flit.axi_data.data.data() +
-                            flit_r_beat_count * axi_width / 8);
-      flit_r_beat_count++;
-      r_queue_out.push_back(payload);
-      // Remove if transaction is done or no more data in this flit
-      if (r_beat_count + 1 == payload->get_beat_count() ||
-          (flit_r_beat_count + 1) * axi_width / 8 > flit_data_bytes) {
-        flit_r_beat_count = 0;
-        // Consume from Rx buffer
-        std::memmove(rx_buffers[rx_idx].data(),
-                     rx_buffers[rx_idx].data() + flit_size,
-                     rx_ptrs[rx_idx] - flit_size);
-        rx_ptrs[rx_idx] -= flit_size;
-        stats.update_usage(this->name(),
-                           "rx_buffer_usage_link" + std::to_string(rx_idx),
-                           rx_ptrs[rx_idx]);
-      }
-    }
-    break;
-  }
-  default:
-    break;
-  }
+	switch (flit.axi_ch) {
+	case AW: {
+		if (aw_state == CLEAR) {
+			uint32_t address;
+			std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
+			ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(ARM::AXI::COMMAND_WRITE, address,
+			                                                            get_axi_size(axi_width), flit.len, flit.burst);
+			payload->id                = flit.id;
+			payload->user              = flit.user;
+			// Save payload for later beats
+			UserSignals user      = UserSignals::decode(payload->user);
+			PayloadKey  key       = {payload->id, user.core, user.src_chiplet};
+			manager_payloads[key] = payload;
+			aw_queue_out.push_back(payload);
+			// Consume from Rx buffer
+			std::memmove(rx_buffers[rx_idx].data(), rx_buffers[rx_idx].data() + flit_size, rx_ptrs[rx_idx] - flit_size);
+			rx_ptrs[rx_idx] -= flit_size;
+			stats.update_usage(this->name(), "rx_buffer_usage_link" + std::to_string(rx_idx), rx_ptrs[rx_idx]);
+		}
+		break;
+	}
+	case W: {
+		ARM::AXI::Payload *payload = nullptr;
+		UserSignals        user    = UserSignals::decode(flit.user);
+		auto               it      = manager_payloads.find({flit.id, user.core, user.src_chiplet});
+		if (it != manager_payloads.end()) {
+			payload = it->second;
+		} else {
+			SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown W payload");
+		}
+		if (w_state == CLEAR) {
+			payload->write_in_beat(flit.axi_data.data.data() + flit_w_beat_count * axi_width / 8);
+			flit_w_beat_count++;
+			w_queue_out.push_back(payload);
+			// Remove if transaction is done or no more data in this flit
+			if (w_beat_count + 1 == payload->get_beat_count() ||
+			    (flit_w_beat_count + 1) * axi_width / 8 > flit_data_bytes) {
+				flit_w_beat_count = 0;
+				// Consume from Rx buffer
+				std::memmove(rx_buffers[rx_idx].data(), rx_buffers[rx_idx].data() + flit_size,
+				             rx_ptrs[rx_idx] - flit_size);
+				rx_ptrs[rx_idx] -= flit_size;
+				stats.update_usage(this->name(), "rx_buffer_usage_link" + std::to_string(rx_idx), rx_ptrs[rx_idx]);
+			}
+		}
+		break;
+	}
+	case B: {
+		ARM::AXI::Payload *payload = nullptr;
+		UserSignals        user    = UserSignals::decode(flit.user);
+		auto               it      = subordinate_payloads.find({flit.id, user.core, user.src_chiplet});
+		if (it != subordinate_payloads.end()) {
+			payload = it->second;
+		} else {
+			SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown B payload");
+		}
+		if (b_state == CLEAR) {
+			b_queue_out.push_back(payload);
+			// Consume from Rx buffer
+			std::memmove(rx_buffers[rx_idx].data(), rx_buffers[rx_idx].data() + flit_size, rx_ptrs[rx_idx] - flit_size);
+			rx_ptrs[rx_idx] -= flit_size;
+			stats.update_usage(this->name(), "rx_buffer_usage_link" + std::to_string(rx_idx), rx_ptrs[rx_idx]);
+		}
+		break;
+	}
+	case AR: {
+		if (ar_state == CLEAR) {
+			uint32_t address;
+			std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
+			ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(ARM::AXI::COMMAND_READ, address,
+			                                                            get_axi_size(axi_width), flit.len, flit.burst);
+			payload->id                = flit.id;
+			payload->user              = flit.user;
+			ar_queue_out.push_back(payload);
+			// Consume from Rx buffer
+			std::memmove(rx_buffers[rx_idx].data(), rx_buffers[rx_idx].data() + flit_size, rx_ptrs[rx_idx] - flit_size);
+			rx_ptrs[rx_idx] -= flit_size;
+			stats.update_usage(this->name(), "rx_buffer_usage_link" + std::to_string(rx_idx), rx_ptrs[rx_idx]);
+		}
+		break;
+	}
+	case R: {
+		ARM::AXI::Payload *payload = nullptr;
+		UserSignals        user    = UserSignals::decode(flit.user);
+		auto               it      = subordinate_payloads.find({flit.id, user.core, user.src_chiplet});
+		if (it != subordinate_payloads.end()) {
+			payload = it->second;
+		} else {
+			SC_LOG_ERROR(this, "AXI Protocol Violation: Unknown R payload");
+		}
+		if (r_state == CLEAR) {
+			payload->read_in_beat(flit.axi_data.data.data() + flit_r_beat_count * axi_width / 8);
+			flit_r_beat_count++;
+			r_queue_out.push_back(payload);
+			// Remove if transaction is done or no more data in this flit
+			if (r_beat_count + 1 == payload->get_beat_count() ||
+			    (flit_r_beat_count + 1) * axi_width / 8 > flit_data_bytes) {
+				flit_r_beat_count = 0;
+				// Consume from Rx buffer
+				std::memmove(rx_buffers[rx_idx].data(), rx_buffers[rx_idx].data() + flit_size,
+				             rx_ptrs[rx_idx] - flit_size);
+				rx_ptrs[rx_idx] -= flit_size;
+				stats.update_usage(this->name(), "rx_buffer_usage_link" + std::to_string(rx_idx), rx_ptrs[rx_idx]);
+			}
+		}
+		break;
+	}
+	default:
+		break;
+	}
 }
 
 void GenericInterconnect::send_irq(ARM::AXI::Payload &payload) {
-  // Don't send an IRQ if:
-  // - there are no cores
-  // - DMA engine is used. It will send it.
-  // - extension layer is used. It will send it.
-  if (num_cores == 0 || dma_vm_id != -1 ||
-      UserSignals::decode(payload.user).extension_mask != 0)
-    return;
+	// Don't send an IRQ if:
+	// - there are no cores
+	// - DMA engine is used. It will send it.
+	// - extension layer is used. It will send it.
+	if (num_cores == 0 || dma_vm_id != -1 || UserSignals::decode(payload.user).extension_mask != 0) {
+		return;
+	}
 
-  UserSignals user = UserSignals::decode(payload.user);
+	UserSignals user = UserSignals::decode(payload.user);
 
-  auto *irq = new IRQ();
-  irq->request_id = payload.id;
-  irq->target_module = user.dst_module;
-  irq->target_address = payload.get_address();
-  irq->burst = payload.get_burst();
-  irq->data_length = payload.get_data_length();
+	auto *irq           = new IRQ();
+	irq->request_id     = payload.id;
+	irq->target_module  = user.dst_module;
+	irq->target_address = payload.get_address();
+	irq->burst          = payload.get_burst();
+	irq->data_length    = payload.get_data_length();
 
-  tlm_phase phase = BEGIN_REQ;
-  sc_time delay = SC_ZERO_TIME;
+	tlm_phase phase = BEGIN_REQ;
+	sc_time   delay = SC_ZERO_TIME;
 
-  tlm_generic_payload *transaction = new tlm_generic_payload;
-  transaction->set_data_ptr(reinterpret_cast<unsigned char *>(irq));
-  transaction->set_data_length(sizeof(IRQ));
-  transaction->set_command(TLM_WRITE_COMMAND);
+	tlm_generic_payload *transaction = new tlm_generic_payload;
+	transaction->set_data_ptr(reinterpret_cast<unsigned char *>(irq));
+	transaction->set_data_length(sizeof(IRQ));
+	transaction->set_command(TLM_WRITE_COMMAND);
 
-  SC_LOG_DEBUG(this, "Sending IRQ to Core0");
-  irq_sockets[0]->nb_transport_fw(*transaction, phase, delay);
+	const unsigned irq_core = user.core < num_cores ? user.core : 0;
+	SC_LOG_DEBUG(this, "Sending IRQ to core " << irq_core);
+	irq_sockets[irq_core]->nb_transport_fw(*transaction, phase, delay);
 }
 
 void GenericInterconnect::erase_payload(
-    std::unordered_map<PayloadKey, ARM::AXI::Payload *, PayloadKeyHash>
-        &payload_map,
-    ARM::AXI::Payload *payload) {
-  UserSignals user = UserSignals::decode(payload->user);
-  PayloadKey key = {payload->id, user.core, user.src_chiplet};
+    std::unordered_map<PayloadKey, ARM::AXI::Payload *, PayloadKeyHash> &payload_map, ARM::AXI::Payload *payload) {
+	UserSignals user = UserSignals::decode(payload->user);
+	PayloadKey  key  = {payload->id, user.core, user.src_chiplet};
 
-  auto it = payload_map.find(key);
-  if (it != payload_map.end()) {
-    payload_map.erase(it);
-    return;
-  }
+	auto it = payload_map.find(key);
+	if (it != payload_map.end()) {
+		payload_map.erase(it);
+		return;
+	}
 
-  SC_LOG_WARN(this, "Tried to erase a non-existent payload");
+	SC_LOG_WARN(this, "Tried to erase a non-existent payload");
 }
 
 // -------------------------------------------------------
 // Debug Functions
 // -------------------------------------------------------
 void GenericInterconnect::dump_staging_buffer() {
-  std::cout << sc_time_stamp() << " === Staging Buffer " << name() << " ===\n";
-  std::cout << "(used " << staging_buffer_ptr << " / " << staging_buffer.size()
-            << " bytes)\n  ";
+	std::cout << sc_time_stamp() << " === Staging Buffer " << name() << " ===\n";
+	std::cout << "(used " << staging_buffer_ptr << " / " << staging_buffer.size() << " bytes)\n  ";
 
-  for (size_t j = 0; j < staging_buffer_ptr; ++j) {
-    std::cout << std::hex << std::setw(2) << std::setfill('0')
-              << static_cast<int>(staging_buffer[j]) << " ";
-    if ((j + 1) % flit_size == 0)
-      std::cout << "\n  ";
-  }
-  std::cout << std::dec << "\n";
+	for (size_t j = 0; j < staging_buffer_ptr; ++j) {
+		std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(staging_buffer[j]) << " ";
+		if ((j + 1) % flit_size == 0) {
+			std::cout << "\n  ";
+		}
+	}
+	std::cout << std::dec << "\n";
 }
 
 void GenericInterconnect::dump_tx_buffers() {
-  std::cout << sc_time_stamp() << " === Tx Buffers " << name() << " ===\n";
-  for (size_t i = 0; i < tx_buffers.size(); ++i) {
-    std::cout << "Buffer[" << i << "] (used " << tx_ptrs[i] << " / "
-              << tx_buffers[i].size() << " bytes):\n  ";
+	std::cout << sc_time_stamp() << " === Tx Buffers " << name() << " ===\n";
+	for (size_t i = 0; i < tx_buffers.size(); ++i) {
+		std::cout << "Buffer[" << i << "] (used " << tx_ptrs[i] << " / " << tx_buffers[i].size() << " bytes):\n  ";
 
-    for (size_t j = 0; j < tx_ptrs[i]; ++j) {
-      std::cout << std::hex << std::setw(2) << std::setfill('0')
-                << static_cast<int>(tx_buffers[i][j]) << " ";
-      if ((j + 1) % flit_size == 0)
-        std::cout << "\n  ";
-    }
-    std::cout << std::dec << "\n";
-  }
+		for (size_t j = 0; j < tx_ptrs[i]; ++j) {
+			std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(tx_buffers[i][j]) << " ";
+			if ((j + 1) % flit_size == 0) {
+				std::cout << "\n  ";
+			}
+		}
+		std::cout << std::dec << "\n";
+	}
 }
 
 void GenericInterconnect::dump_rx_buffers() {
-  std::cout << sc_time_stamp() << " === Rx Buffers " << name() << " ===\n";
-  for (size_t i = 0; i < rx_buffers.size(); ++i) {
-    std::cout << "Buffer[" << i << "] (used " << rx_ptrs[i] << " / "
-              << rx_buffers[i].size() << " bytes):\n  ";
+	std::cout << sc_time_stamp() << " === Rx Buffers " << name() << " ===\n";
+	for (size_t i = 0; i < rx_buffers.size(); ++i) {
+		std::cout << "Buffer[" << i << "] (used " << rx_ptrs[i] << " / " << rx_buffers[i].size() << " bytes):\n  ";
 
-    for (size_t j = 0; j < rx_ptrs[i]; ++j) {
-      std::cout << std::hex << std::setw(2) << std::setfill('0')
-                << static_cast<int>(rx_buffers[i][j]) << " ";
-      if ((j + 1) % flit_size == 0)
-        std::cout << "\n  ";
-    }
-    std::cout << std::dec << "\n";
-  }
+		for (size_t j = 0; j < rx_ptrs[i]; ++j) {
+			std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(rx_buffers[i][j]) << " ";
+			if ((j + 1) % flit_size == 0) {
+				std::cout << "\n  ";
+			}
+		}
+		std::cout << std::dec << "\n";
+	}
 }

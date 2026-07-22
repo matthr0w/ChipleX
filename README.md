@@ -92,6 +92,18 @@ make
 make run ARGS="--help"
 ```
 
+### Testing
+
+Run every setup and compare its `stats.json` against the committed golden output in
+`tests/golden/`:
+
+```bash
+make test
+```
+
+After an intentional, reviewed behavior change, regenerate the golden files with
+`make test-update`.
+
 ## TODO
 
 - [ ] Documentation
