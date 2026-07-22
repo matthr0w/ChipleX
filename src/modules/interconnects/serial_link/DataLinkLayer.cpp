@@ -64,7 +64,17 @@ void SLDataLinkLayer::clk_posedge() {
                                std::to_string(link_id),
                            delay.to_seconds() * 1e6);
         stream_fifo_out->read();
+        // The wire payload has been packed into the outgoing transaction; free
+        // it (stream FIFO entries are owning heap pointers).
+        delete payload;
         data_out_ongoing = true;
+      } else {
+        // Backpressure: the receiver could not accept the flit this cycle. Free
+        // the transaction and its packed buffer and retry next cycle. Without
+        // this, a new transaction + buffer leaked on every stalled cycle (only
+        // the accepted path is freed later, in nb_transport_bw).
+        delete[] transaction->get_data_ptr();
+        delete transaction;
       }
     }
   }
@@ -130,21 +140,25 @@ void SLDataLinkLayer::pack_payload(tlm_generic_payload &transaction,
   const size_t axi_bytes = (axi_width + 7) / 8;
   const size_t size = sizeof(PayloadWire_t) + axi_bytes;
   auto *buf = new unsigned char[size];
-  auto *wire = reinterpret_cast<PayloadWire_t *>(buf);
-  auto *axi_data = buf + sizeof(PayloadWire_t);
 
-  // Payload
-  wire->addr = payload.axi_ch.addr;
-  wire->hdr = payload.hdr;
-  wire->credit = payload.credit;
-  wire->id = payload.id;
-  wire->user = payload.user;
-  wire->link_id = payload.link_id;
-  wire->len = payload.len;
-  wire->burst = payload.burst;
+  // Fill a real PayloadWire_t object and memcpy it into the buffer. Writing
+  // through a reinterpret_cast pointer that was never the start of a
+  // PayloadWire_t object lifetime is undefined behavior; PayloadWire_t is
+  // trivially copyable, so this is the well-defined equivalent.
+  PayloadWire_t wire;
+  wire.addr = payload.axi_ch.addr;
+  wire.hdr = payload.hdr;
+  wire.credit = payload.credit;
+  wire.id = payload.id;
+  wire.user = payload.user;
+  wire.link_id = payload.link_id;
+  wire.len = payload.len;
+  wire.burst = payload.burst;
+  std::memcpy(buf, &wire, sizeof(PayloadWire_t));
 
   // Append AXI data bytes
-  std::memcpy(axi_data, payload.axi_ch.data.data(), payload.axi_ch.data.size());
+  std::memcpy(buf + sizeof(PayloadWire_t), payload.axi_ch.data.data(),
+              payload.axi_ch.data.size());
 
   transaction.set_data_ptr(buf);
   transaction.set_data_length(size);
@@ -152,21 +166,24 @@ void SLDataLinkLayer::pack_payload(tlm_generic_payload &transaction,
 
 Payload_t *SLDataLinkLayer::unpack_payload(tlm_generic_payload &transaction) {
   const size_t axi_bytes = (axi_width + 7) / 8;
-  auto *wire =
-      reinterpret_cast<const PayloadWire_t *>(transaction.get_data_ptr());
-  auto *axi_data =
-      reinterpret_cast<const uint8_t *>(wire) + sizeof(PayloadWire_t);
-  auto *payload = new Payload_t(axi_width);
+  const unsigned char *buf = transaction.get_data_ptr();
 
-  // Payload
-  payload->axi_ch.addr = wire->addr;
-  payload->hdr = wire->hdr;
-  payload->credit = wire->credit;
-  payload->id = wire->id;
-  payload->user = wire->user;
-  payload->link_id = wire->link_id;
-  payload->len = wire->len;
-  payload->burst = wire->burst;
+  // Read a real PayloadWire_t object out of the buffer via memcpy (well-defined
+  // for the trivially-copyable wire struct), rather than reading through a
+  // reinterpret_cast pointer whose object lifetime never began.
+  PayloadWire_t wire;
+  std::memcpy(&wire, buf, sizeof(PayloadWire_t));
+  const uint8_t *axi_data = buf + sizeof(PayloadWire_t);
+
+  auto *payload = new Payload_t(axi_width);
+  payload->axi_ch.addr = wire.addr;
+  payload->hdr = wire.hdr;
+  payload->credit = wire.credit;
+  payload->id = wire.id;
+  payload->user = wire.user;
+  payload->link_id = wire.link_id;
+  payload->len = wire.len;
+  payload->burst = wire.burst;
 
   // Copy AXI data bytes
   std::memcpy(payload->axi_ch.data.data(), axi_data, axi_bytes);

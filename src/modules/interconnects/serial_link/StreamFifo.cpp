@@ -37,5 +37,8 @@ bool StreamFifo::reserve() {
   return true;
 }
 
-unsigned StreamFifo::num_free() { return size - fill_level; }
+unsigned StreamFifo::num_free() {
+  // Guard against unsigned underflow if fill_level ever exceeds size.
+  return fill_level >= size ? 0 : size - fill_level;
+}
 unsigned StreamFifo::num_available() { return data.size(); }

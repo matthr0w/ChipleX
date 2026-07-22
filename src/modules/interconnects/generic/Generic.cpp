@@ -32,6 +32,13 @@ GenericInterconnect::GenericInterconnect(sc_module_name name,
   LOG_ASSERT(flit_size >= min_flit_size,
              "Parameter Error: Flit size must be at least " << min_flit_size
                                                             << " bytes");
+  // The Tx/Rx buffers are sized to link_buffer_size and hold whole flits; a
+  // buffer smaller than one flit can never satisfy room >= flit_size and would
+  // deadlock the PHY, so reject it at construction.
+  LOG_ASSERT(link_buffer_size >= flit_size,
+             "Parameter Error: link_buffer_size ("
+                 << link_buffer_size << ") must be >= flit_size (" << flit_size
+                 << ")");
 
   stats.register_utilization(this->name());
   stats.register_usage(this->name(), "staging_buffer_usage");
@@ -52,25 +59,16 @@ GenericInterconnect::GenericInterconnect(sc_module_name name,
   irq_sockets =
       new simple_initiator_socket_tagged<GenericInterconnect>[num_cores];
 
-  // Register ports in InterconnectBase
-  axi_in_port =
-      reinterpret_cast<ARM::AXI::SimpleTargetSocket<InterconnectBase> *>(
-          &axi_in);
-  axi_out_port =
-      reinterpret_cast<ARM::AXI::SimpleInitiatorSocket<InterconnectBase> *>(
-          &axi_out);
-  for (int i = 0; i < num_links; ++i) {
-    link_in_ports[i] =
-        reinterpret_cast<simple_target_socket_tagged<InterconnectBase> *>(
-            &phy_in[i]);
-    link_out_ports[i] =
-        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
-            &phy_out[i]);
+  // Register ports in InterconnectBase (implicit upcast to the TLM base socket
+  // types; no reinterpret_cast, see InterconnectBase.h).
+  axi_in_port = &axi_in;
+  axi_out_port = &axi_out;
+  for (unsigned i = 0; i < num_links; ++i) {
+    link_in_ports[i] = &phy_in[i];
+    link_out_ports[i] = &phy_out[i];
   }
-  for (int i = 0; i < num_cores; ++i)
-    irq_ports[i] =
-        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
-            &irq_sockets[i]);
+  for (unsigned i = 0; i < num_cores; ++i)
+    irq_ports[i] = &irq_sockets[i];
 
   staging_buffer.resize(staging_buffer_size, 0);
 
@@ -263,24 +261,31 @@ void GenericInterconnect::clk_posedge_phy() {
   // Receive into Rx buffers
   while (!phy_queue.empty()) {
     PhyRequest request = phy_queue.front();
-    phy_queue.pop_front();
 
     const int rx_idx = request.link_id;
     const size_t tail = rx_ptrs[rx_idx];
     const size_t room = rx_buffers[rx_idx].size() - tail;
 
-    if (room >= flit_size) {
-      std::memcpy(&rx_buffers[rx_idx][tail],
-                  request.transaction->get_data_ptr(), flit_size);
-      rx_ptrs[rx_idx] += flit_size;
-      stats.update_usage(this->name(),
-                         "rx_buffer_usage_link" + std::to_string(rx_idx),
-                         rx_ptrs[rx_idx]);
+    // If the target Rx buffer is full, leave the flit queued and retry on a
+    // later cycle rather than dropping it. Dropping (the previous behavior)
+    // leaked the sender's transaction and permanently stalled the link: the
+    // sender never received its BEGIN_RESP, so phy_active_tx stayed set and
+    // that link never transmitted again. Applying backpressure here is the
+    // correct behavior.
+    if (room < flit_size)
+      break;
 
-      tlm_phase phase = BEGIN_RESP;
-      sc_time delay = SC_ZERO_TIME;
-      phy_in[rx_idx]->nb_transport_bw(*request.transaction, phase, delay);
-    }
+    phy_queue.pop_front();
+    std::memcpy(&rx_buffers[rx_idx][tail], request.transaction->get_data_ptr(),
+                flit_size);
+    rx_ptrs[rx_idx] += flit_size;
+    stats.update_usage(this->name(),
+                       "rx_buffer_usage_link" + std::to_string(rx_idx),
+                       rx_ptrs[rx_idx]);
+
+    tlm_phase phase = BEGIN_RESP;
+    sc_time delay = SC_ZERO_TIME;
+    phy_in[rx_idx]->nb_transport_bw(*request.transaction, phase, delay);
   }
 }
 
@@ -447,8 +452,19 @@ void GenericInterconnect::handle_axi_channels() {
       flush_staging_buffer)
     return;
 
-  // AW channel
-  if (!aw_queue_in.empty() && axi_transaction.channel == None) {
+  // Process at most one AXI channel per call. The receiver's process_flit()
+  // parses each flit as a single channel (AW->address, W/R->beat data at a
+  // per-beat offset, B->response), so different channels must never share a
+  // staging buffer / flit. AW/AR/B produce a single flit and release the
+  // channel (reset_axi_channel); W/R accumulate multiple beats while the
+  // channel stays claimed. Previously the W/B/R blocks had no channel guard and
+  // the flush check was only performed on entry, so a second channel could
+  // append to the same staging buffer and overwrite axi_transaction.channel,
+  // producing a mislabeled, corrupted flit.
+  const AxiChannel active = axi_transaction.channel;
+
+  // AW channel (single address flit)
+  if (!aw_queue_in.empty() && active == None) {
     auto *payload = aw_queue_in.front();
     aw_queue_in.pop_front();
 
@@ -474,12 +490,14 @@ void GenericInterconnect::handle_axi_channels() {
     // Respond on AXI port
     ARM::AXI::Phase phase = ARM::AXI::AW_READY;
     axi_in.nb_transport_bw(*payload, phase);
-    // Set flags
+    // Set flags: flush this address flit and release the channel.
     flush_staging_buffer = true;
+    reset_axi_channel = true;
+    return;
   }
 
-  // W channel
-  if (!w_queue_in.empty()) {
+  // W channel (accumulates beats into a flit while the channel stays claimed)
+  if (!w_queue_in.empty() && (active == None || active == W)) {
     auto *payload = w_queue_in.front();
     w_queue_in.pop_front();
 
@@ -506,10 +524,11 @@ void GenericInterconnect::handle_axi_channels() {
       flush_staging_buffer = true;
       reset_axi_channel = true;
     }
+    return;
   }
 
-  // B channel
-  if (!b_queue_in.empty()) {
+  // B channel (single response flit)
+  if (!b_queue_in.empty() && active == None) {
     auto *payload = b_queue_in.front();
     b_queue_in.pop_front();
 
@@ -542,10 +561,11 @@ void GenericInterconnect::handle_axi_channels() {
     // Set flags
     flush_staging_buffer = true;
     reset_axi_channel = true;
+    return;
   }
 
-  // AR channel
-  if (!ar_queue_in.empty() && axi_transaction.channel == None) {
+  // AR channel (single address flit)
+  if (!ar_queue_in.empty() && active == None) {
     auto *payload = ar_queue_in.front();
     ar_queue_in.pop_front();
 
@@ -571,12 +591,14 @@ void GenericInterconnect::handle_axi_channels() {
     // Respond on AXI port
     ARM::AXI::Phase phase = ARM::AXI::AR_READY;
     axi_in.nb_transport_bw(*payload, phase);
-    // Set flags
+    // Set flags: flush this address flit and release the channel.
     flush_staging_buffer = true;
+    reset_axi_channel = true;
+    return;
   }
 
-  // R channel
-  if (!r_queue_in.empty()) {
+  // R channel (accumulates beats into a flit while the channel stays claimed)
+  if (!r_queue_in.empty() && (active == None || active == R)) {
     auto *payload = r_queue_in.front();
     r_queue_in.pop_front();
 
@@ -608,6 +630,7 @@ void GenericInterconnect::handle_axi_channels() {
       flush_staging_buffer = true;
       reset_axi_channel = true;
     }
+    return;
   }
 }
 
@@ -778,18 +801,22 @@ void GenericInterconnect::forward_flit(unsigned rx_idx, uint8_t dest_id) {
 void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
   switch (flit.axi_ch) {
   case AW: {
-    uint32_t address;
-    std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
-    ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
-        ARM::AXI::COMMAND_WRITE, address, get_axi_size(axi_width), flit.len,
-        flit.burst);
-    payload->id = flit.id;
-    payload->user = flit.user;
-    // Save payload for later beats
-    UserSignals user = UserSignals::decode(payload->user);
-    PayloadKey key = {payload->id, user.core, user.src_chiplet};
-    manager_payloads[key] = payload;
+    // Only allocate + register the payload when the AW channel is free and the
+    // flit is actually consumed. Doing it unconditionally leaked a Payload on
+    // every reprocessed flit under AW backpressure (manager_payloads[key] was
+    // overwritten while the same flit remained in the Rx buffer).
     if (aw_state == CLEAR) {
+      uint32_t address;
+      std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
+      ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
+          ARM::AXI::COMMAND_WRITE, address, get_axi_size(axi_width), flit.len,
+          flit.burst);
+      payload->id = flit.id;
+      payload->user = flit.user;
+      // Save payload for later beats
+      UserSignals user = UserSignals::decode(payload->user);
+      PayloadKey key = {payload->id, user.core, user.src_chiplet};
+      manager_payloads[key] = payload;
       aw_queue_out.push_back(payload);
       // Consume from Rx buffer
       std::memmove(rx_buffers[rx_idx].data(),
@@ -853,14 +880,16 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
     break;
   }
   case AR: {
-    uint32_t address;
-    std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
-    ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
-        ARM::AXI::COMMAND_READ, address, get_axi_size(axi_width), flit.len,
-        flit.burst);
-    payload->id = flit.id;
-    payload->user = flit.user;
+    // Only allocate the payload when the AR channel is free and the flit is
+    // actually consumed (see the AW case above for the leak this prevents).
     if (ar_state == CLEAR) {
+      uint32_t address;
+      std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
+      ARM::AXI::Payload *payload = ARM::AXI::Payload::new_payload(
+          ARM::AXI::COMMAND_READ, address, get_axi_size(axi_width), flit.len,
+          flit.burst);
+      payload->id = flit.id;
+      payload->user = flit.user;
       ar_queue_out.push_back(payload);
       // Consume from Rx buffer
       std::memmove(rx_buffers[rx_idx].data(),
@@ -933,8 +962,10 @@ void GenericInterconnect::send_irq(ARM::AXI::Payload &payload) {
   transaction->set_data_length(sizeof(IRQ));
   transaction->set_command(TLM_WRITE_COMMAND);
 
-  SC_LOG_DEBUG(this, "Sending IRQ to Core0");
-  irq_sockets[0]->nb_transport_fw(*transaction, phase, delay);
+  // Deliver the completion IRQ to the originating core, not always core 0.
+  const unsigned irq_core = user.core < num_cores ? user.core : 0;
+  SC_LOG_DEBUG(this, "Sending IRQ to core " << irq_core);
+  irq_sockets[irq_core]->nb_transport_fw(*transaction, phase, delay);
 }
 
 void GenericInterconnect::erase_payload(

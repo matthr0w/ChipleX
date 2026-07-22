@@ -90,8 +90,8 @@ private:
   sc_signal<AxiTrans_t> axi_out_sig;
   AxiTrans_t axi_out_trans;
 
-  Payload_t *payload_out;
-  ARM::AXI::Payload *payload_in;
+  Payload_t *payload_out = nullptr;
+  ARM::AXI::Payload *payload_in = nullptr;
 
   std::deque<ARM::AXI::Payload *> pending_read_responses;
   std::deque<ARM::AXI::Payload *> pending_write_responses;

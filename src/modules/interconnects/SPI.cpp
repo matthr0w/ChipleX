@@ -27,25 +27,16 @@ SPI::SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
 
   irq_sockets = new simple_initiator_socket_tagged<SPI>[num_cores];
 
-  // Register ports in InterconnectBase
-  axi_in_port =
-      reinterpret_cast<ARM::AXI::SimpleTargetSocket<InterconnectBase> *>(
-          &axi_in);
-  axi_out_port =
-      reinterpret_cast<ARM::AXI::SimpleInitiatorSocket<InterconnectBase> *>(
-          &axi_out);
-  for (int i = 0; i < num_links; ++i) {
-    link_in_ports[i] =
-        reinterpret_cast<simple_target_socket_tagged<InterconnectBase> *>(
-            &links_in[i]);
-    link_out_ports[i] =
-        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
-            &links_out[i]);
+  // Register ports in InterconnectBase (implicit upcast to the TLM base socket
+  // types; no reinterpret_cast, see InterconnectBase.h).
+  axi_in_port = &axi_in;
+  axi_out_port = &axi_out;
+  for (unsigned i = 0; i < num_links; ++i) {
+    link_in_ports[i] = &links_in[i];
+    link_out_ports[i] = &links_out[i];
   }
-  for (int i = 0; i < num_cores; ++i)
-    irq_ports[i] =
-        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
-            &irq_sockets[i]);
+  for (unsigned i = 0; i < num_cores; ++i)
+    irq_ports[i] = &irq_sockets[i];
 
   active_links.resize(num_links, false);
 
@@ -86,11 +77,14 @@ void SPI::clk_posedge() {
   //    - Link transfers (beats that must be forwarded)
   //    - Incoming AXI beats in this order: R, B, AW, AR, W
 
-  // Check links for available AXI beat
+  // Check links for a beat destined for this chiplet (delivered to the local
+  // bus). Scan the whole queue and remove only the first matching request,
+  // preserving the FIFO order of the rest. (Previously this used
+  // pop_front/push_front, which re-examined the head every iteration and never
+  // looked past a non-local head -> permanent head-of-line blocking.)
   link_req_out = {-1, nullptr};
   for (size_t i = 0; i < links_queue.size(); ++i) {
-    LinkRequest req = links_queue.front();
-    links_queue.pop_front();
+    const LinkRequest &req = links_queue[i];
 
     uint8_t destination_id = UserSignals::decode(req.payload->user).dst_chiplet;
     int link_id = Router::instance().get_link_id(chiplet_id, interconnect_id,
@@ -98,9 +92,8 @@ void SPI::clk_posedge() {
 
     if (link_id == -1) {
       link_req_out = req;
+      links_queue.erase(links_queue.begin() + i);
       break;
-    } else {
-      links_queue.push_front(req);
     }
   }
   // Put AXI beat in correct queue
@@ -133,24 +126,24 @@ void SPI::clk_posedge() {
     }
   }
 
-  // Check links for forwarding beats
+  // Check links for a beat that must be forwarded (destination is not this
+  // chiplet). Scan in FIFO order for the first forwardable request. If it can
+  // be sent now, remove it; otherwise leave it queued in place for retry next
+  // cycle. Stop at the first forwardable request either way.
   if (!active_transfer) {
     for (size_t i = 0; i < links_queue.size(); ++i) {
-      LinkRequest req = links_queue.front();
-      links_queue.pop_front();
+      const LinkRequest req = links_queue[i];
 
       uint8_t destination_id =
           UserSignals::decode(req.payload->user).dst_chiplet;
 
       if (destination_id != chiplet_id) {
         active_transfer = send_link_request(*req.payload);
-        if (active_transfer)
+        if (active_transfer) {
           active_links[req.link_id] = false;
-        else
-          links_queue.push_front(req);
+          links_queue.erase(links_queue.begin() + i);
+        }
         break;
-      } else {
-        links_queue.push_front(req);
       }
     }
   }
@@ -504,8 +497,10 @@ void SPI::send_irq(ARM::AXI::Payload &payload) {
   transaction->set_data_length(sizeof(IRQ));
   transaction->set_command(TLM_WRITE_COMMAND);
 
-  SC_LOG_DEBUG(this, "Sending IRQ to Core0");
-  irq_sockets[0]->nb_transport_fw(*transaction, phase, delay);
+  // Deliver the completion IRQ to the originating core, not always core 0.
+  const unsigned irq_core = user.core < num_cores ? user.core : 0;
+  SC_LOG_DEBUG(this, "Sending IRQ to core " << irq_core);
+  irq_sockets[irq_core]->nb_transport_fw(*transaction, phase, delay);
 }
 
 bool SPI::send_link_request(ARM::AXI::Payload &payload) {

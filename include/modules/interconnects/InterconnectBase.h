@@ -31,16 +31,23 @@ struct InterconnectBase {
   const unsigned num_cores;
   const unsigned axi_width;
 
+  // Ports are stored as the module-independent TLM base socket types. The
+  // concrete interconnect sockets (templated on their own module type) bind
+  // through these base pointers, replacing the previous reinterpret_cast
+  // between unrelated socket template instantiations, which was undefined
+  // behavior. These ports are only ever used for bind(), a base-class
+  // operation; nb_transport always goes through the concrete typed sockets.
+
   // AXI ports
-  ARM::AXI::SimpleTargetSocket<InterconnectBase> *axi_in_port;
-  ARM::AXI::SimpleInitiatorSocket<InterconnectBase> *axi_out_port;
+  ARM::TLM::BaseTargetSocket<ARM::AXI::ProtocolType> *axi_in_port;
+  ARM::TLM::BaseInitiatorSocket<ARM::AXI::ProtocolType> *axi_out_port;
 
   // Link ports
-  simple_target_socket_tagged<InterconnectBase> **link_in_ports;
-  simple_initiator_socket_tagged<InterconnectBase> **link_out_ports;
+  tlm::tlm_target_socket<> **link_in_ports;
+  tlm::tlm_initiator_socket<> **link_out_ports;
 
   // IRQ ports
-  simple_initiator_socket_tagged<InterconnectBase> **irq_ports;
+  tlm::tlm_initiator_socket<> **irq_ports;
 
   InterconnectBase(unsigned chiplet_id, ChipletConfig chiplet_config,
                    unsigned interconnect_id,
@@ -53,12 +60,9 @@ struct InterconnectBase {
         num_links(interconnect_config.connections.size()),
         num_cores(chiplet_config.node["cores"]["num"].as<unsigned>()),
         axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()) {
-    link_in_ports =
-        new simple_target_socket_tagged<InterconnectBase> *[num_links];
-    link_out_ports =
-        new simple_initiator_socket_tagged<InterconnectBase> *[num_links];
-    irq_ports =
-        new simple_initiator_socket_tagged<InterconnectBase> *[num_cores];
+    link_in_ports = new tlm::tlm_target_socket<> *[num_links];
+    link_out_ports = new tlm::tlm_initiator_socket<> *[num_links];
+    irq_ports = new tlm::tlm_initiator_socket<> *[num_cores];
   }
 
   virtual ~InterconnectBase() {

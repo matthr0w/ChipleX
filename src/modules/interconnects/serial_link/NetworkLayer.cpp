@@ -74,6 +74,11 @@ void SLNetworkLayer::clk_posedge() {
         SC_LOG_ERROR(this, "No valid routing path from "
                                << chiplet_id << " to " << int(destination_id));
       decrement_credits(link_id);
+
+      // Ownership of the committed payload has moved to the stream FIFO (and is
+      // freed by its consumer, SLDataLinkLayer). Drop our pointer so the sender
+      // allocates a fresh one instead of orphaning this heap object.
+      payload_out = nullptr;
     }
 
     // Unpacker
@@ -179,6 +184,13 @@ void SLNetworkLayer::clk_posedge() {
         default:
           break;
         }
+
+        // The wire payload is consumed once it is no longer at the FIFO front;
+        // free it. A busy-channel case leaves it queued for a later cycle (so
+        // peek() still returns it), and the forwarding branch above instead
+        // moves it into the out FIFO -- neither should be freed here.
+        if (stream_fifo_in->peek() != payload)
+          delete payload;
       }
     }
 
@@ -373,7 +385,13 @@ void SLNetworkLayer::sender_thread() {
       }
     }
 
-    payload_out = new Payload_t(axi_width);
+    // Reuse the pending payload if clk_posedge has not yet committed (taken
+    // ownership of) it; otherwise allocate a fresh one. Previously a new
+    // Payload_t was heap-allocated on every sender wakeup, orphaning all but
+    // the one clk_posedge happened to commit.
+    if (!payload_out)
+      payload_out = new Payload_t(axi_width);
+    payload_out->hdr = TagIdle;
 
     if (aw_gnt.read()) {
       payload_out->hdr = TagAW;
@@ -756,8 +774,10 @@ void SLNetworkLayer::send_irq(ARM::AXI::Payload &payload) {
   transaction->set_data_length(sizeof(IRQ));
   transaction->set_command(TLM_WRITE_COMMAND);
 
-  SC_LOG_DEBUG(this, "Sending IRQ to Core0");
-  irq_sockets[0]->nb_transport_fw(*transaction, phase, delay);
+  // Deliver the completion IRQ to the originating core, not always core 0.
+  const unsigned irq_core = user.core < num_cores ? user.core : 0;
+  SC_LOG_DEBUG(this, "Sending IRQ to core " << irq_core);
+  irq_sockets[irq_core]->nb_transport_fw(*transaction, phase, delay);
 }
 
 void SLNetworkLayer::increment_credits(int link_id, unsigned credit) {

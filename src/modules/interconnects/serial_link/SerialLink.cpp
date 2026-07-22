@@ -32,24 +32,14 @@ SerialLink::SerialLink(sc_module_name name, unsigned chiplet_id,
   }
 
   // Register ports in InterconnectBase
-  axi_in_port =
-      reinterpret_cast<ARM::AXI::SimpleTargetSocket<InterconnectBase> *>(
-          &network_layer.axi_in);
-  axi_out_port =
-      reinterpret_cast<ARM::AXI::SimpleInitiatorSocket<InterconnectBase> *>(
-          &network_layer.axi_out);
+  axi_in_port = &network_layer.axi_in;
+  axi_out_port = &network_layer.axi_out;
   for (unsigned i = 0; i < num_links; ++i) {
-    link_in_ports[i] =
-        reinterpret_cast<simple_target_socket_tagged<InterconnectBase> *>(
-            &channel_allocaters[i]->data_in_tsocket);
-    link_out_ports[i] =
-        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
-            &channel_allocaters[i]->data_out_isocket);
+    link_in_ports[i] = &channel_allocaters[i]->data_in_tsocket;
+    link_out_ports[i] = &channel_allocaters[i]->data_out_isocket;
   }
-  for (int i = 0; i < num_cores; ++i)
-    irq_ports[i] =
-        reinterpret_cast<simple_initiator_socket_tagged<InterconnectBase> *>(
-            &network_layer.irq_sockets[i]);
+  for (unsigned i = 0; i < num_cores; ++i)
+    irq_ports[i] = &network_layer.irq_sockets[i];
 }
 
 SerialLink::~SerialLink() {
