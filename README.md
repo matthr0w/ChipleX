@@ -92,6 +92,21 @@ make
 make run ARGS="--help"
 ```
 
+Bit-error injection is deterministic (reproducible) by default; pass `--seed=<n>` to vary it,
+e.g. `make run ARGS="--setup=bcdc --ber=1e-6 --seed=42"`.
+
+### Testing (regression harness)
+
+Run every setup and compare its `stats.json` against the committed golden output in
+`tests/golden/` (requires `SYSTEMC_PATH` / `LD_LIBRARY_PATH` set as for `make run`):
+
+```bash
+make test
+```
+
+After an intentional, reviewed behavior change, regenerate the golden files with
+`make test-update`.
+
 ## TODO
 
 - [ ] Documentation
