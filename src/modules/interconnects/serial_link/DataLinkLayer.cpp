@@ -56,15 +56,10 @@ void SLDataLinkLayer::clk_posedge() {
 				stats.update_accum(this->name(), "transmission_duration_out_us_link" + std::to_string(link_id),
 				                   delay.to_seconds() * 1e6);
 				stream_fifo_out->read();
-				// The wire payload has been packed into the outgoing transaction; free
-				// it (stream FIFO entries are owning heap pointers).
 				delete payload;
 				data_out_ongoing = true;
 			} else {
-				// Backpressure: the receiver could not accept the flit this cycle. Free
-				// the transaction and its packed buffer and retry next cycle. Without
-				// this, a new transaction + buffer leaked on every stalled cycle (only
-				// the accepted path is freed later, in nb_transport_bw).
+				// Backpressure: free the transaction and retry next cycle.
 				delete[] transaction->get_data_ptr();
 				delete transaction;
 			}
@@ -128,10 +123,6 @@ void SLDataLinkLayer::pack_payload(tlm_generic_payload &transaction, Payload_t &
 	const size_t size      = sizeof(PayloadWire_t) + axi_bytes;
 	auto        *buf       = new unsigned char[size];
 
-	// Fill a real PayloadWire_t object and memcpy it into the buffer. Writing
-	// through a reinterpret_cast pointer that was never the start of a
-	// PayloadWire_t object lifetime is undefined behavior; PayloadWire_t is
-	// trivially copyable, so this is the well-defined equivalent.
 	PayloadWire_t wire;
 	wire.addr    = payload.axi_ch.addr;
 	wire.hdr     = payload.hdr;
@@ -154,9 +145,6 @@ Payload_t *SLDataLinkLayer::unpack_payload(tlm_generic_payload &transaction) {
 	const size_t         axi_bytes = (axi_width + 7) / 8;
 	const unsigned char *buf       = transaction.get_data_ptr();
 
-	// Read a real PayloadWire_t object out of the buffer via memcpy (well-defined
-	// for the trivially-copyable wire struct), rather than reading through a
-	// reinterpret_cast pointer whose object lifetime never began.
 	PayloadWire_t wire;
 	std::memcpy(&wire, buf, sizeof(PayloadWire_t));
 	const uint8_t *axi_data = buf + sizeof(PayloadWire_t);

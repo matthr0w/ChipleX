@@ -83,8 +83,6 @@ void Memory::clk_posedge() {
 
 			for (unsigned i = 0; i < beats; ++i) {
 				const uint32_t a = set_beat_address(active_addr, i, beat_bytes, beats, burst);
-				// Overflow-safe bounds check: reject accesses past the backing store
-				// rather than corrupting the heap.
 				if (a > mem.size() || beat_bytes > mem.size() - a) {
 					SC_LOG_ERROR(this, "Memory write out of bounds: address " + std::to_string(a) + " + " +
 					                       std::to_string(beat_bytes) + " byte(s) exceeds size " +
@@ -123,8 +121,6 @@ void Memory::clk_posedge() {
 
 			for (unsigned i = 0; i < beats; ++i) {
 				const uint32_t a = set_beat_address(active_addr, i, beat_bytes, beats, burst);
-				// Overflow-safe bounds check: reject accesses past the backing store
-				// rather than reading out of bounds.
 				if (a > mem.size() || beat_bytes > mem.size() - a) {
 					SC_LOG_ERROR(this, "Memory read out of bounds: address " + std::to_string(a) + " + " +
 					                       std::to_string(beat_bytes) + " byte(s) exceeds size " +

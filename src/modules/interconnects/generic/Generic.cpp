@@ -43,8 +43,7 @@ GenericInterconnect::GenericInterconnect(sc_module_name name, unsigned chiplet_i
 
 	irq_sockets = new simple_initiator_socket_tagged<GenericInterconnect>[num_cores];
 
-	// Register ports in InterconnectBase (implicit upcast to the TLM base socket
-	// types; no reinterpret_cast, see InterconnectBase.h).
+	// Register ports in InterconnectBase
 	axi_in_port  = &axi_in;
 	axi_out_port = &axi_out;
 	for (unsigned i = 0; i < num_links; ++i) {
@@ -717,10 +716,6 @@ void GenericInterconnect::forward_flit(unsigned rx_idx, uint8_t dest_id) {
 void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
 	switch (flit.axi_ch) {
 	case AW: {
-		// Only allocate + register the payload when the AW channel is free and the
-		// flit is actually consumed. Doing it unconditionally leaked a Payload on
-		// every reprocessed flit under AW backpressure (manager_payloads[key] was
-		// overwritten while the same flit remained in the Rx buffer).
 		if (aw_state == CLEAR) {
 			uint32_t address;
 			std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
@@ -785,8 +780,6 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
 		break;
 	}
 	case AR: {
-		// Only allocate the payload when the AR channel is free and the flit is
-		// actually consumed (see the AW case above for the leak this prevents).
 		if (ar_state == CLEAR) {
 			uint32_t address;
 			std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
@@ -859,7 +852,6 @@ void GenericInterconnect::send_irq(ARM::AXI::Payload &payload) {
 	transaction->set_data_length(sizeof(IRQ));
 	transaction->set_command(TLM_WRITE_COMMAND);
 
-	// Deliver the completion IRQ to the originating core, not always core 0.
 	const unsigned irq_core = user.core < num_cores ? user.core : 0;
 	SC_LOG_DEBUG(this, "Sending IRQ to core " << irq_core);
 	irq_sockets[irq_core]->nb_transport_fw(*transaction, phase, delay);

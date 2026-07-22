@@ -115,8 +115,6 @@ class CryptoExtension : public ExtensionBase {
 	}
 
 	void dump_data(const char *tag, const std::vector<uint8_t> &data) const {
-		// Debug-only: this ran unconditionally on every W/R beat, printing hex to
-		// stdout even under SILENT (a real hot-path cost when crypto is enabled).
 		if (log_level > LogLevel::DEBUG) {
 			return;
 		}

@@ -27,9 +27,7 @@ inline sc_time     sim_duration   = sc_time(0, SC_NS);
 inline double      wire_length_mm = 1.0;
 inline double      wire_ps_per_mm = 5.0;
 inline double      bit_error_rate = 1e-12;
-// Deterministic by default so bit-error injection is reproducible across runs;
-// Override with --seed=<n>. The engine is (re)seeded from rng_seed in Parser
-// after CLI parsing.
+// Deterministic by default; override with --seed.
 inline constexpr unsigned               kDefaultRngSeed = 0xC0FFEE;
 inline unsigned                         rng_seed        = kDefaultRngSeed;
 inline std::mt19937                     bit_error_gen{kDefaultRngSeed};

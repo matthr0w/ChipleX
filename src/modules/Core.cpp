@@ -341,11 +341,6 @@ std::shared_ptr<RequestHandle> Core::write_internal(uint32_t request_id, uint8_t
 	payload->user  = user.encode();
 	payload->cache = is_volatile ? ARM::AXI::CACHE_AW_DEVICE_NB : ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
-	// write_in reads whole AXI beats (get_data_length() bytes). When data_length
-	// is not a multiple of the beat width, reading directly from the caller's
-	// buffer over-reads past its end (heap-buffer-overflow). Pad a zero-filled
-	// beat-aligned scratch buffer in that case; the aligned common case is
-	// unchanged.
 	const unsigned aligned_length = beats * axi_bytes;
 	if (data_length == aligned_length) {
 		payload->write_in(data);

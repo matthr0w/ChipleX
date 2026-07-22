@@ -141,9 +141,6 @@ struct RequestHandle {
 	void notify(sc_time delay) {
 		completed = true;
 		if (payload->get_command() == ARM::AXI::COMMAND_READ) {
-			// read_out writes whole AXI beats (get_data_length() bytes). When the
-			// caller's buffer is not beat-aligned, copy back only data_length bytes
-			// via a scratch buffer so we never write past its end.
 			const unsigned aligned = static_cast<unsigned>(payload->get_data_length());
 			if (data_length == aligned) {
 				payload->read_out(data);

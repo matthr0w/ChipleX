@@ -41,7 +41,6 @@ bool StreamFifo::reserve() {
 }
 
 unsigned StreamFifo::num_free() {
-	// Guard against unsigned underflow if fill_level ever exceeds size.
 	return fill_level >= size ? 0 : size - fill_level;
 }
 

@@ -118,10 +118,7 @@ void SPI::clk_posedge() {
 		}
 	}
 
-	// Check links for a beat that must be forwarded (destination is not this
-	// chiplet). Scan in FIFO order for the first forwardable request. If it can
-	// be sent now, remove it; otherwise leave it queued in place for retry next
-	// cycle. Stop at the first forwardable request either way.
+	// Forward the first beat destined for another chiplet
 	if (!active_transfer) {
 		for (size_t i = 0; i < links_queue.size(); ++i) {
 			const LinkRequest req = links_queue[i];
@@ -469,7 +466,6 @@ void SPI::send_irq(ARM::AXI::Payload &payload) {
 	transaction->set_data_length(sizeof(IRQ));
 	transaction->set_command(TLM_WRITE_COMMAND);
 
-	// Deliver the completion IRQ to the originating core, not always core 0.
 	const unsigned irq_core = user.core < num_cores ? user.core : 0;
 	SC_LOG_DEBUG(this, "Sending IRQ to core " << irq_core);
 	irq_sockets[irq_core]->nb_transport_fw(*transaction, phase, delay);

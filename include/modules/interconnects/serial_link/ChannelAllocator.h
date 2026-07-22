@@ -80,14 +80,6 @@ SC_MODULE(SLChannelAllocater) {
 
 			if (!transfer_successful) {
 				SC_LOG_WARN(&module, "Transmission error detected: AXI data payload corrupted.");
-				// Model an uncorrected bit error on the link: the data payload arrives
-				// corrupted, but the flit framing (tag), address, and flow-control
-				// fields (credit/link_id) are preserved so the transaction still
-				// completes and credit accounting stays consistent. Previously this
-				// also zeroed the address word (AXI_ADDR_WIRE_OFFSET), which redirected
-				// the transfer to address 0 and forged a valid write/read there. The
-				// serial link has no retransmission layer, so a corrupted flit cannot
-				// simply be dropped without deadlocking the credit-based flow control.
 				unsigned char *data = transaction.get_data_ptr();
 				std::memset(data + AXI_DATA_WIRE_OFFSET, 0, (module.axi_width + 7) / 8);
 			}

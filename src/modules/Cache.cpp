@@ -5,11 +5,6 @@
 #include "modules/chiplets/ChipletRegistry.h"
 
 namespace {
-// Cache indexing relies on power-of-two block size and line count (address
-// masking + bit-shift indexing). These helpers replace the previous
-// float-based (unsigned)log2(x), which truncates incorrectly for values whose
-// log2 lands just below an integer, and the preconditions are validated in the
-// constructor below.
 inline bool is_power_of_two(unsigned x) {
 	return x != 0 && (x & (x - 1)) == 0;
 }

@@ -369,8 +369,6 @@ std::shared_ptr<RequestHandle> HWAccel::write_internal(uint32_t request_id, uint
 	payload->user  = user.encode();
 	payload->cache = is_volatile ? ARM::AXI::CACHE_AW_DEVICE_NB : ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
-	// See Core::write_internal: pad non-beat-aligned writes so write_in does not
-	// read past the caller's buffer.
 	const unsigned aligned_length = beats * axi_bytes;
 	if (data_length == aligned_length) {
 		payload->write_in(data);

@@ -131,8 +131,7 @@ void StatUtilization::dump(std::ostream &os) const {
 // StatManager Implementation
 // -------------------------------------------------------
 namespace {
-// Resolve (creating if absent) the (module, name) slot to a typed handle in a
-// single map traversal, with a checked cast.
+// Resolve (creating if absent) the stat slot to a typed handle.
 template <typename T, typename Map, typename... Args>
 T *resolve_stat(Map &module_stats, const std::string &module, const std::string &name, Args &&...args) {
 	auto &slot = module_stats[module][name];
@@ -197,9 +196,7 @@ void StatManager::update_usage(const std::string &module, const std::string &nam
 }
 
 namespace {
-// Look up an already-registered utilization stat without inserting a slot on
-// miss. LOG_ERROR always throws, so a missing/mismatched stat aborts cleanly
-// instead of dereferencing null.
+// Look up a registered utilization stat (throws if missing/mismatched).
 template <typename Map>
 StatUtilization *get_utilization(Map &module_stats, const std::string &module, const std::string &name) {
 	auto mit = module_stats.find(module);

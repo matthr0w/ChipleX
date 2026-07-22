@@ -54,9 +54,7 @@ int sc_main(int argc, char *argv[]) {
 		                ->link_in_ports[conn.endpoint0.link_id]);
 	}
 
-	// A fatal error or failed assertion in any process throws; catch it here so
-	// the simulation shuts down cleanly (with partial stats) instead of calling
-	// std::terminate.
+	// Catch fatal errors so the run shuts down cleanly instead of terminating.
 	int exit_code = 0;
 	try {
 		if (sim_duration == SC_ZERO_TIME) {
