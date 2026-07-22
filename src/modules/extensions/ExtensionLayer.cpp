@@ -39,6 +39,8 @@ ExtensionLayer::ExtensionLayer(sc_module_name name,
 
   SC_METHOD(clk_posedge);
   sensitive << clk.pos();
+  // Match every other clocked module: do not run before the first clock edge.
+  dont_initialize();
 }
 
 ExtensionLayer::~ExtensionLayer() { delete[] irq_sockets; }

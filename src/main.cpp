@@ -39,7 +39,7 @@ int sc_main(int argc, char *argv[]) {
   }
 
   // Connect chiplets
-  for (int i = 0; i < sysconf.connections.size(); ++i) {
+  for (size_t i = 0; i < sysconf.connections.size(); ++i) {
     const auto &conn = sysconf.connections[i];
     chiplets[conn.endpoint0.chiplet_name]
         ->interconnects[conn.endpoint0.interconnect_name]
@@ -55,13 +55,23 @@ int sc_main(int argc, char *argv[]) {
                     ->link_in_ports[conn.endpoint0.link_id]);
   }
 
-  if (sim_duration == SC_ZERO_TIME)
-    sc_start();
-  else
-    sc_start(sim_duration);
+  // A fatal error or failed assertion in any process throws; catch it here so
+  // the simulation shuts down cleanly (with partial stats) instead of calling
+  // std::terminate.
+  int exit_code = 0;
+  try {
+    if (sim_duration == SC_ZERO_TIME)
+      sc_start();
+    else
+      sc_start(sim_duration);
+  } catch (const std::exception &e) {
+    std::cerr << "Simulation aborted at " << sc_time_stamp() << ": " << e.what()
+              << std::endl;
+    exit_code = 1;
+  }
 
   stats.end_simulation_timer();
   stats.dump_to_file("stats.json");
 
-  return 0;
+  return exit_code;
 }

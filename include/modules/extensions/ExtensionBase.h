@@ -7,10 +7,10 @@
 enum class AxiDir : uint8_t { UPSTREAM, DOWNSTREAM };
 
 struct AxiBeat {
-  ARM::AXI::Payload *payload;
-  ARM::AXI::Phase phase;
-  AxiDir dir;
-  int index;
+  ARM::AXI::Payload *payload = nullptr;
+  ARM::AXI::Phase phase = ARM::AXI4::PHASE_UNINITIALIZED;
+  AxiDir dir = AxiDir::UPSTREAM;
+  int index = 0;
 };
 
 class ExtensionBase {

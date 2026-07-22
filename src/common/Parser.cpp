@@ -35,6 +35,12 @@ void Parser::parse(int argc, char *argv[]) {
       } catch (...) {
         LOG_ERROR("Invalid value for --ber");
       }
+    } else if (arg.rfind("--seed=", 0) == 0) {
+      try {
+        rng_seed = static_cast<unsigned>(std::stoul(arg.substr(7)));
+      } catch (...) {
+        LOG_ERROR("Invalid value for --seed");
+      }
     } else if (arg.rfind("--logging=", 0) == 0) {
       std::string level = arg.substr(10);
       std::transform(level.begin(), level.end(), level.begin(), ::tolower);
@@ -60,6 +66,10 @@ void Parser::parse(int argc, char *argv[]) {
       LOG_ERROR("Unknown argument: " << arg);
     }
   }
+
+  // Apply the (possibly overridden) RNG seed so bit-error injection is
+  // reproducible for a given seed.
+  bit_error_gen.seed(rng_seed);
 }
 
 void Parser::print_help(const char *progname) {
@@ -70,6 +80,8 @@ void Parser::print_help(const char *progname) {
       << "  --time=<ns>               Set simulation time in nanoseconds "
          "(default: unlimited)\n"
       << "  --ber=<prob>              Set bit error rate (default: 1e-12)\n"
+      << "  --seed=<n>                Set RNG seed for bit-error injection "
+         "(default: fixed, reproducible)\n"
       << "  --logging=level           Set logging level: INFO, WARN, "
          "ERROR, DELAY, DEBUG, SILENT (default: ERROR)\n"
       << "  --help                    Show this help message"
