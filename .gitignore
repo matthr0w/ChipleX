@@ -9,7 +9,8 @@ build*/
 .venv/
 
 # VSCode directory
-.vscode/
+.vscode/*
+!.vscode/settings.json
 
 # Binaries
 *.so
