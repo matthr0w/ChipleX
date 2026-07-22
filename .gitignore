@@ -3,7 +3,7 @@
 __pycache__/
 
 # Build directories
-build/
+build*/
 
 # Python venv
 .venv/
@@ -14,3 +14,8 @@ build/
 # Binaries
 *.so
 sim
+
+# Run outputs
+/stats.json
+setups/duckcam/data/duckiebot_output*.jpg
+setups/tumlogo/data/tum_output.jpg
