@@ -68,7 +68,7 @@ int sc_main(int argc, char *argv[]) {
 	}
 
 	stats.end_simulation_timer();
-	stats.dump_to_file("stats.json");
+	stats.dump_to_file(stats_out);
 
 	return exit_code;
 }
