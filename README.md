@@ -8,10 +8,8 @@ SystemC serves as the foundation of this simulation environment, and its install
 
 ### Prerequisites
 
-**Fedora**
-
 ```bash
-sudo dnf install clang cmake
+clang cmake git
 ```
 
 ### Installation Steps
@@ -83,10 +81,16 @@ https://github.com/riscv-software-src/riscv-isa-sim
 ### Build
 
 ```bash
-make
+make [release|debug|asan]
 ```
 
-### Execute Simulation
+### Execute Simulation GUI *(recommended)*
+
+```bash
+make gui
+```
+
+### Execute Simulation CLI
 
 ```bash
 make run ARGS="--help"

@@ -44,6 +44,7 @@ endif()
 # -----------------------
 # Optional: specify setup library to build
 # -----------------------
+set(SETUPS_DIR "${PROJECT_SOURCE_DIR}/setups" CACHE PATH "Directory containing setup subdirectories")
 set(BUILD_SETUP "" CACHE STRING "Name of setup library to build (default: build all)")
 
 # -----------------------
@@ -113,7 +114,7 @@ endif()
 # -----------------------
 # Setup libraries
 # -----------------------
-file(GLOB SETUP_DIRS "${PROJECT_SOURCE_DIR}/setups/*")
+file(GLOB SETUP_DIRS "${SETUPS_DIR}/*")
 
 foreach(SETUP_PATH ${SETUP_DIRS})
   if(IS_DIRECTORY ${SETUP_PATH})

@@ -33,6 +33,10 @@ void Parser::parse(int argc, char *argv[]) {
 			} catch (...) {
 				LOG_ERROR("Invalid value for --ber");
 			}
+		} else if (arg.rfind("--stats-out=", 0) == 0) {
+			std::string path = arg.substr(12);
+			LOG_ASSERT(!path.empty(), "Missing path for --stats-out");
+			stats_out = path;
 		} else if (arg.rfind("--seed=", 0) == 0) {
 			try {
 				rng_seed = static_cast<unsigned>(std::stoul(arg.substr(7)));
@@ -77,6 +81,8 @@ void Parser::print_help(const char *progname) {
 	          << "  --ber=<prob>              Set bit error rate (default: 1e-12)\n"
 	          << "  --seed=<n>                Set RNG seed for bit-error injection "
 	             "(default: fixed, reproducible)\n"
+	          << "  --stats-out=<path>        Write statistics JSON to path "
+	             "(default: stats.json)\n"
 	          << "  --logging=level           Set logging level: INFO, WARN, "
 	             "ERROR, DELAY, DEBUG, SILENT (default: ERROR)\n"
 	          << "  --help                    Show this help message" << std::endl;

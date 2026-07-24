@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
-from constants import *
 from classes import *
+from constants import *
 
 
 def sha1_file(path: Path) -> str:

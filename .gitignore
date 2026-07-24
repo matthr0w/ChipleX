@@ -5,6 +5,9 @@ __pycache__/
 # Build directories
 build*/
 
+# GUI managed setups workspace
+tools/gui/setups/
+
 # Python venv
 .venv/
 
