@@ -25,7 +25,7 @@ if [ "${1:-}" = "--update" ]; then
 fi
 
 if [ ! -x "$ROOT/sim" ]; then
-  echo "error: ./sim is not built. Run 'make' with SYSTEMC_PATH set." >&2
+  echo "Error: ./sim is not built. Run 'make' with SYSTEMC_PATH set." >&2
   exit 2
 fi
 

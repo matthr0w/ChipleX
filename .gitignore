@@ -1,23 +1,21 @@
-# Cache directories
-.cache/
-__pycache__/
-
-# Build directories
+# Build artifacts
 build*/
+dist/
+.systemc-install/
+sim
+*.so
 
-# GUI managed setups workspace
-tools/gui/setups/
-
-# Python venv
+# Caches and venvs
+__pycache__/
+.cache/
 .venv/
 
-# VSCode directory
+# GUI-managed setups workspace
+tools/gui/setups/
+
+# Editor
 .vscode/*
 !.vscode/settings.json
-
-# Binaries
-*.so
-sim
 
 # Run outputs
 /stats.json
