@@ -9,7 +9,7 @@ release:linux-x86_64:
   stage: release
   image: $RELEASE_IMAGE
   tags:
-    - docker
+    - stuws01
   cache:
     key: "systemc-$SYSTEMC_VERSION-$RELEASE_IMAGE"
     paths:
