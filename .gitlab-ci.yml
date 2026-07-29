@@ -27,6 +27,7 @@ release:linux-x86_64:
         libxcb-shape0 libxcb-shm0 libxcb-sync1 libxcb-xfixes0
         libxcb-xinerama0 libxcb-xkb1
         libfontconfig1 libfreetype6 libxrender1 libxi6
+        libgtk-3-0 libtiff5
   script:
     - make bundle
   artifacts:
