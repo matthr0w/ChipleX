@@ -7,13 +7,13 @@ import tempfile
 from pathlib import Path
 from typing import List
 
-from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QSpinBox, QTabWidget,
                                QVBoxLayout, QWidget)
 
 from ..project import Project
 from ..runner import RunResult
+from .markdown_viewer import show_markdown
 from .results_tab import ResultsTab
 from .runs_tab import RunsTab
 from .setups_tab import SetupsTab
@@ -66,10 +66,10 @@ class MainWindow(QMainWindow):
         self._progress.setTextVisible(True)
         self._status = QLabel("Ready")
 
-        docs_url = QUrl.fromLocalFile(str(project.root / "docs" / "GUI.md")).toString()
-        help_hint = QLabel(f'<a href="{docs_url}">Help</a>')
-        help_hint.setOpenExternalLinks(True)
-        help_hint.setToolTip("Open docs/GUI.md")
+        docs_path = project.root / "docs" / "GUI.md"
+        help_hint = QLabel('<a href="#">Help</a>')
+        help_hint.setToolTip("Open the GUI guide")
+        help_hint.linkActivated.connect(lambda _=None, p=docs_path: show_markdown(self, p))
 
         controls = QHBoxLayout()
         controls.addWidget(self._cores)

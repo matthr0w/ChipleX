@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
 from .. import setup_writer
 from ..project import Project
 from .graph_editor import GraphEditor
+from .markdown_viewer import show_markdown
 
 _LAYOUT_FILE = ".layout.json"
 
@@ -44,10 +45,9 @@ class SetupEditorDialog(QDialog):
         open_code.accepted.connect(self._open_code)
 
         docs_path = project.root / "docs" / "PROGRAM-CODE.md"
-        docs_url = QUrl.fromLocalFile(str(docs_path)).toString()
-        hint = QLabel(f'<a href="{docs_url}">How to write program code</a>')
-        hint.setOpenExternalLinks(True)
-        hint.setToolTip("Open docs/PROGRAM-CODE.md")
+        hint = QLabel('<a href="#">How to write program code</a>')
+        hint.setToolTip("Open the program-code guide")
+        hint.linkActivated.connect(lambda _=None, p=docs_path: show_markdown(self, p))
 
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._save)
