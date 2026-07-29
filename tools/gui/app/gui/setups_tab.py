@@ -15,7 +15,7 @@ from ..cycle_estimation import run_cycle_estimation
 from ..project import Project, missing_build_tools, missing_cycle_tools
 from ..setup_builder import BuildResult, build_setup
 from .setup_editor import SetupEditorDialog
-
+from .theme import link
 
 _TOOL_URLS = {
     "cmake": "https://cmake.org/download/",
@@ -29,7 +29,7 @@ _TOOL_URLS = {
 
 def _tool_item(name: str) -> str:
     url = _TOOL_URLS.get(name)
-    return f'<li><a href="{url}">{name}</a></li>' if url else f"<li>{name}</li>"
+    return f"<li>{link(url, name)}</li>" if url else f"<li>{name}</li>"
 
 
 def _warning_banner(intro: str, tools: list, outro: str) -> QLabel:

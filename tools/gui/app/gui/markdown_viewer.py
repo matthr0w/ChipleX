@@ -55,8 +55,8 @@ class MarkdownViewer(QDialog):
     def _stylesheet(self) -> str:
         base = self.palette().color(QPalette.Base)
         dark = base.lightness() < 128
-        code_bg = "#33373e" if dark else "#f2f3f5"
-        border = "#4a4f57" if dark else "#d5d8dc"
+        code_bg = "#2b2b2b" if dark else "#f2f3f5"
+        border = "#3c3c3c" if dark else "#d5d8dc"
         return (
             f"pre {{ background-color: {code_bg}; padding: 8px;"
             f" border: 1px solid {border}; }}"

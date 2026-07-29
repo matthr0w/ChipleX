@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox
 
 from ..project import Project, is_frozen, user_data_dir
 from .main_window import MainWindow
+from .theme import apply_theme
 
 
 def _ensure_executable(path) -> None:
@@ -23,6 +24,9 @@ def _ensure_executable(path) -> None:
 def main() -> int:
     app = QApplication(sys.argv)
     app.setApplicationName("Chiplet Simulator")
+
+    if is_frozen():
+        apply_theme(app)
 
     try:
         project = Project.discover()

@@ -16,6 +16,7 @@ from .. import setup_writer
 from ..project import Project
 from .graph_editor import GraphEditor
 from .markdown_viewer import show_markdown
+from .theme import link
 
 _LAYOUT_FILE = ".layout.json"
 
@@ -45,7 +46,7 @@ class SetupEditorDialog(QDialog):
         open_code.accepted.connect(self._open_code)
 
         docs_path = project.root / "docs" / "PROGRAM-CODE.md"
-        hint = QLabel('<a href="#">How to write program code</a>')
+        hint = QLabel(link("#", "How to write program code"))
         hint.setToolTip("Open the program-code guide")
         hint.linkActivated.connect(lambda _=None, p=docs_path: show_markdown(self, p))
 

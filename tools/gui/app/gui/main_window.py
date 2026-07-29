@@ -18,6 +18,7 @@ from .results_tab import ResultsTab
 from .runs_tab import RunsTab
 from .setups_tab import SetupsTab
 from .sweep_tab import SweepTab
+from .theme import link
 from .worker import BatchController
 
 
@@ -67,7 +68,7 @@ class MainWindow(QMainWindow):
         self._status = QLabel("Ready")
 
         docs_path = project.root / "docs" / "GUI.md"
-        help_hint = QLabel('<a href="#">Help</a>')
+        help_hint = QLabel(link("#", "Help"))
         help_hint.setToolTip("Open the GUI guide")
         help_hint.linkActivated.connect(lambda _=None, p=docs_path: show_markdown(self, p))
 
