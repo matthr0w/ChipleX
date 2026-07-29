@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 # RISC-V Compiler
@@ -16,19 +17,24 @@ SPIKE_SIMULATOR_FLAGS = ["pk"]
 REQUIRED_TOOLS = [RISCV_COMPILER, LLVM_ANALYZER, SPIKE_SIMULATOR]
 
 # Paths
+# The config, setup, and scratch build locations default to the repository
+# layout (relative to the working directory) but can be overridden via the
+# environment so the GUI can point them at its managed workspace.
 SCRIPT_ROOT = Path(__file__).parent.absolute()
 ## Configs
-CONFIGS_ROOT = Path("configs")
+CONFIGS_ROOT = Path(os.environ.get("CE_CONFIGS_DIR", "configs"))
 ACCELERATOR_CONFIGS = CONFIGS_ROOT / "accelerators"
 ## Setups
-SETUPS_ROOT = Path("setups")
+SETUPS_ROOT = Path(os.environ.get("CE_SETUPS_DIR", "setups"))
 SETUP_SRC_SUBDIR = Path("src")
 SETUP_PROGRAM_FILE = SETUP_SRC_SUBDIR / "program.cpp"
 SETUP_WORKLOADS_SUBDIR = Path("workloads")
 SETUP_WORKLOADS_DB = "workloads.yaml"
 SETUP_SYSTEM_FILE = "system.yaml"
+## Setup to process (empty = all setups)
+ONLY_SETUP = os.environ.get("CE_ONLY_SETUP", "")
 ## Build
-BUILD_DIR = SCRIPT_ROOT / "build"
+BUILD_DIR = Path(os.environ.get("CE_BUILD_DIR", str(SCRIPT_ROOT / "build")))
 
 # Annotations
 BEGIN_CYCLE_ANNOT = "//@BEGIN_CYCLE_MEASURE"

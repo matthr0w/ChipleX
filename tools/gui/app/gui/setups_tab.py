@@ -6,14 +6,43 @@ import shutil
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox,
-                               QHBoxLayout, QInputDialog, QListWidget,
+                               QHBoxLayout, QInputDialog, QLabel, QListWidget,
                                QMessageBox, QPlainTextEdit, QPushButton,
                                QVBoxLayout, QWidget)
 
 from .. import setup_writer
-from ..project import Project
+from ..cycle_estimation import run_cycle_estimation
+from ..project import Project, missing_build_tools, missing_cycle_tools
 from ..setup_builder import BuildResult, build_setup
 from .setup_editor import SetupEditorDialog
+
+
+_TOOL_URLS = {
+    "cmake": "https://cmake.org/download/",
+    "C++ compiler (g++ or clang++)": "https://gcc.gnu.org/install/",
+    "LLVM": "https://llvm.org",
+    "RISC-V GNU Compiler Toolchain": "https://github.com/riscv-collab/riscv-gnu-toolchain",
+    "RISC-V Proxy Kernel and Boot Loader": "https://github.com/riscv-software-src/riscv-pk",
+    "Spike RISC-V ISA Simulator": "https://github.com/riscv-software-src/riscv-isa-sim",
+}
+
+
+def _tool_item(name: str) -> str:
+    url = _TOOL_URLS.get(name)
+    return f'<li><a href="{url}">{name}</a></li>' if url else f"<li>{name}</li>"
+
+
+def _warning_banner(intro: str, tools: list, outro: str) -> QLabel:
+    items = "".join(_tool_item(t) for t in tools)
+    label = QLabel(f"Warning: {intro}<ul>{items}</ul>{outro}")
+    label.setWordWrap(True)
+    label.setOpenExternalLinks(True)
+    label.setTextInteractionFlags(Qt.TextBrowserInteraction)
+    label.setStyleSheet(
+        "QLabel { color: #9a6700; border: 1px solid #c8a000;"
+        " border-radius: 4px; padding: 6px; }"
+    )
+    return label
 
 
 class _BuildWorker(QThread):
@@ -25,7 +54,12 @@ class _BuildWorker(QThread):
         self._name = name
 
     def run(self) -> None:
-        self.done.emit(build_setup(self._project, self._name))
+        # Refresh workload cycle counts, then compile the setup plugin.
+        cycles = run_cycle_estimation(self._project, self._name)
+        result = build_setup(self._project, self._name)
+        log = f"=== Cycle estimation ===\n{cycles.log}\n\n=== Build ===\n{result.log}"
+        note = "Cycle estimation failed; see log." if cycles.status == "failed" else ""
+        self.done.emit(BuildResult(result.ok, log, note))
 
 
 def _valid_name(name: str) -> bool:
@@ -62,10 +96,34 @@ class SetupsTab(QWidget):
         buttons.addStretch(1)
 
         layout = QVBoxLayout(self)
+        for banner in self._environment_banners():
+            layout.addWidget(banner)
         layout.addLayout(buttons)
         layout.addWidget(self._list, 1)
 
         self.refresh()
+
+    def _environment_banners(self) -> list:
+        """Warning banners for missing build and cycle-estimation tools."""
+        banners = []
+        build_missing = missing_build_tools()
+        if build_missing:
+            self._build_btn.setEnabled(False)
+            self._build_btn.setToolTip("Install " + ", ".join(build_missing))
+            banners.append(_warning_banner(
+                "setups cannot be built without:",
+                build_missing,
+                "You can still create and edit setups; install these to build and run them.",
+            ))
+        cycle_missing = missing_cycle_tools()
+        if cycle_missing:
+            banners.append(_warning_banner(
+                "cycle estimation is disabled and will be skipped without:",
+                cycle_missing,
+                "Setups run with their existing workload cycle counts; new or "
+                "changed workloads are not estimated.",
+            ))
+        return banners
 
     def refresh(self) -> None:
         current = self._selected()
@@ -154,7 +212,10 @@ class SetupsTab(QWidget):
         name = self._selected() or ""
         if result.ok:
             self.status.emit(f"Built '{name}' successfully.")
-            QMessageBox.information(self, "Build", f"Built '{name}' successfully.")
+            if result.note:
+                _show_log(f"Built '{name}' ({result.note})", result.log, self)
+            else:
+                QMessageBox.information(self, "Build", f"Built '{name}' successfully.")
         else:
             self.status.emit(f"Build of '{name}' failed.")
             _show_log("Build failed", result.log, self)

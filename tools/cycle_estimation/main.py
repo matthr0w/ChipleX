@@ -33,6 +33,9 @@ class CycleEstimator:
         for setup_dir in sorted(SETUPS_ROOT.iterdir()):
             if not setup_dir.is_dir():
                 continue
+            # Restrict to a single setup when requested (GUI per-setup builds).
+            if ONLY_SETUP and setup_dir.stem != ONLY_SETUP:
+                continue
             # Check if workloads exist
             workloads_dir = setup_dir / SETUP_WORKLOADS_SUBDIR
             if not workloads_dir.exists():
