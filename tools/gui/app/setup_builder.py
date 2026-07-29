@@ -17,10 +17,11 @@ from .project import Project
 class BuildResult:
     ok: bool
     log: str
+    note: str = ""
 
 
 def build_setup(project: Project, name: str, timeout_s: int = 900) -> BuildResult:
-    build_dir = project.root / "build"
+    build_dir = project.build_dir
     build_dir.mkdir(parents=True, exist_ok=True)
     env = project.child_env()
 
@@ -32,6 +33,8 @@ def build_setup(project: Project, name: str, timeout_s: int = 900) -> BuildResul
         f"-DBUILD_SETUP={name}",
         f"-DSETUPS_DIR={project.setups_dir}",
     ]
+    if project.yaml_cpp_dir is not None:
+        configure.append(f"-DYAML_CPP_DIR={project.yaml_cpp_dir}")
     build = ["cmake", "--build", str(build_dir)]
 
     log_parts = []

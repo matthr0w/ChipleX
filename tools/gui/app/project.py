@@ -4,9 +4,49 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Dict, List, Optional
+
+
+def is_frozen() -> bool:
+    """True when running from a PyInstaller bundle."""
+    return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
+
+
+# Tools required to compile a setup plugin, and the cycle-estimation toolchain
+# (see tools/cycle_estimation/constants.py). Each cycle tool is an (executable
+# to probe, display name) pair; missing_* return the display names.
+_CXX_COMPILERS = ("c++", "g++", "clang++")
+_CYCLE_TOOLS = (
+    ("llvm-mca", "LLVM"),
+    ("riscv64-unknown-elf-gcc", "RISC-V GNU Compiler Toolchain"),
+    ("pk", "RISC-V Proxy Kernel and Boot Loader"),
+    ("spike", "Spike RISC-V ISA Simulator"),
+)
+
+
+def missing_build_tools() -> List[str]:
+    """Return the build tools that are absent; empty when setups can be built."""
+    missing: List[str] = []
+    if shutil.which("cmake") is None:
+        missing.append("cmake")
+    if not any(shutil.which(cxx) for cxx in _CXX_COMPILERS):
+        missing.append("C++ compiler (g++ or clang++)")
+    return missing
+
+
+def missing_cycle_tools() -> List[str]:
+    """Return the display names of absent cycle-estimation tools."""
+    return [name for exe, name in _CYCLE_TOOLS if shutil.which(exe) is None]
+
+
+def user_data_dir() -> Path:
+    """Persistent, writable location for the workspace and build outputs."""
+    base = os.environ.get("XDG_DATA_HOME")
+    root = Path(base) if base else Path.home() / ".local" / "share"
+    return root / "chiplet-sim"
 
 
 @dataclass
@@ -15,15 +55,34 @@ class Project:
     sim_binary: Path
     configs_dir: Path
     setups_dir: Path
+    build_dir: Path
+    systemc_path: Optional[Path] = None
+    yaml_cpp_dir: Optional[Path] = None
 
     @classmethod
     def discover(cls, start: Optional[Path] = None) -> "Project":
-        """Find the repository root by walking up from `start`.
+        """Locate the framework root.
 
-        The root is the first ancestor that contains both a `setups` directory
-        and a `configs` directory. Defaults to this file's location so the tool
-        works regardless of the caller's working directory.
+        In a PyInstaller bundle the root is the staged `framework/` directory,
+        with a bundled SystemC install and yaml-cpp so setups can be compiled
+        offline, and setup builds directed to a persistent user data directory.
+
+        Otherwise the root is the first ancestor of this file that contains both
+        a `setups` and a `configs` directory, so the tool works from any working
+        directory during development.
         """
+        if is_frozen():
+            root = Path(sys._MEIPASS) / "framework"
+            return cls(
+                root=root,
+                sim_binary=root / "sim",
+                configs_dir=root / "configs",
+                setups_dir=root / "setups",
+                build_dir=user_data_dir() / "build",
+                systemc_path=root / "systemc",
+                yaml_cpp_dir=root / "deps" / "yaml-cpp",
+            )
+
         here = (start or Path(__file__)).resolve()
         for candidate in [here, *here.parents]:
             if (candidate / "setups").is_dir() and (candidate / "configs").is_dir():
@@ -39,6 +98,7 @@ class Project:
             sim_binary=root / "sim",
             configs_dir=root / "configs",
             setups_dir=root / "setups",
+            build_dir=root / "build",
         )
 
     def with_setups_dir(self, setups_dir: Path) -> "Project":
@@ -92,6 +152,8 @@ class Project:
         env = dict(os.environ)
         env.setdefault("SYSTEMC_DISABLE_COPYRIGHT_MESSAGE", "1")
 
+        if self.systemc_path is not None:
+            env["SYSTEMC_PATH"] = str(self.systemc_path)
         systemc_path = env.get("SYSTEMC_PATH", "").strip()
         extra: List[str] = []
         if systemc_path:
