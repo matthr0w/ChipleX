@@ -1,28 +1,30 @@
 cmake_minimum_required(VERSION 3.10)
 project(sim LANGUAGES C CXX)
 
-# -----------------------
-# C++ standard
-# -----------------------
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Export the simulator's symbols so dlopen'd setup plugins can resolve them.
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
 
-# -----------------------
-# Build type
-# -----------------------
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING
       "Build type (Debug, Release, RelWithDebInfo, MinSizeRel)" FORCE)
   message(STATUS "No build type specified; defaulting to Release")
 endif()
 
-# -----------------------
-# Optional build configurations
-# -----------------------
 option(ENABLE_LTO "Enable link-time optimization (Release only)" OFF)
 option(ENABLE_ASAN "Build with AddressSanitizer + UBSan (verification builds)" OFF)
+option(RELOCATABLE "Bake an $ORIGIN rpath so binaries find a co-located libsystemc.so (release bundles)" OFF)
+
+if(RELOCATABLE)
+  # sim loads libsystemc.so from a co-located copy or the bundled SystemC
+  # install; plugins then resolve SystemC from the already-loaded library.
+  # $ORIGIN keeps this working wherever the bundle is unpacked.
+  set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+  set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/systemc/lib;$ORIGIN/systemc/lib64")
+endif()
 
 if(ENABLE_ASAN)
   add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -O1 -g)
@@ -41,18 +43,12 @@ if(ENABLE_LTO AND NOT ENABLE_ASAN)
   endif()
 endif()
 
-# -----------------------
-# Optional: specify setup library to build
-# -----------------------
 set(SETUPS_DIR "${PROJECT_SOURCE_DIR}/setups" CACHE PATH "Directory containing setup subdirectories")
 set(BUILD_SETUP "" CACHE STRING "Name of setup library to build (default: build all)")
 
-# -----------------------
-# Fetch dependencies
-# -----------------------
 include(FetchContent)
 
-# SystemC: from SYSTEMC_PATH, else an installed CMake package
+# SystemC: prefer SYSTEMC_PATH, then an installed CMake package.
 set(SYSTEMC_PATH $ENV{SYSTEMC_PATH})
 set(SYSTEMC_INCLUDE_DIR "")
 if(EXISTS "${SYSTEMC_PATH}/lib/libsystemc.so")
@@ -74,19 +70,27 @@ else()
   endif()
 endif()
 
-# yaml-cpp (pinned release)
-set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(
-  yaml-cpp
-  GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-  GIT_TAG 0.8.0
-)
-FetchContent_MakeAvailable(yaml-cpp)
+# yaml-cpp: a prebuilt copy when YAML_CPP_DIR is given (offline bundle builds),
+# otherwise the pinned release fetched from upstream.
+set(YAML_CPP_DIR "" CACHE PATH "Prebuilt yaml-cpp with include/ and lib/libyaml-cpp.a; empty = fetch")
+if(YAML_CPP_DIR)
+  add_library(yaml-cpp::yaml-cpp STATIC IMPORTED)
+  set_target_properties(yaml-cpp::yaml-cpp PROPERTIES
+    IMPORTED_LOCATION "${YAML_CPP_DIR}/lib/libyaml-cpp.a"
+    INTERFACE_INCLUDE_DIRECTORIES "${YAML_CPP_DIR}/include")
+  message(STATUS "Using prebuilt yaml-cpp: ${YAML_CPP_DIR}")
+else()
+  set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+    yaml-cpp
+    GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
+    GIT_TAG 0.8.0
+  )
+  FetchContent_MakeAvailable(yaml-cpp)
+endif()
 
-# -----------------------
-# Simulator executable
-# -----------------------
+# Simulator (skipped when building only a single setup plugin).
 if(NOT BUILD_SETUP)
   file(GLOB_RECURSE PROJECT_SOURCES "${PROJECT_SOURCE_DIR}/src/*.cpp")
 
@@ -102,18 +106,21 @@ if(NOT BUILD_SETUP)
     yaml-cpp::yaml-cpp
   )
 
-  set_target_properties(sim PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}"
-  )
+  # Dev builds place sim at the repo root; relocatable bundle builds leave it in
+  # the build tree for the release step to stage.
+  if(NOT RELOCATABLE)
+    set_target_properties(sim PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}"
+    )
+  endif()
 
   if(ENABLE_LTO)
     set_target_properties(sim PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
   endif()
 endif()
 
-# -----------------------
-# Setup libraries
-# -----------------------
+# One shared setup plugin (libsetup.so) per setup directory, built from its
+# src/ sources. BUILD_SETUP restricts the build to a single setup.
 file(GLOB SETUP_DIRS "${SETUPS_DIR}/*")
 
 foreach(SETUP_PATH ${SETUP_DIRS})
