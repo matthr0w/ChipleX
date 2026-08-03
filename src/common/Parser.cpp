@@ -75,7 +75,7 @@ void Parser::parse(int argc, char *argv[]) {
 void Parser::print_help(const char *progname) {
 	std::cout << "Usage: " << progname << " [options]\n"
 	          << "Options:\n"
-	          << "  --setup=name              Set simulation setup\n"
+	          << "  --setup=name              Set simulation setup (required)\n"
 	          << "  --time=<ns>               Set simulation time in nanoseconds "
 	             "(default: unlimited)\n"
 	          << "  --ber=<prob>              Set bit error rate (default: 1e-12)\n"

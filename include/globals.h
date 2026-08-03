@@ -22,7 +22,8 @@ inline LogLevel log_level = LogLevel::WARN;
 // ---------------------------
 // Simulation Parameters
 // ---------------------------
-inline std::string sim_setup      = "default";
+// No default setup: --setup selects one and the loader rejects an unknown name.
+inline std::string sim_setup      = "";
 inline std::string stats_out      = "stats.json";
 inline sc_time     sim_duration   = sc_time(0, SC_NS);
 inline double      wire_length_mm = 1.0;

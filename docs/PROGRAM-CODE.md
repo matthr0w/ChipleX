@@ -210,7 +210,8 @@ produced by the cycle-estimation tool.
    //@END_CYCLE_MEASURE
    ```
 
-3. Run `make run` (the estimator runs automatically before the simulation), or
+3. Run `make run ARGS="--setup=<name>"` (the estimator runs automatically before
+   the simulation), or
    run it directly with `tools/cycle_estimation/main.py`. It compiles the
    workload for RISC-V, measures cycles with Spike, and records the result in
    `workloads.yaml` under a key equal to the file name (`<workload>`).

@@ -14,9 +14,15 @@ int sc_main(int argc, char *argv[]) {
 	// Start statistics manager
 	StatManager &stats = StatManager::instance();
 	stats.start_simulation_timer();
-	// Load system setup
-	SetupLoader  setup("./configs", "./setups", sim_setup);
-	SystemConfig sysconf = setup.get_config();
+	// Load system setup. A missing or unknown setup must fail before elaboration.
+	SystemConfig sysconf;
+	try {
+		SetupLoader setup("./configs", "./setups", sim_setup);
+		sysconf = setup.get_config();
+	} catch (const std::exception &) {
+		// The loader has already reported the cause.
+		return 1;
+	}
 	// Initialize router instance
 	Router::instance().init(sysconf);
 

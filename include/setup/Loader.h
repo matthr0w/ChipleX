@@ -8,6 +8,7 @@ class SetupLoader {
 		chiplets_path_      = configs_path + "/chiplets/";
 		accels_path_        = configs_path + "/accelerators/";
 		interconnects_path_ = configs_path + "/interconnects/";
+		check_setup(setups_path, setup_name);
 		load_system_config(setups_path + "/" + setup_name + "/system.yaml");
 		load_cycles_db(setups_path + "/" + setup_name + "/workloads.yaml");
 		load_lib_code(setups_path + "/" + setup_name + "/libsetup.so");
@@ -23,6 +24,7 @@ class SetupLoader {
 	std::string  interconnects_path_;
 	SystemConfig sysconf_;
 
+	void check_setup(const std::string &setups_path, const std::string &setup_name);
 	void load_system_config(const std::string &system_file);
 	void load_cycles_db(const std::string &workloads_file);
 	void load_lib_code(const std::string &setup_lib);

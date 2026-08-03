@@ -5,6 +5,24 @@
 
 #include "logging.h"
 
+void SetupLoader::check_setup(const std::string &setups_path, const std::string &setup_name) {
+	// Paths are relative to the working directory, so name it in the error.
+	LOG_ASSERT(std::filesystem::is_directory(setups_path),
+	           "SetupLoader: No setups directory at " + std::filesystem::absolute(setups_path).string());
+
+	std::string available;
+	for (const auto &entry : std::filesystem::directory_iterator(setups_path)) {
+		if (std::filesystem::is_regular_file(entry.path() / "system.yaml")) {
+			available += (available.empty() ? "" : ", ") + entry.path().filename().string();
+		}
+	}
+
+	LOG_ASSERT(!setup_name.empty(), "SetupLoader: No setup selected. Use --setup=<name>. Available: " + available);
+
+	LOG_ASSERT(std::filesystem::is_regular_file(std::filesystem::path(setups_path) / setup_name / "system.yaml"),
+	           "SetupLoader: Unknown setup: " + setup_name + ". Available: " + available);
+}
+
 void SetupLoader::load_system_config(const std::string &system_file) {
 	YAML::Node root = YAML::LoadFile(system_file);
 
