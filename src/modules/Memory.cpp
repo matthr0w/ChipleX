@@ -9,6 +9,7 @@ Memory::Memory(sc_module_name name, ChipletConfig chiplet_config)
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
       size(chiplet_config.node["memory"]["size"].as<unsigned>()),
       clk_cycle(chiplet_config.node["memory"]["clk_cycle"].as<unsigned>(), SC_NS),
+      access_latency(chiplet_config.node["memory"]["access_latency"].as<unsigned>()),
       tsocket("tsocket", *this, &Memory::nb_transport_fw, ARM::TLM::PROTOCOL_AXI4, axi_width),
       mem(size * 1024, 0),
       mem_bitmap((mem.size() + 7) / 8, 0),
@@ -73,11 +74,18 @@ void Memory::clk_posedge() {
 		ARM::AXI::Phase phase = ARM::AXI::AW_READY;
 		trace_axi(*aw_queue.front(), phase);
 		tsocket.nb_transport_bw(*aw_queue.front(), phase);
-		mem_state = MemoryState::WriteAccess;
+		access_wait = access_latency;
+		mem_state   = MemoryState::WriteAccess;
 		break;
 	}
 	case MemoryState::WriteAccess: {
 		if (!w_queue.empty()) {
+			// Charged once the write data has arrived, once per transaction.
+			if (access_wait > 0) {
+				--access_wait;
+				break;
+			}
+
 			b_outgoing = w_queue.front();
 			aw_queue.pop_front();
 			w_queue.pop_front();
@@ -117,11 +125,17 @@ void Memory::clk_posedge() {
 		ARM::AXI::Phase phase = ARM::AXI::AR_READY;
 		trace_axi(*ar_queue.front(), phase);
 		tsocket.nb_transport_bw(*ar_queue.front(), phase);
-		mem_state = MemoryState::ReadAccess;
+		access_wait = access_latency;
+		mem_state   = MemoryState::ReadAccess;
 		break;
 	}
 	case MemoryState::ReadAccess: {
 		if (!ar_queue.empty()) {
+			if (access_wait > 0) {
+				--access_wait;
+				break;
+			}
+
 			r_outgoing = ar_queue.front();
 			ar_queue.pop_front();
 

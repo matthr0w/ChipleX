@@ -10,6 +10,7 @@ caches:
 memory:
   size: 512 # KB
   clk_cycle: 3 # ns
+  access_latency: 1 # cycles
 dma_engine:
   clk_cycle: 5 # ns
 extensions:

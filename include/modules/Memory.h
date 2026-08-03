@@ -23,6 +23,7 @@ SC_MODULE(Memory) {
 	const unsigned axi_width;
 	const unsigned size;
 	const sc_time  clk_cycle;
+	const unsigned access_latency;
 
   public:
 	// -------------------------------------------------------
@@ -75,7 +76,8 @@ SC_MODULE(Memory) {
 
 	std::vector<uint8_t>         mem;
 	std::vector<uint8_t>         mem_bitmap;
-	MemoryState                  mem_state = MemoryState::Idle;
+	MemoryState                  mem_state   = MemoryState::Idle;
+	unsigned                     access_wait = 0;
 	std::map<uint32_t, unsigned> allocated_ranges;
 	uint32_t                     offchip_base_address;
 	uint32_t                     active_addr = 0;
