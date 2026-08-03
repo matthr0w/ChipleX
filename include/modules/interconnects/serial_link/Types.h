@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -109,8 +110,40 @@ struct Payload_t {
 	uint8_t         len   = 0;
 	ARM::AXI::Burst burst = 0;
 
+	// Wire size of one packet in bytes. Every packet is the same size, so a data
+	// beat costs as much as an address to transmit. Not sizeof(Payload_t): those
+	// members are simulation state, not wire fields.
+	//
+	//   +-----+---------------------------+---------+-----+-----+--------+
+	//   | pad |          axi_ch           | b_valid |  b  | hdr | credit |
+	//   +-----+---------------------------+---------+-----+-----+--------+
+	//     (a)      max(AW, AR, W, R)           1      (b)    4      4      bits
+	//
+	//   (a) rounds the packet up to whole bytes
+	//   (b) id + resp + user
+	//
+	//   AW  id + addr + ctrl + atop + user
+	//   AR  id + addr + ctrl + user
+	//   W   data + strb + last + user
+	//   R   id + data + resp + last + user
 	static constexpr size_t simulation_size(size_t axi_width) {
-		return (axi_width + 7) / 8 + sizeof(Tag_e) + sizeof(int) + sizeof(uint32_t) + sizeof(uint64_t);
+		constexpr size_t id   = 6; // 4 manager bits plus 2 bits of crossbar port
+		constexpr size_t addr = 64;
+		constexpr size_t user = 1;  // a zero-width user field cannot be a packed type
+		constexpr size_t ctrl = 29; // len 8, size 3, burst 2, lock 1, cache 4, prot 3, qos 4, region 4
+		constexpr size_t atop = 6;
+		constexpr size_t resp = 2;
+		constexpr size_t last = 1;
+
+		const size_t aw = id + addr + ctrl + atop + user;
+		const size_t ar = id + addr + ctrl + user;
+		const size_t w  = axi_width + axi_width / 8 + last + user; // one strobe bit per data byte
+		const size_t r  = id + axi_width + resp + last + user;
+
+		const size_t axi_ch  = std::max(std::max(aw, ar), std::max(w, r));
+		const size_t framing = 1 + (id + resp + user) + 4 + 4;
+
+		return (axi_ch + framing + 7) / 8;
 	}
 
 	Payload_t(size_t axi_width) : axi_ch((axi_width + 7) / 8) {}
