@@ -19,9 +19,9 @@
     },
     "chiplet0.core0": {
       "transaction_count": 50,
-      "transaction_latency_us": { "min": 0.42, "max": 5.121 },
-      "transaction_total_latency_us": 139.641,
-      "utilization": { "percentage": 0.0593465, "active_time_us": 42.76, "idle_time_us": 72008.7 }
+      "transaction_latency_us": { "min": 0.421, "max": 5.126 },
+      "transaction_total_latency_us": 139.832,
+      "utilization": { "percentage": 0.0593464, "active_time_us": 42.76, "idle_time_us": 72008.7 }
     },
     "chiplet0.dma_engine": {
       "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 72051.5 }
@@ -35,24 +35,24 @@
       "link_buffer_size_bytes_link0": 512,
       "link_buffer_size_bytes_link1": 512,
       "overhead_size_bytes": 4,
-      "rx_buffer_usage_link0": { "average_usage": 0.0255762, "max_usage": 204 },
-      "rx_buffer_usage_link1": { "average_usage": 1.03815e-05, "max_usage": 68 },
+      "rx_buffer_usage_link0": { "average_usage": 0.0255988, "max_usage": 204 },
+      "rx_buffer_usage_link1": { "average_usage": 9.43769e-06, "max_usage": 68 },
       "staging_buffer_size_bytes": 1024,
-      "staging_buffer_usage": { "average_usage": 0.0104698, "max_usage": 52 },
+      "staging_buffer_usage": { "average_usage": 0.0104609, "max_usage": 52 },
       "transmission_count_in_link0": 530,
       "transmission_count_in_link1": 20,
       "transmission_count_out_link0": 30,
       "transmission_count_out_link1": 270,
       "transmission_duration_out_us_link0": 0.01608,
       "transmission_duration_out_us_link1": 0.14472,
-      "tx_buffer_usage_link0": { "average_usage": 4.43572e-05, "max_usage": 68 },
-      "tx_buffer_usage_link1": { "average_usage": 0.00036807, "max_usage": 68 },
+      "tx_buffer_usage_link0": { "average_usage": 4.05821e-05, "max_usage": 68 },
+      "tx_buffer_usage_link1": { "average_usage": 0.000371845, "max_usage": 68 },
       "utilization": { "percentage": 0.000825521, "active_time_us": 0.5948, "idle_time_us": 72050.9 }
     },
     "chiplet0.memory": {
       "size_bytes": 524288,
       "used_bytes": 2316,
-      "utilization": { "percentage": 0.161851, "active_time_us": 116.616, "idle_time_us": 71934.9 }
+      "utilization": { "percentage": 0.161913, "active_time_us": 116.661, "idle_time_us": 71934.8 }
     },
     "chiplet1.bus": {
       "utilization_cache0<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 72051.5 },
@@ -72,8 +72,8 @@
     },
     "chiplet1.core0": {
       "transaction_count": 30,
-      "transaction_latency_us": { "min": 1.057, "max": 2.911 },
-      "transaction_total_latency_us": 65.384,
+      "transaction_latency_us": { "min": 1.062, "max": 2.916 },
+      "transaction_total_latency_us": 65.496,
       "utilization": { "percentage": 0.382768, "active_time_us": 275.79, "idle_time_us": 71775.7 }
     },
     "chiplet1.dma_engine": {
@@ -88,24 +88,24 @@
       "link_buffer_size_bytes_link0": 512,
       "link_buffer_size_bytes_link1": 512,
       "overhead_size_bytes": 4,
-      "rx_buffer_usage_link0": { "average_usage": 6.60639e-06, "max_usage": 68 },
-      "rx_buffer_usage_link1": { "average_usage": 0.0128721, "max_usage": 204 },
+      "rx_buffer_usage_link0": { "average_usage": 4.71885e-06, "max_usage": 68 },
+      "rx_buffer_usage_link1": { "average_usage": 0.0129306, "max_usage": 204 },
       "staging_buffer_size_bytes": 1024,
-      "staging_buffer_usage": { "average_usage": 0.00353891, "max_usage": 52 },
+      "staging_buffer_usage": { "average_usage": 0.00352853, "max_usage": 52 },
       "transmission_count_in_link0": 10,
       "transmission_count_in_link1": 270,
       "transmission_count_out_link0": 100,
       "transmission_count_out_link1": 20,
       "transmission_duration_out_us_link0": 0.0536,
       "transmission_duration_out_us_link1": 0.01072,
-      "tx_buffer_usage_link0": { "average_usage": 0.000149116, "max_usage": 68 },
+      "tx_buffer_usage_link0": { "average_usage": 0.000139678, "max_usage": 68 },
       "tx_buffer_usage_link1": { "average_usage": 2.73693e-05, "max_usage": 68 },
       "utilization": { "percentage": 0.000374843, "active_time_us": 0.27008, "idle_time_us": 72051.2 }
     },
     "chiplet1.memory": {
       "size_bytes": 524288,
       "used_bytes": 1164,
-      "utilization": { "percentage": 0.0819497, "active_time_us": 59.046, "idle_time_us": 71992.4 }
+      "utilization": { "percentage": 0.0820372, "active_time_us": 59.109, "idle_time_us": 71992.4 }
     },
     "fpga.bus": {
       "utilization_cache0<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 72051.5 },
@@ -125,8 +125,8 @@
     },
     "fpga.core0": {
       "transaction_count": 40,
-      "transaction_latency_us": { "min": 0.719, "max": 2.635 },
-      "transaction_total_latency_us": 69.714,
+      "transaction_latency_us": { "min": 0.721, "max": 2.636 },
+      "transaction_total_latency_us": 69.88,
       "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 72051.5 }
     },
     "fpga.dma_engine": {
@@ -141,24 +141,24 @@
       "link_buffer_size_bytes_link0": 512,
       "link_buffer_size_bytes_link1": 512,
       "overhead_size_bytes": 4,
-      "rx_buffer_usage_link0": { "average_usage": 9.4377e-06, "max_usage": 68 },
-      "rx_buffer_usage_link1": { "average_usage": 0.00453764, "max_usage": 136 },
+      "rx_buffer_usage_link0": { "average_usage": 1.41565e-05, "max_usage": 68 },
+      "rx_buffer_usage_link1": { "average_usage": 0.00454519, "max_usage": 136 },
       "staging_buffer_size_bytes": 1024,
-      "staging_buffer_usage": { "average_usage": 0.020852, "max_usage": 52 },
+      "staging_buffer_usage": { "average_usage": 0.0208537, "max_usage": 52 },
       "transmission_count_in_link0": 30,
       "transmission_count_in_link1": 100,
       "transmission_count_out_link0": 530,
       "transmission_count_out_link1": 10,
       "transmission_duration_out_us_link0": 0.28408,
       "transmission_duration_out_us_link1": 0.00536,
-      "tx_buffer_usage_link0": { "average_usage": 0.000761622, "max_usage": 68 },
-      "tx_buffer_usage_link1": { "average_usage": 1.32128e-05, "max_usage": 68 },
+      "tx_buffer_usage_link0": { "average_usage": 0.000724815, "max_usage": 68 },
+      "tx_buffer_usage_link1": { "average_usage": 1.41565e-05, "max_usage": 68 },
       "utilization": { "percentage": 0.000846173, "active_time_us": 0.60968, "idle_time_us": 72050.9 }
     },
     "fpga.memory": {
       "size_bytes": 524288,
       "used_bytes": 396,
-      "utilization": { "percentage": 0.0284588, "active_time_us": 20.505, "idle_time_us": 72031 }
+      "utilization": { "percentage": 0.0285143, "active_time_us": 20.545, "idle_time_us": 72031 }
     }
   }
 }

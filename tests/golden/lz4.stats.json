@@ -1,122 +1,122 @@
 {
-  "simulation_time_us": 75.271,
+  "simulation_time_us": 75.29,
   "modules": {
     "chiplet0.bus": {
-      "utilization_cache0<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_cache0<->interconnect": { "percentage": 0.332133, "active_time_us": 0.25, "idle_time_us": 75.021 },
-      "utilization_cache0<->memory": { "percentage": 0.491557, "active_time_us": 0.37, "idle_time_us": 74.901 },
-      "utilization_dma_engine<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_dma_engine<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_dma_engine<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_interconnect<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_interconnect<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_interconnect<->memory": { "percentage": 0.504843, "active_time_us": 0.38, "idle_time_us": 74.891 }
+      "utilization_cache0<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_cache0<->interconnect": { "percentage": 0.332049, "active_time_us": 0.25, "idle_time_us": 75.04 },
+      "utilization_cache0<->memory": { "percentage": 0.491433, "active_time_us": 0.37, "idle_time_us": 74.92 },
+      "utilization_dma_engine<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_dma_engine<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_dma_engine<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_interconnect<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_interconnect<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_interconnect<->memory": { "percentage": 0.504715, "active_time_us": 0.38, "idle_time_us": 74.91 }
     },
     "chiplet0.cache0": {
       "hit_rate": 0,
       "miss_rate": 0,
-      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 }
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 }
     },
     "chiplet0.core0": {
       "transaction_count": 2,
-      "transaction_latency_us": { "min": 0.369, "max": 0.938 },
-      "transaction_total_latency_us": 1.307,
-      "utilization": { "percentage": 79.8927, "active_time_us": 60.136, "idle_time_us": 15.135 }
+      "transaction_latency_us": { "min": 0.368, "max": 0.94 },
+      "transaction_total_latency_us": 1.308,
+      "utilization": { "percentage": 79.8725, "active_time_us": 60.136, "idle_time_us": 15.154 }
     },
     "chiplet0.dma_engine": {
-      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 }
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 }
     },
     "chiplet0.interconnect.data_link_layer": {
       "transmission_count_in_link0": 37,
       "transmission_count_in_link1": 7,
       "transmission_count_out_link0": 10,
       "transmission_count_out_link1": 24,
-      "transmission_duration_out_us_link0": 0.30005,
-      "transmission_duration_out_us_link1": 0.72012,
-      "utilization": { "percentage": 2.04563, "active_time_us": 1.53025, "idle_time_us": 73.2757 }
+      "transmission_duration_out_us_link0": 0.32005,
+      "transmission_duration_out_us_link1": 0.76812,
+      "utilization": { "percentage": 2.18143, "active_time_us": 1.63226, "idle_time_us": 73.1927 }
     },
     "chiplet0.memory": {
       "size_bytes": 524288,
       "used_bytes": 144,
-      "utilization": { "percentage": 2.18411, "active_time_us": 1.644, "idle_time_us": 73.627 }
+      "utilization": { "percentage": 2.19153, "active_time_us": 1.65, "idle_time_us": 73.64 }
     },
     "chiplet1.bus": {
-      "utilization_cache0<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_cache0<->interconnect": { "percentage": 0.504843, "active_time_us": 0.38, "idle_time_us": 74.891 },
-      "utilization_cache0<->memory": { "percentage": 0.318848, "active_time_us": 0.24, "idle_time_us": 75.031 },
-      "utilization_dma_engine<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_dma_engine<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_dma_engine<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_interconnect<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_interconnect<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_interconnect<->memory": { "percentage": 0.332133, "active_time_us": 0.25, "idle_time_us": 75.021 }
+      "utilization_cache0<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_cache0<->interconnect": { "percentage": 0.504715, "active_time_us": 0.38, "idle_time_us": 74.91 },
+      "utilization_cache0<->memory": { "percentage": 0.318767, "active_time_us": 0.24, "idle_time_us": 75.05 },
+      "utilization_dma_engine<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_dma_engine<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_dma_engine<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_interconnect<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_interconnect<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_interconnect<->memory": { "percentage": 0.332049, "active_time_us": 0.25, "idle_time_us": 75.04 }
     },
     "chiplet1.cache0": {
       "hit_rate": 0,
       "miss_rate": 0,
-      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 }
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 }
     },
     "chiplet1.core0": {
       "transaction_count": 2,
-      "transaction_latency_us": { "min": 0.239, "max": 1.367 },
-      "transaction_total_latency_us": 1.606,
-      "utilization": { "percentage": 14.1329, "active_time_us": 10.638, "idle_time_us": 64.633 }
+      "transaction_latency_us": { "min": 0.239, "max": 1.372 },
+      "transaction_total_latency_us": 1.611,
+      "utilization": { "percentage": 14.1294, "active_time_us": 10.638, "idle_time_us": 64.652 }
     },
     "chiplet1.dma_engine": {
-      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 }
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 }
     },
     "chiplet1.interconnect.data_link_layer": {
       "transmission_count_in_link0": 10,
       "transmission_count_in_link1": 24,
       "transmission_count_out_link0": 37,
       "transmission_count_out_link1": 7,
-      "transmission_duration_out_us_link0": 1.11018,
-      "transmission_duration_out_us_link1": 0.210035,
-      "utilization": { "percentage": 2.04563, "active_time_us": 1.53025, "idle_time_us": 73.2757 }
+      "transmission_duration_out_us_link0": 1.18418,
+      "transmission_duration_out_us_link1": 0.224035,
+      "utilization": { "percentage": 2.18143, "active_time_us": 1.63226, "idle_time_us": 73.1927 }
     },
     "chiplet1.memory": {
       "size_bytes": 524288,
       "used_bytes": 92,
-      "utilization": { "percentage": 1.40692, "active_time_us": 1.059, "idle_time_us": 74.212 }
+      "utilization": { "percentage": 1.41453, "active_time_us": 1.065, "idle_time_us": 74.225 }
     },
     "fpga.bus": {
-      "utilization_cache0<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_cache0<->interconnect": { "percentage": 0.504843, "active_time_us": 0.38, "idle_time_us": 74.891 },
-      "utilization_cache0<->memory": { "percentage": 0.484915, "active_time_us": 0.365, "idle_time_us": 74.906 },
-      "utilization_dma_engine<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_dma_engine<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_dma_engine<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_interconnect<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_interconnect<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 },
-      "utilization_interconnect<->memory": { "percentage": 0.504843, "active_time_us": 0.38, "idle_time_us": 74.891 }
+      "utilization_cache0<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_cache0<->interconnect": { "percentage": 0.504715, "active_time_us": 0.38, "idle_time_us": 74.91 },
+      "utilization_cache0<->memory": { "percentage": 0.484792, "active_time_us": 0.365, "idle_time_us": 74.925 },
+      "utilization_dma_engine<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_dma_engine<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_dma_engine<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_interconnect<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_interconnect<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 },
+      "utilization_interconnect<->memory": { "percentage": 0.504715, "active_time_us": 0.38, "idle_time_us": 74.91 }
     },
     "fpga.cache0": {
       "hit_rate": 0,
       "miss_rate": 0,
-      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 }
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 }
     },
     "fpga.core0": {
       "transaction_count": 2,
-      "transaction_latency_us": { "min": 0.369, "max": 1.37 },
-      "transaction_total_latency_us": 1.739,
-      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 }
+      "transaction_latency_us": { "min": 0.373, "max": 1.376 },
+      "transaction_total_latency_us": 1.749,
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 }
     },
     "fpga.dma_engine": {
-      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.271 }
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 75.29 }
     },
     "fpga.interconnect.data_link_layer": {
       "transmission_count_in_link0": 10,
       "transmission_count_in_link1": 37,
       "transmission_count_out_link0": 37,
       "transmission_count_out_link1": 10,
-      "transmission_duration_out_us_link0": 1.11018,
-      "transmission_duration_out_us_link1": 0.30005,
-      "utilization": { "percentage": 2.41033, "active_time_us": 1.8003, "idle_time_us": 72.8907 }
+      "transmission_duration_out_us_link0": 1.18418,
+      "transmission_duration_out_us_link1": 0.32005,
+      "utilization": { "percentage": 2.57034, "active_time_us": 1.9203, "idle_time_us": 72.7897 }
     },
     "fpga.memory": {
       "size_bytes": 524288,
       "used_bytes": 144,
-      "utilization": { "percentage": 2.17747, "active_time_us": 1.639, "idle_time_us": 73.632 }
+      "utilization": { "percentage": 2.1902, "active_time_us": 1.649, "idle_time_us": 73.641 }
     }
   }
 }

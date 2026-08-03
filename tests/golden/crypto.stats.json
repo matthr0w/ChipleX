@@ -112,7 +112,7 @@
     "chiplet2.memory": {
       "size_bytes": 524288,
       "used_bytes": 256,
-      "utilization": { "percentage": 50.4756, "active_time_us": 22.818, "idle_time_us": 22.388 }
+      "utilization": { "percentage": 50.5751, "active_time_us": 22.863, "idle_time_us": 22.343 }
     }
   }
 }
