@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout,
-                               QHeaderView, QLabel, QPushButton, QSplitter,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout,
-                               QWidget)
+from PySide6.QtGui import QFontMetrics
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFileDialog,
+                               QHBoxLayout, QHeaderView, QLabel, QPushButton,
+                               QSizePolicy, QSplitter, QTableWidget,
+                               QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..project import Project
 from ..runspec import RunSpec
@@ -37,6 +39,7 @@ class RunsTab(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self._table.cellDoubleClicked.connect(lambda row, _col: self._edit_row(row))
         self._table.itemSelectionChanged.connect(self._show_selected_output)
+        self._table.itemSelectionChanged.connect(self._update_log_controls)
         self._outputs: dict[str, str] = {}
 
         add_btn = QPushButton("Add...")
@@ -57,8 +60,6 @@ class RunsTab(QWidget):
         for btn in (add_btn, edit_btn, dup_btn, rm_btn, clear_btn):
             buttons.addWidget(btn)
         buttons.addStretch(1)
-        buttons.addWidget(QLabel("Log level"))
-        buttons.addWidget(self._log_level)
 
         self._output = AnsiTextEdit()
 
@@ -69,11 +70,29 @@ class RunsTab(QWidget):
         output_header.addStretch(1)
         output_header.addWidget(clear_output_btn)
 
+        self._log_file_text = _ElidedLabel()
+        self._choose_log_btn = QPushButton("Choose...")
+        self._choose_log_btn.setToolTip("Write the selected run's output to a file")
+        self._choose_log_btn.clicked.connect(self._choose_log_file)
+        self._remove_log_btn = QPushButton("Unset")
+        self._remove_log_btn.setToolTip("Stop writing the selected run's output to a file")
+        self._remove_log_btn.clicked.connect(self._remove_log_file)
+
+        log_header = QHBoxLayout()
+        log_header.addWidget(QLabel("Log file:"))
+        log_header.addWidget(self._log_file_text, 1)
+        log_header.addWidget(self._choose_log_btn)
+        log_header.addWidget(self._remove_log_btn)
+        log_header.addSpacing(16)
+        log_header.addWidget(QLabel("Log level:"))
+        log_header.addWidget(self._log_level)
+
         splitter = QSplitter(Qt.Vertical)
         splitter.addWidget(self._table)
         output_box = QWidget()
         output_layout = QVBoxLayout(output_box)
         output_layout.setContentsMargins(0, 0, 0, 0)
+        output_layout.addLayout(log_header)
         output_layout.addLayout(output_header)
         output_layout.addWidget(self._output)
         splitter.addWidget(output_box)
@@ -82,6 +101,9 @@ class RunsTab(QWidget):
         layout = QVBoxLayout(self)
         layout.addLayout(buttons)
         layout.addWidget(splitter, 1)
+
+        self._last_log_dir: Path | None = None
+        self._update_log_controls()
 
     def log_level(self) -> str:
         return self._log_level.currentText()
@@ -100,15 +122,60 @@ class RunsTab(QWidget):
         if self._current_label() == label:
             self._output.append_ansi(chunk)
 
-    def _current_label(self) -> "str | None":
+    def _current_spec(self) -> "RunSpec | None":
+        """The single selected run, or None when the selection is not exactly one."""
         rows = self._selected_rows()
         if len(rows) != 1:
             return None
-        return self._specs[rows[0]].label
+        return self._specs[rows[0]]
+
+    def _current_label(self) -> "str | None":
+        spec = self._current_spec()
+        return spec.label if spec is not None else None
 
     def _show_selected_output(self) -> None:
         label = self._current_label()
         self._output.set_ansi(self._outputs.get(label, "") if label else "")
+
+    def _update_log_controls(self) -> None:
+        spec = self._current_spec()
+        self._choose_log_btn.setEnabled(spec is not None)
+        self._remove_log_btn.setEnabled(spec is not None and spec.log_path is not None)
+        if spec is None:
+            self._log_file_text.set_full_text("Select a run")
+        elif spec.log_path is None:
+            self._log_file_text.set_full_text("Output is not written to a file")
+        else:
+            self._log_file_text.set_full_text(str(spec.log_path))
+
+    def _choose_log_file(self) -> None:
+        spec = self._current_spec()
+        if spec is None:
+            return
+        path, _filter = QFileDialog.getSaveFileName(
+            self,
+            f"Log file for '{spec.label}'",
+            str(self._log_dialog_start(spec)),
+            "Log files (*.log);;All files (*)",
+        )
+        if not path:
+            return
+        spec.log_path = Path(path)
+        self._last_log_dir = spec.log_path.parent
+        self._update_log_controls()
+
+    def _remove_log_file(self) -> None:
+        spec = self._current_spec()
+        if spec is None:
+            return
+        spec.log_path = None
+        self._update_log_controls()
+
+    def _log_dialog_start(self, spec: RunSpec) -> Path:
+        if spec.log_path is not None:
+            return spec.log_path
+        directory = self._last_log_dir or Path.home()
+        return directory / f"{_slug(spec.label)}.log"
 
     def set_setups(self, setups: List[str]) -> None:
         self._setups = list(setups)
@@ -161,6 +228,8 @@ class RunsTab(QWidget):
         dialog = RunEditorDialog(self._project, self._setups, spec=self._specs[row], parent=self)
         if dialog.exec():
             new_spec = dialog.result_spec()
+            # The editor does not cover the log file, so keep the row's choice.
+            new_spec.log_path = self._specs[row].log_path
             if new_spec.label != self._specs[row].label:
                 new_spec.label = self._unique_label(new_spec.label, ignore_index=row)
             self._specs[row] = new_spec
@@ -177,6 +246,8 @@ class RunsTab(QWidget):
                 ber=original.ber,
                 seed=original.seed,
                 overrides=list(original.overrides),
+                # The log file is deliberately not copied: two runs writing to
+                # the same file would overwrite each other's output.
             )
             self._specs.append(copy)
         self._rebuild()
@@ -218,9 +289,39 @@ class RunsTab(QWidget):
             self._table.setItem(row, 6, _ro(spec.overrides_summary()))
             self._table.setItem(row, 7, _ro(""))
         self._table.resizeColumnToContents(0)
+        self._update_log_controls()
+
+
+class _ElidedLabel(QLabel):
+    """Label that elides long text on the left so full paths stay readable."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # An ignored horizontal policy keeps a long path from widening the tab.
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._full_text = ""
+
+    def set_full_text(self, text: str) -> None:
+        self._full_text = text
+        self.setToolTip(text)
+        self._apply_elision()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 - Qt naming
+        super().resizeEvent(event)
+        self._apply_elision()
+
+    def _apply_elision(self) -> None:
+        metrics = QFontMetrics(self.font())
+        self.setText(metrics.elidedText(self._full_text, Qt.ElideLeft, max(0, self.width())))
 
 
 def _ro(text: str) -> QTableWidgetItem:
     item = QTableWidgetItem(text)
     item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable)
     return item
+
+
+def _slug(text: str) -> str:
+    keep = [c if c.isalnum() or c in ("-", "_") else "_" for c in text]
+    return "".join(keep) or "run"

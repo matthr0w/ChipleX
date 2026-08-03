@@ -6,15 +6,17 @@ its statistics are parsed into a RunResult.
 
 from __future__ import annotations
 
+import re
 import shutil
 import signal
 import subprocess
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from threading import Event, Thread
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, TextIO
 
 from . import stats
 from .project import Project
@@ -22,6 +24,8 @@ from .runspec import RunSpec
 
 DEFAULT_TIMEOUT_S = 3600
 _TAIL_CHARS = 20000
+# CSI sequences, which cover the SGR colour codes the simulator emits.
+_ANSI_ESCAPE = re.compile("\x1b\\[[0-?]*[ -/]*[@-~]")
 
 
 @dataclass
@@ -105,7 +109,11 @@ class Runner:
             stats_path.unlink()
 
         started = time.monotonic()
+        log_file = None
         try:
+            log_file = _open_log(spec.log_path)
+            self._emit(spec, on_output, log_file,
+                       f"Simulation '{spec.label}' of setup '{spec.setup}' started {_timestamp()}")
             spec.build_sandbox(self.project, sandbox)
             argv = spec.argv(self.project.sim_binary, stats_path, self.log_level)
             proc = subprocess.Popen(
@@ -118,19 +126,25 @@ class Runner:
                 bufsize=1,
                 start_new_session=True,
             )
-            output = self._stream(proc, spec, on_output)
+            output = self._stream(proc, spec, on_output, log_file)
             result.returncode = proc.returncode
             result.stdout_tail = output[-_TAIL_CHARS:]
             result.cancelled = self._cancel.is_set()
+            result.duration_s = time.monotonic() - started
+            outcome = ("cancelled" if result.cancelled
+                       else f"exited with code {result.returncode}")
+            self._emit(spec, on_output, log_file,
+                       f"Simulation '{spec.label}' of setup '{spec.setup}' {outcome} after {result.duration_s:.1f} s")
         except Exception as exc:  # noqa: BLE001 - surface any launch failure to the UI
             result.error = str(exc)
             result.duration_s = time.monotonic() - started
+            self._emit(spec, on_output, log_file, f"Simulation '{spec.label}' of setup '{spec.setup}' failed: {exc}")
             return result
         finally:
+            if log_file is not None:
+                log_file.close()
             if not self.keep_sandboxes:
                 shutil.rmtree(sandbox, ignore_errors=True)
-
-        result.duration_s = time.monotonic() - started
 
         if result.cancelled:
             result.error = "cancelled"
@@ -151,18 +165,22 @@ class Runner:
             result.error = f"failed to parse statistics: {exc}"
         return result
 
-    def _stream(self, proc: subprocess.Popen, spec: RunSpec, on_output: Optional[Callable]) -> str:
+    def _stream(self, proc: subprocess.Popen, spec: RunSpec, on_output: Optional[Callable],
+                log_file: Optional[TextIO] = None) -> str:
         """Read merged stdout/stderr live, forwarding each line to on_output.
 
         A reader thread iterates the pipe so lines surface as the simulator
         emits them; the main thread enforces cancellation and the timeout by
-        killing the process, which ends the reader at EOF.
+        killing the process, which ends the reader at EOF. Lines are flushed to
+        the run's log file as they arrive so the file can be tailed while the
+        batch is still running.
         """
         chunks: List[str] = []
 
         def reader() -> None:
             for line in proc.stdout:
                 chunks.append(line)
+                _write_log(log_file, line)
                 if on_output is not None:
                     on_output(spec, line)
 
@@ -178,6 +196,43 @@ class Runner:
                 break
         proc.wait()
         return "".join(chunks)
+
+    def _emit(self, spec: RunSpec, on_output: Optional[Callable],
+              log_file: Optional[TextIO], text: str) -> None:
+        """Send a framework-generated marker line to the live output and the log."""
+        line = f"=== {text} ===\n"
+        _write_log(log_file, line)
+        if on_output is not None:
+            on_output(spec, line)
+
+
+def _open_log(log_path: Optional[Path]) -> Optional[TextIO]:
+    """Open a run's log file for writing, creating missing parent directories.
+
+    Raised errors are reported as run failures rather than silently dropping the
+    log the user asked for.
+    """
+    if log_path is None:
+        return None
+    log_path = Path(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    return log_path.open("w", encoding="utf-8")
+
+
+def _write_log(log_file: Optional[TextIO], text: str) -> None:
+    """Append to a run's log file, if one is set.
+
+    Colour escapes are stripped because the file is read in editors that
+    would otherwise show them as literal text.
+    """
+    if log_file is None:
+        return
+    log_file.write(_ANSI_ESCAPE.sub("", text))
+    log_file.flush()
+
+
+def _timestamp() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _kill(proc: subprocess.Popen) -> None:

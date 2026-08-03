@@ -69,7 +69,15 @@ limit, BER, seed, a summary of overrides, and status.
 - **Duplicate**, **Remove**, and **Clear** manage the list.
 - The **Enabled** checkbox controls whether a row runs; only enabled rows execute
   when you press Run.
-- **Log level** sets the simulator verbosity for the whole batch.
+- The **Log file** row above the output panel shows the file the currently
+  selected run writes its output to. **Choose...** picks that file (missing
+  directories are created, an existing file is overwritten), **Unset** goes back
+  to not writing a file. The setting belongs to the selected run, so each run can
+  have its own log file; give every run a distinct file, since runs execute in
+  parallel and would otherwise overwrite each other. Lines are flushed as they
+  arrive, so the file can be tailed while the batch runs, and colour codes are
+  stripped from the file so it reads cleanly in an editor. **Log level**
+  in the same row sets the simulator verbosity for the whole batch.
 - The **Output** panel shows the live log of the currently selected run. Select a
   different row to view its output; **Clear** empties the panel.
 

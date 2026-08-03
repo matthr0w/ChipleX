@@ -26,6 +26,7 @@ class RunSpec:
     ber: float | None = None  # None keeps the simulator default
     seed: int | None = None
     overrides: List[Tuple[ParamRef, Any]] = field(default_factory=list)
+    log_path: Path | None = None  # None discards the run output after the batch
 
     def argv(self, sim_binary: Path, stats_out: Path, log_level: str = "SILENT") -> List[str]:
         args = [
