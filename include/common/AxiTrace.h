@@ -63,12 +63,20 @@ inline const char *resp_name(ARM::AXI::Resp resp) {
 	}
 }
 
+// src_module and dst_module are per-hop routing selectors, not endpoints: the bus
+// routes to src_module while the payload is on the source chiplet and to
+// dst_module on the destination chiplet. VIA is therefore only meaningful
+// off-chip, and its id belongs to the FROM chiplet.
 inline std::string identity(const ARM::AXI::Payload &payload) {
 	const UserSignals  user = UserSignals::decode(payload.user);
 	std::ostringstream out;
-	out << "ID:" << payload.id << " UID:" << payload.uid << " CORE:" << unsigned(user.core) << " C"
-	    << unsigned(user.src_chiplet) << ".M" << unsigned(user.src_module) << "->C" << unsigned(user.dst_chiplet)
-	    << ".M" << unsigned(user.dst_module);
+	out << "ID:" << payload.id << " UID:" << payload.uid << " CORE:" << unsigned(user.core) << " FROM:C"
+	    << unsigned(user.src_chiplet) << " TO:C" << unsigned(user.dst_chiplet) << ".M" << unsigned(user.dst_module);
+
+	if (user.src_chiplet != user.dst_chiplet) {
+		out << " VIA:M" << unsigned(user.src_module);
+	}
+
 	return out.str();
 }
 
