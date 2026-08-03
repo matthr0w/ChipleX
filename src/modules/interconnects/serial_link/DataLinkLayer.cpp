@@ -55,6 +55,11 @@ void SLDataLinkLayer::clk_posedge() {
 				stats.increment_counter(this->name(), "transmission_count_out_link" + std::to_string(link_id));
 				stats.update_accum(this->name(), "transmission_duration_out_us_link" + std::to_string(link_id),
 				                   delay.to_seconds() * 1e6);
+
+				// The receiving channel allocator has added its delay by now.
+				SC_LOG_DEBUG(this, "Packet sent: " << describe(*payload) << " transfer:" << delay
+				                                   << " arrival:" << (sc_time_stamp() + delay));
+
 				stream_fifo_out->read();
 				delete payload;
 				data_out_ongoing = true;
@@ -87,6 +92,7 @@ tlm_sync_enum SLDataLinkLayer::nb_transport_fw(int id, tlm_generic_payload &tran
 			Payload_t *payload = unpack_payload(*tptr);
 			payload->link_id   = id;
 			stream_fifo_in->write(payload);
+			SC_LOG_DEBUG(this, "Packet received: " << describe(*payload));
 			tlm_phase resp_phase = BEGIN_RESP;
 			sc_time   resp_delay = SC_ZERO_TIME;
 			data_in_tsockets[id]->nb_transport_bw(*tptr, resp_phase, resp_delay);

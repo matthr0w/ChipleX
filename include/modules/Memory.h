@@ -3,6 +3,7 @@
 #include <map>
 #include <systemc>
 #include <tlm>
+#include <unordered_map>
 #include <vector>
 
 #include "ARM/TLM/arm_axi4.h"
@@ -35,6 +36,7 @@ SC_MODULE(Memory) {
 	ARM::AXI::SimpleTargetSocket<Memory> tsocket;
 
 	Memory(sc_module_name name, ChipletConfig chiplet_config);
+	~Memory();
 
   private:
 	// -------------------------------------------------------
@@ -85,6 +87,15 @@ SC_MODULE(Memory) {
 	// Transport Functions
 	// -------------------------------------------------------
 	tlm_sync_enum nb_transport_fw(ARM::AXI::Payload & payload, ARM::AXI::Phase & phase);
+
+	// -------------------------------------------------------
+	// Debug Functions
+	// -------------------------------------------------------
+	// Subordinate-side AXI trace. A memory chiplet has no bus to log phases.
+	void trace_axi(ARM::AXI::Payload & payload, ARM::AXI::Phase phase);
+
+	uint8_t                                                *beat_data;
+	std::unordered_map<const ARM::AXI::Payload *, unsigned> trace_beat_index;
 
 	// -------------------------------------------------------
 	// Helper Functions

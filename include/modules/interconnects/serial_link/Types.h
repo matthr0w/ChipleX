@@ -1,5 +1,9 @@
 #pragma once
 
+#include <iomanip>
+#include <sstream>
+#include <string>
+
 #include "ARM/TLM/arm_axi4.h"
 
 struct Committer {
@@ -69,6 +73,25 @@ enum Tag_e : uint8_t {
 	TagB    = 5
 };
 
+inline const char *to_string(Tag_e tag) {
+	switch (tag) {
+	case TagIdle:
+		return "IDLE";
+	case TagAW:
+		return "AW";
+	case TagW:
+		return "W";
+	case TagAR:
+		return "AR";
+	case TagR:
+		return "R";
+	case TagB:
+		return "B";
+	default:
+		return "?";
+	}
+}
+
 struct Payload_t {
 	// AXI beat
 	AxiBeat axi_ch;
@@ -92,6 +115,25 @@ struct Payload_t {
 
 	Payload_t(size_t axi_width) : axi_ch((axi_width + 7) / 8) {}
 };
+
+// Shared packet description, so every link event prints the same fields.
+inline std::string describe(const Payload_t &payload) {
+	const UserSignals  user = UserSignals::decode(payload.user);
+	std::ostringstream out;
+	out << std::left << std::setw(4) << to_string(payload.hdr) << " ID:" << payload.id << " @0x" << std::hex
+	    << payload.axi_ch.addr << std::dec << " LEN:" << unsigned(payload.len);
+
+	// Responses overwrite their destination with the requester's chiplet, so
+	// both USER chiplet fields are equal and only the destination is meaningful.
+	if (payload.hdr == TagB || payload.hdr == TagR) {
+		out << " ->C" << unsigned(user.dst_chiplet);
+	} else {
+		out << " C" << unsigned(user.src_chiplet) << "->C" << unsigned(user.dst_chiplet);
+	}
+
+	out << " link:" << payload.link_id << " credit:" << payload.credit;
+	return out.str();
+}
 
 // Safe struct for memcpy
 struct PayloadWire_t {

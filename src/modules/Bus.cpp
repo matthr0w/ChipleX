@@ -4,6 +4,7 @@
 
 #include "logging.h"
 
+#include "common/AxiTrace.h"
 #include "common/Router.h"
 #include "modules/chiplets/ChipletRegistry.h"
 
@@ -260,64 +261,26 @@ void Bus::print_payload(ARM::AXI::Payload &payload, ARM::AXI::Phase phase, ARM::
 	message << phase_name << " ";
 
 	if (show_addr) {
-		message << "@0x" << std::right << std::setw(8) << std::setfill('0') << std::hex << payload.get_address()
-		        << std::dec << ' ';
-
-		if (payload.get_command() != ARM::AXI::COMMAND_SNOOP) {
-			const static char *burst_types[] = {"FIXED", "INCR ", "WRAP "};
-			ARM::AXI::Burst    burst         = payload.get_burst();
-
-			message << payload.get_beat_count() << "x" << (8 * (1 << payload.get_size())) << "bits ";
-			message << (burst <= ARM::AXI::BURST_WRAP ? burst_types[burst] : "?????") << ' ';
-		}
+		message << AxiTrace::addressing(payload);
 	}
 
 	if (show_resp) {
-		ARM::AXI::Resp     resp         = payload.get_resp();
-		const static char *resp_types[] = {"OKAY  ", "EXOKAY", "SLVERR", "DECERR"};
-		message << (resp <= ARM::AXI::RESP_DECERR ? resp_types[resp] : "??????") << ' ';
+		message << AxiTrace::resp_name(payload.get_resp()) << ' ';
 	} else {
 		message << "       ";
 	}
 
 	if (show_data) {
 		unsigned burst_index = payload_burst_index[&payload];
-		message << (burst_index == payload.get_len() ? "LAST " : "     ") << "DATA:";
-
-		uint64_t byte_strobe(uint64_t(~0));
-		switch (payload.get_command()) {
-		case ARM::AXI::COMMAND_WRITE:
-			payload.write_out_beat(burst_index, beat_data);
-			byte_strobe = payload.write_out_beat_strobe(burst_index);
-			break;
-		case ARM::AXI::COMMAND_READ:
-			payload.read_out_beat(burst_index, beat_data);
-			break;
-		case ARM::AXI::COMMAND_SNOOP:
-			payload.snoop_out_beat(burst_index, beat_data);
-			break;
-		default:
-			break;
-		}
-
-		message << std::uppercase << std::hex;
-		unsigned size = 1 << payload.get_size();
-		for (int i = size - 1; i >= 0; i--) {
-			if ((byte_strobe >> (i % 8)) & 1) {
-				message << std::setw(2) << std::setfill('0') << unsigned(beat_data[i]);
-			} else {
-				message << "XX";
-			}
-			if (i != 0 && !(i % 8)) {
-				message << "_";
-			}
-		}
-		message << std::dec;
+		message << (burst_index == payload.get_len() ? "| LAST " : "| ") << "DATA:"
+		        << AxiTrace::beat_dump(payload, burst_index, beat_data) << ' ';
 
 		if (inc_beat) {
 			payload_burst_index[&payload] = burst_index + 1;
 		}
 	}
+
+	message << "| " << AxiTrace::identity(payload) << ' ' << AxiTrace::attributes(payload);
 
 	if (last_beat) {
 		payload_phase_map.erase(&payload);

@@ -63,7 +63,7 @@ void SLNetworkLayer::clk_posedge() {
 
 			// Write payload to FIFO
 			stream_fifo_out->write(payload_out);
-			SC_LOG_DEBUG(this, "Payload written to FIFO");
+			SC_LOG_DEBUG(this, "Packet queued for send: " << describe(*payload_out));
 
 			// Flow control
 			uint8_t destination_id = UserSignals::decode(payload_out->user).dst_chiplet;
@@ -91,7 +91,7 @@ void SLNetworkLayer::clk_posedge() {
 				if (is_valid && is_ready) {
 					stream_fifo_in->read();
 					stream_fifo_out->write(payload);
-					SC_LOG_DEBUG(this, "Payload written to FIFO");
+					SC_LOG_DEBUG(this, "Packet forwarded: " << describe(*payload));
 
 					// Flow control
 					decrement_credits(link_id);
@@ -101,6 +101,7 @@ void SLNetworkLayer::clk_posedge() {
 				switch (payload->hdr) {
 				case TagIdle: {
 					stream_fifo_in->read();
+					SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
 
 					// Flow control
 					increment_credits(payload->link_id, payload->credit);
@@ -109,6 +110,7 @@ void SLNetworkLayer::clk_posedge() {
 				case TagAW:
 					if (aw_state == CLEAR) {
 						stream_fifo_in->read();
+						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
 						payload_in =
 						    ARM::AXI::Payload::new_payload(ARM::AXI::COMMAND_WRITE, payload->axi_ch.addr,
 						                                   get_axi_size(axi_width), payload->len, payload->burst);
@@ -125,6 +127,7 @@ void SLNetworkLayer::clk_posedge() {
 				case TagW:
 					if (w_state == CLEAR) {
 						stream_fifo_in->read();
+						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
 						payload_in->write_in_beat(payload->axi_ch.data.data());
 						w_queue.push_back(payload_in);
 
@@ -136,6 +139,7 @@ void SLNetworkLayer::clk_posedge() {
 				case TagAR:
 					if (ar_state == CLEAR) {
 						stream_fifo_in->read();
+						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
 						payload_in =
 						    ARM::AXI::Payload::new_payload(ARM::AXI::COMMAND_READ, payload->axi_ch.addr,
 						                                   get_axi_size(axi_width), payload->len, payload->burst);
@@ -152,6 +156,7 @@ void SLNetworkLayer::clk_posedge() {
 				case TagR:
 					if (r_state == CLEAR) {
 						stream_fifo_in->read();
+						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
 						ARM::AXI::Payload *r_payload = pending_read_responses.front();
 						r_payload->read_in_beat(payload->axi_ch.data.data());
 						r_queue.push_back(r_payload);
@@ -167,6 +172,7 @@ void SLNetworkLayer::clk_posedge() {
 				case TagB:
 					if (b_state == CLEAR) {
 						stream_fifo_in->read();
+						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
 						b_queue.push_back(pending_write_responses.front());
 						pending_write_responses.pop_front();
 

@@ -84,6 +84,11 @@ SC_MODULE(SLChannelAllocater) {
 				std::memset(data + AXI_DATA_WIRE_OFFSET, 0, (module.axi_width + 7) / 8);
 			}
 
+			SC_LOG_DEBUG(&module, "Packet serialization: " << payload_bits << " bits over " << bandwidth
+			                                               << " bit(s)/cycle = " << num_cycles << " cycle(s) x "
+			                                               << clk_cycle << " = " << packet_transfer_delay << " + wire "
+			                                               << wire_propagation_delay);
+
 			SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
 			return delay;
 		}

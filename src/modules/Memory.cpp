@@ -2,6 +2,8 @@
 
 #include "logging.h"
 
+#include "common/AxiTrace.h"
+
 Memory::Memory(sc_module_name name, ChipletConfig chiplet_config)
     : sc_module(name),
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
@@ -10,7 +12,8 @@ Memory::Memory(sc_module_name name, ChipletConfig chiplet_config)
       tsocket("tsocket", *this, &Memory::nb_transport_fw, ARM::TLM::PROTOCOL_AXI4, axi_width),
       mem(size * 1024, 0),
       mem_bitmap((mem.size() + 7) / 8, 0),
-      offchip_base_address(size * 1024 / 2) {
+      offchip_base_address(size * 1024 / 2),
+      beat_data(new uint8_t[axi_width >> 3]) {
 	stats.register_utilization(this->name(), clk_cycle);
 
 	SC_METHOD(clk_posedge);
@@ -20,6 +23,10 @@ Memory::Memory(sc_module_name name, ChipletConfig chiplet_config)
 	SC_METHOD(clk_negedge);
 	sensitive << clk.neg();
 	dont_initialize();
+}
+
+Memory::~Memory() {
+	delete[] beat_data;
 }
 
 void Memory::end_of_simulation() {
@@ -64,6 +71,7 @@ void Memory::clk_posedge() {
 	case MemoryState::WriteSet: {
 		set_active_address(*aw_queue.front());
 		ARM::AXI::Phase phase = ARM::AXI::AW_READY;
+		trace_axi(*aw_queue.front(), phase);
 		tsocket.nb_transport_bw(*aw_queue.front(), phase);
 		mem_state = MemoryState::WriteAccess;
 		break;
@@ -96,6 +104,10 @@ void Memory::clk_posedge() {
 				}
 			}
 
+			SC_LOG_DEBUG(this, "Write access complete: ID:" << b_outgoing->id << " @0x" << std::hex << active_addr
+			                                                << std::dec << ' ' << b_outgoing->get_data_length()
+			                                                << " byte(s) in " << beats << " beat(s)");
+
 			mem_state = MemoryState::WriteResponse;
 		}
 		break;
@@ -103,6 +115,7 @@ void Memory::clk_posedge() {
 	case MemoryState::ReadSet: {
 		set_active_address(*ar_queue.front());
 		ARM::AXI::Phase phase = ARM::AXI::AR_READY;
+		trace_axi(*ar_queue.front(), phase);
 		tsocket.nb_transport_bw(*ar_queue.front(), phase);
 		mem_state = MemoryState::ReadAccess;
 		break;
@@ -132,6 +145,10 @@ void Memory::clk_posedge() {
 
 			r_outgoing->read_in(buffer.data());
 
+			SC_LOG_DEBUG(this, "Read access complete: ID:" << r_outgoing->id << " @0x" << std::hex << active_addr
+			                                               << std::dec << ' ' << r_outgoing->get_data_length()
+			                                               << " byte(s) in " << beats << " beat(s)");
+
 			mem_state = MemoryState::ReadResponse;
 		}
 		break;
@@ -146,7 +163,8 @@ void Memory::clk_negedge() {
 	if (b_state == CLEAR && b_outgoing) {
 		b_state               = REQ;
 		ARM::AXI::Phase phase = ARM::AXI::B_VALID;
-		tlm_sync_enum   reply = tsocket.nb_transport_bw(*b_outgoing, phase);
+		trace_axi(*b_outgoing, phase);
+		tlm_sync_enum reply = tsocket.nb_transport_bw(*b_outgoing, phase);
 		if (reply == TLM_UPDATED) {
 			SC_LOG_ASSERT(this, phase == ARM::AXI::B_READY, "AXI TLM Protocol: Unexpected phase");
 			b_state = ACK;
@@ -157,7 +175,8 @@ void Memory::clk_negedge() {
 	if (r_state == CLEAR && r_outgoing) {
 		r_state               = REQ;
 		ARM::AXI::Phase phase = (r_beat_count == 1) ? ARM::AXI::R_VALID_LAST : ARM::AXI::R_VALID;
-		tlm_sync_enum   reply = tsocket.nb_transport_bw(*r_outgoing, phase);
+		trace_axi(*r_outgoing, phase);
+		tlm_sync_enum reply = tsocket.nb_transport_bw(*r_outgoing, phase);
 		if (reply == TLM_UPDATED) {
 			SC_LOG_ASSERT(this, phase == ARM::AXI::R_READY, "AXI TLM Protocol: Unexpected phase");
 			r_state = ACK;
@@ -169,6 +188,8 @@ void Memory::clk_negedge() {
 // Transport Functions
 // -------------------------------------------------------
 tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload, ARM::AXI::Phase &phase) {
+	trace_axi(payload, phase);
+
 	switch (phase) {
 	case ARM::AXI::AR_VALID:
 		ar_queue.push_back(&payload);
@@ -183,10 +204,12 @@ tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload, ARM::AXI::Phas
 		return TLM_ACCEPTED;
 	case ARM::AXI::W_VALID:
 		phase = ARM::AXI::W_READY;
+		trace_axi(payload, phase);
 		return TLM_UPDATED;
 	case ARM::AXI::W_VALID_LAST:
 		w_queue.push_back(&payload);
 		phase = ARM::AXI::W_READY;
+		trace_axi(payload, phase);
 		return TLM_UPDATED;
 	case ARM::AXI::B_READY:
 		b_state = b_state == REQ ? ACK : CLEAR;
@@ -195,6 +218,54 @@ tlm_sync_enum Memory::nb_transport_fw(ARM::AXI::Payload &payload, ARM::AXI::Phas
 		SC_LOG_ERROR(this, "AXI TLM Protocol: Unrecognized phase");
 		return TLM_ACCEPTED;
 	}
+}
+
+// -------------------------------------------------------
+// Debug Functions
+// -------------------------------------------------------
+void Memory::trace_axi(ARM::AXI::Payload &payload, ARM::AXI::Phase phase) {
+	if (log_level > LogLevel::DEBUG) {
+		return;
+	}
+
+	const bool is_valid = phase == ARM::AXI::AW_VALID || phase == ARM::AXI::W_VALID ||
+	                      phase == ARM::AXI::W_VALID_LAST || phase == ARM::AXI::B_VALID ||
+	                      phase == ARM::AXI::AR_VALID || phase == ARM::AXI::R_VALID || phase == ARM::AXI::R_VALID_LAST;
+
+	const bool is_data = phase == ARM::AXI::W_VALID || phase == ARM::AXI::W_VALID_LAST || phase == ARM::AXI::R_VALID ||
+	                     phase == ARM::AXI::R_VALID_LAST;
+
+	const bool is_resp = phase == ARM::AXI::B_VALID || phase == ARM::AXI::B_READY || phase == ARM::AXI::R_VALID ||
+	                     phase == ARM::AXI::R_VALID_LAST || phase == ARM::AXI::R_READY;
+
+	const bool is_last = phase == ARM::AXI::W_VALID_LAST || phase == ARM::AXI::R_VALID_LAST;
+
+	std::ostringstream message;
+	message << AxiTrace::channel_name(phase) << ' ' << (is_valid ? "VALID -----" : "----- READY") << ' '
+	        << AxiTrace::addressing(payload);
+
+	if (is_resp) {
+		message << AxiTrace::resp_name(payload.get_resp()) << ' ';
+	} else {
+		message << "       ";
+	}
+
+	// A data phase carries one beat, so the index is tracked per payload.
+	if (is_data) {
+		const unsigned beat_index = trace_beat_index[&payload];
+		message << (is_last ? "LAST " : "     ") << "DATA:" << AxiTrace::beat_dump(payload, beat_index, beat_data)
+		        << ' ';
+
+		if (is_last) {
+			trace_beat_index.erase(&payload);
+		} else {
+			trace_beat_index[&payload] = beat_index + 1;
+		}
+	}
+
+	message << "| " << AxiTrace::identity(payload) << ' ' << AxiTrace::attributes(payload);
+
+	SC_LOG_DEBUG(this, message.str());
 }
 
 // -------------------------------------------------------
@@ -214,6 +285,8 @@ void Memory::set_active_address(ARM::AXI::Payload &payload) {
 	uint32_t base_addr   = is_onchip ? 0 : offchip_base_address;
 	uint32_t target_addr = address + base_addr;
 
+	const char *mode = "read";
+
 	if (read_op) {
 		// Read transaction (on-chip or off-chip)
 		deallocate_dynamic_address(target_addr, data_size);
@@ -223,11 +296,19 @@ void Memory::set_active_address(ARM::AXI::Payload &payload) {
 			// Fixed write transaction
 			allocated_ranges[target_addr] = data_size;
 			active_addr                   = target_addr;
+			mode                          = "write fixed";
 		} else {
 			// Dynamic write transaction
 			active_addr = allocate_dynamic_address(is_onchip, data_size);
+			mode        = "write dynamic";
 		}
 	}
+
+	// The AXI address is chiplet-local; only the resolved one indexes the array.
+	SC_LOG_DEBUG(this, "Address resolve: ID:" << payload.id << " bus @0x" << std::hex << address << " + base 0x"
+	                                          << base_addr << " -> @0x" << active_addr << std::dec << " ("
+	                                          << (is_onchip ? "on-chip, " : "off-chip, ") << mode << ", " << data_size
+	                                          << " byte(s))");
 
 	payload.set_address(active_addr);
 }
