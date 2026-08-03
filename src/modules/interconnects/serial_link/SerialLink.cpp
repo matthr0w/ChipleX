@@ -45,10 +45,10 @@ SerialLink::~SerialLink() {
 }
 
 unsigned SerialLink::compute_fifo_depth() {
-	bool     ddr          = interconnect_config.node["ddr"].as<bool>();
-	unsigned num_channels = interconnect_config.node["num_channels"].as<unsigned>();
-	unsigned num_lanes    = interconnect_config.node["num_lanes"].as<unsigned>();
-	unsigned num_credits  = interconnect_config.node["num_credits"].as<unsigned>();
+	bool     ddr          = interconnect_config.node["phy"]["ddr"].as<bool>();
+	unsigned num_channels = interconnect_config.node["phy"]["num_channels"].as<unsigned>();
+	unsigned num_lanes    = interconnect_config.node["phy"]["num_lanes"].as<unsigned>();
+	unsigned num_credits  = interconnect_config.node["phy"]["num_credits"].as<unsigned>();
 
 	unsigned bandwidth = num_channels * num_lanes * (ddr ? 2 : 1);
 
@@ -60,6 +60,6 @@ unsigned SerialLink::compute_fifo_depth() {
 }
 
 void SerialLink::bind_clocks(Clocks &clocks) {
-	network_layer.clk.bind(clocks.get());
-	datalink_layer.clk.bind(clocks.get());
+	network_layer.clk.bind(clocks.get("protocol"));
+	datalink_layer.clk.bind(clocks.get("protocol"));
 }

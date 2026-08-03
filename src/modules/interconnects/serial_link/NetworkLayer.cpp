@@ -14,7 +14,7 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chiplet_id, unsigne
       num_links(num_links),
       num_cores(num_cores),
       axi_width(axi_width),
-      num_credits(interconnect_config.node["num_credits"].as<unsigned>()),
+      num_credits(interconnect_config.node["phy"]["num_credits"].as<unsigned>()),
       force_send_thresh(num_credits - 4),
       axi_in("axi_in", *this, &SLNetworkLayer::nb_transport_fw, ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &SLNetworkLayer::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4, axi_width) {

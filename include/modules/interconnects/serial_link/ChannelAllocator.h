@@ -56,10 +56,10 @@ SC_MODULE(SLChannelAllocater) {
 			sc_time packet_transfer_delay  = SC_ZERO_TIME;
 			sc_time wire_propagation_delay = SC_ZERO_TIME;
 
-			sc_time  clk_cycle(config["clk_cycle"].as<unsigned>(), SC_NS);
-			bool     ddr          = config["ddr"].as<bool>();
-			unsigned num_channels = config["num_channels"].as<unsigned>();
-			unsigned num_lanes    = config["num_lanes"].as<unsigned>();
+			sc_time  clk_cycle(config["phy"]["clk_cycle"].as<unsigned>(), SC_NS);
+			bool     ddr          = config["phy"]["ddr"].as<bool>();
+			unsigned num_channels = config["phy"]["num_channels"].as<unsigned>();
+			unsigned num_lanes    = config["phy"]["num_lanes"].as<unsigned>();
 
 			unsigned bandwidth = num_channels * num_lanes * (ddr ? 2 : 1);
 

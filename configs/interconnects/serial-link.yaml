@@ -1,5 +1,9 @@
-clk_cycle: 5 # ns
-ddr: false
-num_channels: 4
-num_lanes: 8
-num_credits: 8
+protocol:
+  clk_cycle: 5 # ns
+
+phy:
+  clk_cycle: 8 # ns
+  ddr: false
+  num_channels: 4
+  num_lanes: 8
+  num_credits: 8
