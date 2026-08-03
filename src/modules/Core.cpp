@@ -590,7 +590,8 @@ std::shared_ptr<RequestHandle> Core::dma(const AxiDMARequest &req) {
 	SC_LOG_ASSERT(this, target_module->is_subordinate(),
 	              "AXI DMA Request Error: Module " << target_module_name << " is not an AXI subordinate");
 
-	bool is_volatile = req.is_volatile || (fetch_chiplet_id != chiplet_id);
+	// Either end being off-chip makes the transfer volatile.
+	bool is_volatile = req.is_volatile || (fetch_chiplet_id != chiplet_id) || (target_chiplet_id != chiplet_id);
 
 	return dma_internal(req.request_id, src_fetch_module->id, src_target_module->id, fetch_chiplet_id, fetch_module->id,
 	                    target_chiplet_id, target_module->id, req.fetch_addr.value(), req.target_addr.value(),
