@@ -12,61 +12,60 @@ sc_event next_run;
 ModuleCodeMap *get_program_code() {
 	static ModuleCodeMap code = {
 	    {{"fpga", "core0"},
-	     {CPUCode{.main =
-	                  [](Core &core) {
-		                  static unsigned run = 0;
-		                  while (run < TOTAL_RUNS) {
-			                  // For now, we just send dummy data
-			                  size_t   num_bytes = TOTAL_SIZE;
-			                  uint8_t *data      = new uint8_t[num_bytes];
-			                  for (size_t i = 0; i < num_bytes; ++i) {
-				                  data[i] = static_cast<uint8_t>(0);
-			                  }
+	     {CPUCode{
+	         .main =
+	             [](Core &core) {
+		             static unsigned run = 0;
+		             while (run < TOTAL_RUNS) {
+			             // For now, we just send dummy data
+			             size_t   num_bytes = TOTAL_SIZE;
+			             uint8_t *data      = new uint8_t[num_bytes];
+			             for (size_t i = 0; i < num_bytes; ++i) {
+				             data[i] = static_cast<uint8_t>(0);
+			             }
 
-			                  auto request = AxiRequest(1, reinterpret_cast<unsigned char *>(data), num_bytes)
-			                                     .to_via("mem_chiplet1", "memory", "pulp")
-			                                     .set_addr(0x0)
-			                                     .skip_cache();
-			                  auto handle  = core.write(request);
-			                  handle->wait();
+			             auto request = AxiRequest(1, reinterpret_cast<unsigned char *>(data), num_bytes)
+			                                .to_via("mem_chiplet1", "memory", "pulp")
+			                                .set_addr(0x0);
+			             auto handle  = core.write(request);
+			             handle->wait();
 
-			                  delete[] data;
+			             delete[] data;
 
-			                  wait(next_run);
-			                  run++;
-		                  }
-	                  },
-	              .irq =
-	                  [](Core &core, const IRQ &irq) {
-		                  static unsigned run       = 0;
-		                  size_t          num_bytes = TOTAL_SIZE;
-		                  uint8_t        *data      = new uint8_t[num_bytes];
+			             wait(next_run);
+			             run++;
+		             }
+	             },
+	         .irq =
+	             [](Core &core, const IRQ &irq) {
+		             static unsigned run       = 0;
+		             size_t          num_bytes = TOTAL_SIZE;
+		             uint8_t        *data      = new uint8_t[num_bytes];
 
-		                  auto request = AxiRequest(1, reinterpret_cast<unsigned char *>(data), num_bytes)
-		                                     .set_addr(irq.target_address)
-		                                     .skip_cache();
-		                  auto handle  = core.read(request);
-		                  handle->wait();
+		             auto request =
+		                 AxiRequest(1, reinterpret_cast<unsigned char *>(data), num_bytes).set_addr(irq.target_address);
+		             auto handle = core.read(request);
+		             handle->wait();
 
-		                  std::cout << "\nResult on FPGA:" << std::endl;
-		                  for (size_t i = 0; i < num_bytes; ++i) {
-			                  std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
-			                  if ((i + 1) % 16 == 0) {
-				                  std::cout << "\n";
-			                  } else {
-				                  std::cout << " ";
-			                  }
-		                  }
+		             std::cout << "\nResult on FPGA:" << std::endl;
+		             for (size_t i = 0; i < num_bytes; ++i) {
+			             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
+			             if ((i + 1) % 16 == 0) {
+				             std::cout << "\n";
+			             } else {
+				             std::cout << " ";
+			             }
+		             }
 
-		                  delete[] data;
+		             delete[] data;
 
-		                  next_run.notify(SC_ZERO_TIME);
-		                  run++;
+		             next_run.notify(SC_ZERO_TIME);
+		             run++;
 
-		                  if (run == TOTAL_RUNS) {
-			                  sc_stop();
-		                  }
-	                  }}}                 },
+		             if (run == TOTAL_RUNS) {
+			             sc_stop();
+		             }
+	             }}}	                  },
 	    {{"chiplet1", "core0"},
 	     {CPUCode{
 	         .main = [](Core &core) {},

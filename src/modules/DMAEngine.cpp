@@ -319,7 +319,7 @@ ARM::AXI::Payload *DMAEngine::issue_fetch_read(const DMARequest &req) {
 
 	payload->id    = req.request_id;
 	payload->user  = user.encode();
-	payload->cache = req.is_volatile ? ARM::AXI::CACHE_AR_DEVICE_NB : ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
+	payload->cache = ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
 
 	// Mark ownership so DMA can handle responses internally
 	payload_owner_map[payload] = internal_vm_id;
@@ -347,7 +347,7 @@ ARM::AXI::Payload *DMAEngine::issue_fetch_write(const DMARequest &req) {
 
 	payload->id    = req.request_id;
 	payload->user  = user.encode();
-	payload->cache = req.is_volatile ? ARM::AXI::CACHE_AR_DEVICE_NB : ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
+	payload->cache = ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
 	// Mark ownership so DMA can handle responses internally
 	payload_owner_map[payload] = internal_vm_id;

@@ -18,8 +18,7 @@ struct DMARequest {
 	uint32_t request_id; // Request ID
 	uint8_t  core_id;    // Core ID
 
-	uint8_t burst;       // Burst type
-	uint8_t is_volatile; // Cache usage
+	uint8_t burst; // Burst type
 
 	uint32_t data_length; // Bytes to transfer
 

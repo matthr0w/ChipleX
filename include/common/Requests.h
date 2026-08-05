@@ -20,8 +20,7 @@ struct AxiRequest {
 	std::optional<std::string> dst_chiplet_name;
 	std::optional<std::string> dst_module_name;
 
-	bool                              is_volatile = false;
-	ARM::AXI::Burst                   burst       = ARM::AXI::BURST_INCR;
+	ARM::AXI::Burst                   burst = ARM::AXI::BURST_INCR;
 	std::optional<SmartExtension::ID> ext_id;
 
 	AxiRequest(uint32_t id, unsigned char *buf, unsigned len) : request_id(id), data(buf), data_length(len) {}
@@ -49,11 +48,6 @@ struct AxiRequest {
 		return *this;
 	}
 
-	AxiRequest &skip_cache(bool val = true) {
-		is_volatile = val;
-		return *this;
-	}
-
 	AxiRequest &use_ext(SmartExtension::ID id) {
 		ext_id = id;
 		return *this;
@@ -73,8 +67,7 @@ struct AxiDMARequest {
 	std::optional<uint32_t>    fetch_addr;
 	std::optional<uint32_t>    target_addr;
 
-	bool                              is_volatile = false;
-	ARM::AXI::Burst                   burst       = ARM::AXI::BURST_INCR;
+	ARM::AXI::Burst                   burst = ARM::AXI::BURST_INCR;
 	std::optional<SmartExtension::ID> ext_id;
 
 	AxiDMARequest(uint32_t id, unsigned len) : request_id(id), data_length(len) {}
@@ -113,11 +106,6 @@ struct AxiDMARequest {
 
 	AxiDMARequest &set_burst(ARM::AXI::Burst type) {
 		burst = type;
-		return *this;
-	}
-
-	AxiDMARequest &skip_cache(bool val = true) {
-		is_volatile = val;
 		return *this;
 	}
 

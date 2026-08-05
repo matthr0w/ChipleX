@@ -37,8 +37,7 @@ ModuleCodeMap *get_program_code() {
 			                  std::memcpy(chunk + ROW_SIZE, &matrixB[0][0], MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE);
 
 			                  auto reqw = AxiRequest(chiplet, chunk, data_size_per_chiplet)
-			                                  .to_via("chiplet" + std::to_string(chiplet), "memory", "interconnect")
-			                                  .skip_cache();
+			                                  .to_via("chiplet" + std::to_string(chiplet), "memory", "interconnect");
 
 			                  handle = core.write(reqw);
 		                  }
@@ -61,7 +60,7 @@ ModuleCodeMap *get_program_code() {
 
 		                  auto *data = new unsigned char[data_size];
 
-		                  auto reqr   = AxiRequest(chiplet_id, data, data_size).set_addr(address).skip_cache();
+		                  auto reqr   = AxiRequest(chiplet_id, data, data_size).set_addr(address);
 		                  auto handle = core.read(reqr);
 		                  handle->wait();
 
@@ -96,7 +95,7 @@ ModuleCodeMap *get_program_code() {
 		                  int      data_size = irq.data_length;
 
 		                  auto *data   = new unsigned char[data_size];
-		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address).skip_cache();
+		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address);
 		                  auto  handle = core.read(reqr);
 		                  handle->wait();
 
@@ -115,11 +114,9 @@ ModuleCodeMap *get_program_code() {
 
 		                  core.wait_cycles("matmul");
 
-		                  auto reqw = AxiRequest(0, result, ROW_SIZE)
-		                                  .to_via("fpga", "memory", "interconnect")
-		                                  .set_addr(0x0)
-		                                  .skip_cache();
-		                  handle    = core.write(reqw);
+		                  auto reqw =
+		                      AxiRequest(0, result, ROW_SIZE).to_via("fpga", "memory", "interconnect").set_addr(0x0);
+		                  handle = core.write(reqw);
 		                  handle->wait();
 
 		                  delete[] data;
@@ -134,7 +131,7 @@ ModuleCodeMap *get_program_code() {
 		                  int      data_size = irq.data_length;
 
 		                  auto *data   = new unsigned char[data_size];
-		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address).skip_cache();
+		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address);
 		                  auto  handle = core.read(reqr);
 		                  handle->wait();
 
@@ -153,11 +150,9 @@ ModuleCodeMap *get_program_code() {
 
 		                  core.wait_cycles("matmul");
 
-		                  auto reqw = AxiRequest(0, result, ROW_SIZE)
-		                                  .to_via("fpga", "memory", "interconnect")
-		                                  .set_addr(0x1000)
-		                                  .skip_cache();
-		                  handle    = core.write(reqw);
+		                  auto reqw =
+		                      AxiRequest(0, result, ROW_SIZE).to_via("fpga", "memory", "interconnect").set_addr(0x1000);
+		                  handle = core.write(reqw);
 		                  handle->wait();
 
 		                  delete[] data;
@@ -172,7 +167,7 @@ ModuleCodeMap *get_program_code() {
 		                  int      data_size = irq.data_length;
 
 		                  auto *data   = new unsigned char[data_size];
-		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address).skip_cache();
+		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address);
 		                  auto  handle = core.read(reqr);
 		                  handle->wait();
 
@@ -191,11 +186,9 @@ ModuleCodeMap *get_program_code() {
 
 		                  core.wait_cycles("matmul");
 
-		                  auto reqw = AxiRequest(0, result, ROW_SIZE)
-		                                  .to_via("fpga", "memory", "interconnect")
-		                                  .set_addr(0x2000)
-		                                  .skip_cache();
-		                  handle    = core.write(reqw);
+		                  auto reqw =
+		                      AxiRequest(0, result, ROW_SIZE).to_via("fpga", "memory", "interconnect").set_addr(0x2000);
+		                  handle = core.write(reqw);
 		                  handle->wait();
 
 		                  delete[] data;
@@ -210,7 +203,7 @@ ModuleCodeMap *get_program_code() {
 		                  int      data_size = irq.data_length;
 
 		                  auto *data   = new unsigned char[data_size];
-		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address).skip_cache();
+		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address);
 		                  auto  handle = core.read(reqr);
 		                  handle->wait();
 
@@ -229,11 +222,9 @@ ModuleCodeMap *get_program_code() {
 
 		                  core.wait_cycles("matmul");
 
-		                  auto reqw = AxiRequest(0, result, ROW_SIZE)
-		                                  .to_via("fpga", "memory", "interconnect")
-		                                  .set_addr(0x3000)
-		                                  .skip_cache();
-		                  handle    = core.write(reqw);
+		                  auto reqw =
+		                      AxiRequest(0, result, ROW_SIZE).to_via("fpga", "memory", "interconnect").set_addr(0x3000);
+		                  handle = core.write(reqw);
 		                  handle->wait();
 
 		                  delete[] data;

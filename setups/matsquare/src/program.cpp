@@ -6,8 +6,7 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2, 
 	auto *buf1 = new unsigned char[4 * sizeof(int)];
 	auto *buf2 = new unsigned char[4 * sizeof(int)];
 
-	auto reqr =
-	    AxiRequest(1, reinterpret_cast<unsigned char *>(buf1), 4 * sizeof(int)).set_addr(src_addr1).skip_cache();
+	auto reqr   = AxiRequest(1, reinterpret_cast<unsigned char *>(buf1), 4 * sizeof(int)).set_addr(src_addr1);
 	auto handle = core.read(reqr);
 	handle->wait();
 	reqr   = AxiRequest(2, reinterpret_cast<unsigned char *>(buf2), 4 * sizeof(int)).set_addr(src_addr2);
@@ -28,9 +27,8 @@ static void matrix_multiply(Core &core, uint32_t src_addr1, uint32_t src_addr2, 
 	auto *data = new unsigned char[4 * sizeof(int)];
 	std::memcpy(data, result, 4 * sizeof(int));
 
-	auto reqw =
-	    AxiRequest(3, reinterpret_cast<unsigned char *>(data), 4 * sizeof(int)).set_addr(dest_addr).skip_cache();
-	handle = core.write(reqw);
+	auto reqw = AxiRequest(3, reinterpret_cast<unsigned char *>(data), 4 * sizeof(int)).set_addr(dest_addr);
+	handle    = core.write(reqw);
 	handle->wait();
 
 	delete[] buf1;
@@ -47,8 +45,7 @@ ModuleCodeMap *get_program_code() {
 		                  memcpy(data, matrix, sizeof(matrix));
 
 		                  auto reqw   = AxiRequest(0, reinterpret_cast<unsigned char *>(data), sizeof(matrix))
-		                                    .to_via("chiplet0", "memory", "interconnect")
-		                                    .skip_cache();
+		                                    .to_via("chiplet0", "memory", "interconnect");
 		                  auto handle = core.write(reqw);
 		                  handle->wait();
 
@@ -59,8 +56,7 @@ ModuleCodeMap *get_program_code() {
 		                  auto *data = new unsigned char[4 * sizeof(int)];
 
 		                  auto reqr   = AxiRequest(0, reinterpret_cast<unsigned char *>(data), 4 * sizeof(int))
-		                                    .set_addr(irq.target_address)
-		                                    .skip_cache();
+		                                    .set_addr(irq.target_address);
 		                  auto handle = core.read(reqr);
 		                  handle->wait();
 
@@ -91,16 +87,14 @@ ModuleCodeMap *get_program_code() {
 		                  matrix_multiply(core, 0x4000, matrix_addr,
 		                                  0x5000); // A^6 = A^5 * A
 
-		                  auto *data   = new unsigned char[4 * sizeof(int)];
-		                  auto  reqr   = AxiRequest(4, reinterpret_cast<unsigned char *>(data), 4 * sizeof(int))
-		                                     .set_addr(0x5000)
-		                                     .skip_cache();
-		                  auto  handle = core.read(reqr);
+		                  auto *data = new unsigned char[4 * sizeof(int)];
+		                  auto  reqr =
+		                      AxiRequest(4, reinterpret_cast<unsigned char *>(data), 4 * sizeof(int)).set_addr(0x5000);
+		                  auto handle = core.read(reqr);
 		                  handle->wait();
 
 		                  auto reqw = AxiRequest(5, reinterpret_cast<unsigned char *>(data), 4 * sizeof(int))
-		                                  .to_via("fpga", "memory", "interconnect")
-		                                  .skip_cache();
+		                                  .to_via("fpga", "memory", "interconnect");
 		                  handle    = core.write(reqw);
 		                  handle->wait();
 
