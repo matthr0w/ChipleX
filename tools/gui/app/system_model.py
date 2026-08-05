@@ -270,6 +270,7 @@ def render(doc: Dict[str, Any]) -> str:
 
 
 _LOCKED_MARKER = re.compile(r"do\s+not\s+edit", re.IGNORECASE)
+_GEM5_MARKER = re.compile(r"\bgem5\b", re.IGNORECASE)
 
 
 def _leaf_comments(text: str):
@@ -300,21 +301,24 @@ def _leaf_comments(text: str):
 
 
 def _split_comment(comment: str):
-    """Split a trailing comment into (unit, is_locked).
+    """Split a trailing comment into (unit, is_locked, is_gem5).
 
-    A comment may carry a unit, a "do not edit" marker, or both in any order
-    (e.g. `# ns`, `# DO NOT EDIT`, `# ns, DO NOT EDIT`).
+    A comment may carry a unit and/or markers in any order, comma/space
+    separated: "DO NOT EDIT" locks the param, "GEM5" flags it as feeding cycle
+    estimation (e.g. `# ns`, `# DO NOT EDIT`, `# ns, GEM5`).
     """
     is_locked = bool(_LOCKED_MARKER.search(comment))
-    unit = _LOCKED_MARKER.sub("", comment).strip().strip(",").strip()
-    return (unit or None), is_locked
+    is_gem5 = bool(_GEM5_MARKER.search(comment))
+    leftover = _GEM5_MARKER.sub("", _LOCKED_MARKER.sub("", comment))
+    tokens = [token for token in re.split(r"[,\s]+", leftover) if token]
+    return (" ".join(tokens) or None), is_locked, is_gem5
 
 
 def _parse_units(text: str) -> Dict[str, str]:
-    """Map dotted path to its inline-comment unit, ignoring the lock marker."""
+    """Map dotted path to its inline-comment unit, ignoring the markers."""
     units: Dict[str, str] = {}
     for dotted, comment in _leaf_comments(text):
-        unit, _ = _split_comment(comment)
+        unit, _, _ = _split_comment(comment)
         if unit:
             units[dotted] = unit
     return units
@@ -327,6 +331,15 @@ def _parse_constants(text: str) -> set:
     overridden, so the GUI hides them from the editable surfaces.
     """
     return {dotted for dotted, comment in _leaf_comments(text) if _split_comment(comment)[1]}
+
+
+def _parse_gem5(text: str) -> set:
+    """Return the dotted paths marked GEM5.
+
+    These SystemC config values (e.g. cores.clk_cycle, memory.access_latency)
+    are passed to gem5, so editing them invalidates cached cycle estimates.
+    """
+    return {dotted for dotted, comment in _leaf_comments(text) if _split_comment(comment)[2]}
 
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:

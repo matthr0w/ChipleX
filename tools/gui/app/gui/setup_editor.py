@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import yaml
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
                                QMessageBox, QVBoxLayout)
@@ -29,7 +29,9 @@ class SetupEditorDialog(QDialog):
         self.is_new = is_new
         self.saved_name: Optional[str] = None
         self.setWindowTitle(f"{'' if is_new else 'Edit'} {setup_name}")
+        # Restored size when un-maximized; the dialog opens maximized.
         self.resize(1080, 720)
+        self.setWindowState(Qt.WindowState.WindowMaximized)
 
         if is_new:
             doc = setup_writer.new_system_doc()

@@ -39,6 +39,15 @@ class ConfigForm(QWidget):
             row_layout.addWidget(editor, 1)
             if param.unit:
                 row_layout.addWidget(QLabel(param.unit))
+            if getattr(param, "gem5", False):
+                warn = QLabel("gem5")
+                warn.setStyleSheet("color: #c07000; font-weight: bold;")
+                warn.setToolTip(
+                    "Changing this parameter invalidates cached cycle "
+                    "estimates, so the next build re-runs gem5 and takes "
+                    "longer."
+                )
+                row_layout.addWidget(warn)
             form.addRow(param.dotted_key, row)
 
     def set_config(self, config: Dict[str, Any]) -> None:

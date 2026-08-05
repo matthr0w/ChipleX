@@ -1,11 +1,11 @@
 cores:
   num: 1
-  clk_cycle: 1 # ns
+  clk_cycle: 1 # ns, GEM5
   irq_delay: 2 # ns
 memory:
   size: 512 # KB
-  clk_cycle: 3 # ns
-  access_latency: 1 # cycles
+  clk_cycle: 3 # ns, GEM5
+  access_latency: 1 # cycles, GEM5
 dma_engine:
   clk_cycle: 5 # ns
 extensions:
