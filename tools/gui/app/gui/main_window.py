@@ -13,12 +13,10 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox,
 
 from ..project import Project
 from ..runner import RunResult
-from .markdown_viewer import show_markdown
 from .results_tab import ResultsTab
 from .runs_tab import RunsTab
 from .setups_tab import SetupsTab
 from .sweep_tab import SweepTab
-from .theme import link
 from .worker import BatchController
 
 
@@ -67,18 +65,12 @@ class MainWindow(QMainWindow):
         self._progress.setTextVisible(True)
         self._status = QLabel("Ready")
 
-        docs_path = project.root / "docs" / "GUI.md"
-        help_hint = QLabel(link("#", "Help"))
-        help_hint.setToolTip("Open the GUI guide")
-        help_hint.linkActivated.connect(lambda _=None, p=docs_path: show_markdown(self, p))
-
         controls = QHBoxLayout()
         controls.addWidget(self._cores)
         controls.addWidget(self._timeout)
         controls.addWidget(self._run_btn)
         controls.addWidget(self._cancel_btn)
         controls.addWidget(self._progress, 1)
-        controls.addWidget(help_hint)
 
         central = QWidget()
         outer = QVBoxLayout(central)

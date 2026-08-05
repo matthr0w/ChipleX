@@ -12,7 +12,6 @@ There are two ways to use it:
 
 ## Documentation
 
-- [docs/GUI.md](docs/GUI.md) - using the GUI.
 - [docs/PROGRAM-CODE.md](docs/PROGRAM-CODE.md) - writing setup program code (AXI/DMA APIs, cycle estimation).
 - [docs/RELEASE.md](docs/RELEASE.md) - building a release bundle.
 

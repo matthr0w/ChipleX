@@ -142,7 +142,6 @@ cp -r "$$YI" "$(CURDIR)/$(STAGE_DIR)/deps/yaml-cpp/include/"
 cp "$$YL" "$(CURDIR)/$(STAGE_DIR)/deps/yaml-cpp/lib/"
 mkdir -p "$(CURDIR)/$(STAGE_DIR)/tools"
 cp -r "$(CURDIR)/tools/cycle_estimation" "$(CURDIR)/$(STAGE_DIR)/tools/cycle_estimation"
-cp -r "$(CURDIR)/docs" "$(CURDIR)/$(STAGE_DIR)/docs"
 if [ ! -d "$(RELEASE_VENV)" ]; then python3 -m venv "$(RELEASE_VENV)"; fi
 "$(RELEASE_VENV)/bin/pip" install -q --upgrade pip
 "$(RELEASE_VENV)/bin/pip" install -q -r "$(GUI_REQ)" pyinstaller
