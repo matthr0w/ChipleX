@@ -13,6 +13,9 @@ class Workload:
     asm_path: Path
     binary_path: Path
     estimation_result: int
+    model: str = "riscv-minor"
+    num_cycle_sections: int = 0
+    has_speedup: bool = False
 
 @dataclass
 class Setup:

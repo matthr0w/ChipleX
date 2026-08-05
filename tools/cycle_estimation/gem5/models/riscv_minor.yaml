@@ -1,0 +1,16 @@
+name: riscv-minor
+description: In-order RISC-V pipeline (gem5 RiscvMinorCPU) with private L1 caches.
+
+config: se_model.py
+cpu_type: RiscvMinorCPU
+mem_mode: timing
+m5op_abi: riscv
+compiler: riscv64-unknown-elf-g++
+compiler_flags: ["-O2"]
+
+params:
+  l1i-size: 32kB
+  l1d-size: 32kB
+  l1i-assoc: 2
+  l1d-assoc: 2
+  cacheline: 64
