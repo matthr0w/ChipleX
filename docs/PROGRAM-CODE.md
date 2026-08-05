@@ -72,7 +72,7 @@ Call `sc_stop()` from either handler to end the simulation.
          delete[] buf;
      },
      .irq = [](Core &core, const IRQ &irq) {
-         // react to an incoming interrupt; call sc_stop() when done
+         // react to an incoming interrupt
      }}}}
 ```
 
