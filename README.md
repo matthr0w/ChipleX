@@ -12,7 +12,8 @@ There are two ways to use it:
 
 ## Documentation
 
-- [docs/PROGRAM-CODE.md](docs/PROGRAM-CODE.md) - writing setup program code (AXI/DMA APIs, cycle estimation).
+- [docs/PROGRAM-CODE.md](docs/PROGRAM-CODE.md) - writing setup program code (module entry points, AXI/DMA APIs).
+- [docs/CYCLE-ESTIMATION.md](docs/CYCLE-ESTIMATION.md) - estimating per-workload compute time with gem5.
 - [docs/RELEASE.md](docs/RELEASE.md) - building a release bundle.
 
 ## Download (recommended)
@@ -32,8 +33,9 @@ setups out of the box. On first launch it seeds an editable workspace under
 Two optional capabilities depend on tools installed on your machine:
 
 - **Building new or edited setups** requires a C++ compiler and `cmake`.
-- **Cycle estimation** requires LLVM, the RISC-V toolchain, and gem5 (see below); without them,
-  setups run with their existing workload cycle counts.
+- **Cycle estimation** requires gem5 and a workload compiler, with LLVM adding
+  accelerator speedup (see [Cycle-estimation tools](#cycle-estimation-tools)).
+  Without them, setups run with their existing workload cycle counts.
 
 ## Build from source
 
@@ -54,25 +56,44 @@ To use an existing SystemC instead, set
 `SYSTEMC_PATH` to its install prefix (containing `include/` and
 `lib/libsystemc.so`).
 
-## LLVM, RISC-V Toolchain & gem5
+## Cycle-estimation tools
 
-LLVM, the RISC-V toolchain and the gem5 simulator are used to estimate the execution cycle counts of the setup programs. While their installation is optional, it is highly recommended in order to obtain realistic processing delay estimations. Please refer to the links listed below for installation instructions.
+Cycle estimation predicts each setup's per-workload compute time so simulated
+time advances realistically; see
+[docs/CYCLE-ESTIMATION.md](docs/CYCLE-ESTIMATION.md) for how it works. It runs
+automatically and is skipped when the tools below are missing, in which case
+setups fall back to their existing workload cycle counts. Installing them is
+optional but recommended for realistic processing-delay estimates.
 
-Cycle estimation runs automatically: the CLI runs it before every `make run`, and the GUI runs it when you build a setup. If the toolchain is not installed it is skipped, and setups run with their existing workload cycle counts.
+Each tool is discovered independently, as described below.
 
-gem5 must be built with the ISAs of the CPU models you use (a `build/ALL` build covers all of them) and be discoverable at run time: put `gem5.opt` on your `PATH` (or point `GEM5_BIN` at the binary), and set `GEM5_HOME` to the gem5 source tree so the m5 pseudo-op header and shim are found (otherwise it is inferred from the binary location). The RISC-V toolchain must likewise be on your `PATH`.
+### gem5
 
-**LLVM**
+- **Used for:** running each workload under a CPU model to measure its cycle count.
+- **Found via:** `gem5.opt` on your `PATH`, or the full path in the `GEM5_BIN`
+  environment variable. The m5 pseudo-op header and shim are read from the gem5
+  source tree: set `GEM5_HOME` to it, or let it be inferred from the binary's
+  location.
+- **Note:** build gem5 with the ISAs of the CPU models you use (a `build/ALL`
+  build covers all of them).
+- **Homepage:** https://gem5.org
 
-https://llvm.org
+### Workload compiler toolchain
 
-**RISC-V GNU Compiler Toolchain** 
+- **Used for:** compiling each workload for its CPU model before gem5 runs it.
+- **Which toolchain:** this depends on the CPU model, not on gem5. The default
+  `riscv-minor` model uses the RISC-V GNU toolchain (`riscv64-unknown-elf-g++`);
+  another CPU model may name a different compiler in its manifest.
+- **Found via:** the model's compiler on your `PATH`.
+- **Homepage (RISC-V, the default):**
+  https://github.com/riscv-collab/riscv-gnu-toolchain
 
-https://github.com/riscv-collab/riscv-gnu-toolchain
+### LLVM (`llvm-mca`)
 
-**gem5**
-
-https://www.gem5.org
+- **Used for:** modeling accelerator speedup only; plain core cycle estimation
+  does not need it.
+- **Found via:** `llvm-mca` on your `PATH`.
+- **Homepage:** https://llvm.org
 
 ## Usage
 
@@ -84,7 +105,7 @@ make [release|debug|asan]
 
 The first build also compiles SystemC; later builds reuse it.
 
-### Execute Simulation GUI *(recommended)*
+### Execute Simulation GUI
 
 ```bash
 make gui

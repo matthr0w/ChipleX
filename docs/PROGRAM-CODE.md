@@ -2,8 +2,9 @@
 
 Each setup describes *what hardware exists* in `system.yaml` and *what that
 hardware does* in `src/program.cpp`. This document explains how to write the
-program code: the module entry points, the AXI and DMA transfer APIs, and how to
-model per-workload compute time with the cycle-estimation tool.
+program code: the module entry points and the AXI and DMA transfer APIs.
+Modeling per-workload compute time is covered separately in
+[CYCLE-ESTIMATION.md](CYCLE-ESTIMATION.md).
 
 ## The entry point
 
@@ -50,11 +51,11 @@ struct CPUCode {
 
 ```cpp
 struct IRQ {
-    uint32_t request_id;     // tag supplied by the sender
+    uint32_t request_id;      // tag supplied by the sender
     uint8_t  target_module;
-    uint32_t target_address; // address associated with the interrupt
+    uint32_t target_address;  // address associated with the interrupt
     uint8_t  burst;
-    unsigned data_length;    // payload size in bytes
+    unsigned data_length;     // payload size in bytes
 };
 ```
 
@@ -92,8 +93,8 @@ input buffer; process it in place and write the result back out.
      for (size_t i = 0; i < size; ++i) {
          data[i] = transform(data[i]);
      }
-     accel.wait_cycles("matalu");            // model compute time
-     auto req = AxiRequest(4, data, size);   // send the result on
+     accel.wait_cycles("matalu");           // model compute time
+     auto req = AxiRequest(4, data, size);  // send the result on
      accel.write(req)->wait();
  }}}}
 ```
@@ -121,7 +122,7 @@ auto req = AxiRequest(request_id, buffer, length)
 | Method | Effect |
 |--------|--------|
 | `AxiRequest(id, data, len)` | `id` is a caller-chosen tag; `data`/`len` is the buffer (source bytes for a write, destination for a read). |
-| `.set_addr(addr)` | Destination address. Required for reads; optional for writes. |
+| `.set_addr(addr)` | Destination address. Required for reads; optional for writes - if omitted, the target module allocates a free address dynamically. |
 | `.to(module)` | Issue through the named local module (default `memory`). |
 | `.to_via(chiplet, module, via)` | Target a specific `chiplet`/`module`, leaving through the local interconnect `via`. |
 | `.set_burst(type)` | `ARM::AXI::BURST_INCR` (default), `BURST_FIXED`, or `BURST_WRAP`. |
@@ -139,7 +140,7 @@ transfer completes.
 
 ```cpp
 auto handle = core.read(req);
-handle->wait();          // suspends this process until the transfer finishes
+handle->wait();  // suspends this process until the transfer finishes
 // for a read, `buffer` now holds the result
 ```
 
@@ -183,7 +184,7 @@ Program code models *communication* explicitly (the AXI/DMA transfers above).
 *Computation* is modeled by advancing simulation time for a named workload:
 
 ```cpp
-core.wait_cycles("matmul");    // or accel.wait_cycles("matmul")
+core.wait_cycles("matmul");  // or accel.wait_cycles("matmul")
 ```
 
 This suspends the caller for the number of clock cycles associated with the
@@ -198,104 +199,7 @@ directly:
 core.wait_cycles(500);
 ```
 
-### Memory-latency boundary
-
-Every memory access is charged in exactly one place, so latency is never
-double-counted:
-
-- **Inside `wait_cycles` (gem5):** the compute kernel's pipeline timing and its
-  accesses to its local working buffers through the L1 cache. `cycles_count` is
-  therefore the compute time on data already resident locally.
-- **In explicit API calls (SystemC):** moving data into and out of local
-  buffers and to and from remote chiplets (`read`/`write`/`dma`) carries the
-  fabric and memory latency.
-
-So a workload's own loads and stores are gem5's job and must not be duplicated
-with API calls: `program.cpp` moves the data with API calls, then calls
-`wait_cycles` for the compute. Contention from simultaneous compute on multiple
-cores is not modeled (only contention on the explicit DMA/AXI traffic is); this
-is acceptable for the single-core setups here and is common-mode across design
-points.
-
-### The cycle-estimation workflow
-
-1. Write a small, self-contained C++ program in
-   `setups/<name>/workloads/<workload>.cpp` with an `int main()`. It should
-   perform the same computation the real module does.
-2. Mark the region to measure:
-
-   ```cpp
-   //@BEGIN_CYCLE_MEASURE
-   for (size_t i = header; i < total; ++i) {
-       out[i] = 255 - in[i];
-   }
-   //@END_CYCLE_MEASURE
-   ```
-
-3. Run `make run ARGS="--setup=<name>"` (the estimator runs automatically before
-   the simulation), or run it directly with `tools/cycle_estimation/main.py`. It
-   compiles the workload with the owning chiplet's CPU-model compiler, runs it
-   under gem5 to obtain per-region cycle counts, and records them in
-   `workloads.yaml` keyed by the region name and the chiplet and core that run
-   it (so the same kernel on different cores can differ).
-4. Reference that name from `program.cpp`: `wait_cycles("<workload>")`.
-
-The estimator re-measures a workload when its source or any resolved gem5 input
-changes (the CPU model, compiler, parameters, core clock, or memory latency),
-and it skips silently if gem5 is not installed. Accelerator speedup
-additionally needs `llvm-mca`; compiling workloads needs the RISC-V toolchain.
-
-### Modeling accelerator speedup (optional)
-
-To model an accelerator that executes a region faster than a scalar core, wrap
-that region with a speedup annotation *inside* the cycle block:
-
-```cpp
-//@BEGIN_CYCLE_MEASURE
-//@BEGIN_SPEEDUP_MEASURE
-    heavy_alu_loop();
-//@END_SPEEDUP_MEASURE
-//@END_CYCLE_MEASURE
-```
-
-The estimator analyzes the instruction mix of that region and scales its cycles
-by the resources declared in the accelerator's config
-(`configs/accelerators/<type>.yaml`): `num_alu`, `num_branch`, `num_fpalu`,
-`num_fpdivsqrt`, `num_idiv`, `num_imul`, `num_mem`. Alternatively, set an
-explicit `speedup_factor` in that config to override the analysis. The
-accelerator is identified by matching the `wait_cycles("<workload>")` call in its
-`AccelCode`.
-
-### CPU model and gem5 parameters
-
-Each chiplet that has cores estimates cycles with a gem5 CPU model, defaulting
-to `riscv-minor` (an in-order RISC-V pipeline with private L1 caches). Select a
-different model or override its parameters per chiplet with a `gem5:` block in
-`system.yaml` (the GUI's setup editor exposes this for core-bearing chiplets):
-
-```yaml
-chiplets:
-  - name: chiplet0
-    type: compute
-    gem5:
-      cpu_model: riscv-minor
-      params:
-        l1d-size: 64kB
-```
-
-Models live in `tools/cycle_estimation/gem5/models/*.yaml`; each names a gem5
-config script, a compiler, the m5op ABI, and the parameters it exposes with
-defaults. These parameters are model-specific and are not part of a chiplet's
-default config.
-
-Two SystemC config values are also passed to gem5: the core clock period
-(`cores.clk_cycle`) becomes gem5's CPU clock, and the local memory latency is
-`memory.access_latency` x `memory.clk_cycle`. They are marked `GEM5` in the
-default configs; changing them, a gem5 parameter, the model, or the compiler
-invalidates the cached estimate so the next build re-runs gem5. Values marked
-`DO NOT EDIT` (e.g. `cores.num`) are structural and hidden from the editor.
-
-To add a model, drop a manifest in the models directory declaring its
-`cpu_type`, `compiler`, `m5op_abi`, and `params`; the gem5 build must include
-that ISA. A custom config script must accept and use `--clock` and
-`--mem-latency` (see `se_model.py` for the reference).
+A workload's own loads and stores are already charged inside `wait_cycles`, so
+do not move that data with API calls as well. See
+[CYCLE-ESTIMATION.md](CYCLE-ESTIMATION.md) for how counts are produced, the
+memory-latency boundary, accelerator speedup, and CPU-model selection.

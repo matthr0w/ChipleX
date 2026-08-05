@@ -16,7 +16,7 @@ The build stages a `framework/` tree that PyInstaller embeds:
   of the box.
 - `include/`, `CMakeLists.txt`, `deps/yaml-cpp/` - everything needed to compile a
   setup plugin offline on the target.
-- `configs/`, `docs/`, `tools/cycle_estimation/`.
+- `configs/`, `tools/cycle_estimation/`.
 
 At runtime the bundle seeds an editable workspace under
 `~/.local/share/chiplet-sim/` (setups and build outputs) so the read-only bundle
