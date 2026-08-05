@@ -17,15 +17,19 @@ class CycleEstimator:
         self.setups: List[Setup] = self.get_setups()
         self.updates: Dict[Setup, List[Workload]] = self.get_updates()
 
-    def update_database(self, setup: Setup, workload: Workload):
+    def update_database(self, setup: Setup, workload: Workload, execution: Execution):
         data = load_yaml(setup.workloads_db)
         if "workloads" not in data:
             data["workloads"] = {}
-        # Update YAML
-        data["workloads"].setdefault(workload.id, {})
-        data["workloads"][workload.id]["cycles_count"] = workload.estimation_result
-        data["workloads"][workload.id]["source_hash"] = workload.source_hash
-        # Write YAML back
+        # Entries are nested region -> executor -> {cycles_count, input_hash}.
+        region = data["workloads"].setdefault(workload.id, {})
+        # Drop any legacy flat keys from the pre-executor schema.
+        for legacy in ("cycles_count", "input_hash", "source_hash"):
+            region.pop(legacy, None)
+        region[execution.executor] = {
+            "cycles_count": execution.estimation_result,
+            "input_hash": execution.input_hash,
+        }
         write_yaml(setup.workloads_db, data)
 
     def get_setups(self) -> List[Setup]:
@@ -49,14 +53,9 @@ class CycleEstimator:
                 workloads_db=setup_dir / SETUP_WORKLOADS_DB
             )
 
-            # Per-workload CPU model is read from the DB (default when unset).
-            db = load_yaml(setup.workloads_db)
-            db_workloads = db.get("workloads", {}) if db else {}
-
             for cpp_file in sorted(workloads_dir.glob("*.cpp")):
                 id = cpp_file.stem
                 file_id = f"{setup.id}__{id}"
-                entry = db_workloads.get(id, {}) or {}
                 workload = Workload(
                     id=id,
                     file_id=file_id,
@@ -65,37 +64,33 @@ class CycleEstimator:
                     dest_path=BUILD_DIR / f"{file_id}.cpp",
                     asm_path=BUILD_DIR / f"{file_id}.s",
                     binary_path=BUILD_DIR / f"{file_id}",
-                    estimation_result=0,
-                    model=entry.get("model", DEFAULT_MODEL),
                 )
+                # Enumerate the executions (one per chiplet+core that runs this
+                # region), each resolving its model, gem5 params, and clock/mem.
+                resolve_workload(setup, workload)
                 setup.workloads[id] = workload
             setups.append(setup)
         return setups
 
-    def get_updates(self) -> Dict[Path, List[Workload]]:
-        updates: Dict[Setup, List[Workload]] = {}
+    def get_updates(self) -> Dict[Setup, List]:
+        updates: Dict[Setup, List] = {}
         for setup in self.setups:
-            pending: List[Workload] = []
+            pending = []
             data = load_yaml(setup.workloads_db)
             workloads_data = data.get("workloads", {}) if data else {}
             for id, workload in setup.workloads.items():
-                # Check if workload entry exists
-                workload_entry = workloads_data.get(id)
-                if workload_entry is None:
-                    pending.append(workload)
-                    continue
+                region_entry = workloads_data.get(id, {}) or {}
+                for execution in workload.executions:
+                    stored = region_entry.get(execution.executor, {}) or {}
 
-                # Check if workload hash exists and is valid
-                workload_hash = workload_entry.get("source_hash")
-                if not workload_hash or workload_hash != workload.source_hash:
-                    pending.append(workload)
-                    continue
-
-                # Check if workload cycles count exists
-                workload_cycles = workload_entry.get("cycles_count")
-                if workload_cycles is None or not isinstance(workload_cycles, int):
-                    pending.append(workload)
-                    continue
+                    # Re-estimate this executor whenever any resolved input
+                    # changed (source, CPU model, compiler/flags, gem5 params,
+                    # clock, or memory latency) or no valid count is stored.
+                    stored_hash = stored.get("input_hash")
+                    stored_cycles = stored.get("cycles_count")
+                    if (not stored_hash or stored_hash != execution.input_hash
+                            or not isinstance(stored_cycles, int)):
+                        pending.append((workload, execution))
 
             if pending:
                 updates[setup] = pending
@@ -206,8 +201,8 @@ class CycleEstimator:
         # Write back
         workload.dest_path.write_text(final_code, encoding="utf-8")
 
-    def compile_workload(self, workload: Workload):
-        model = load_model(workload.model)
+    def compile_workload(self, workload: Workload, execution: Execution):
+        model = load_model(execution.model)
         compiler = model.get("compiler", RISCV_COMPILER)
         flags = list(model.get("compiler_flags", RISCV_COMPILER_FLAGS))
         abi = model.get("m5op_abi", "riscv")
@@ -249,16 +244,16 @@ class CycleEstimator:
         if proc.returncode != 0:
             log_error(f"Binary compilation failed:\n{proc.stderr}")
 
-    def compute_estimation(self, setup: Setup, workload: Workload):
-        model = load_model(workload.model)
+    def compute_estimation(self, setup: Setup, workload: Workload, execution: Execution):
+        model = load_model(execution.model)
 
-        # Run gem5 to get per-region cycle counts. --clock and --mem-latency come
-        # from the SystemC config (fallback defaults until Phase 3 sources them).
+        # Run gem5 to get per-region cycle counts. --clock (core period) and
+        # --mem-latency come from the executor's resolved SystemC chiplet config.
         outdir = BUILD_DIR / "m5out"
         command = ([GEM5_BINARY, "--outdir", str(outdir), str(model_config(model)),
                     "--cmd", str(workload.binary_path)]
-                   + model_cli(model)
-                   + ["--clock", DEFAULT_CLOCK, "--mem-latency", DEFAULT_MEM_LATENCY])
+                   + model_cli(model, execution.params)
+                   + ["--clock", execution.clock, "--mem-latency", execution.mem_latency])
         proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         output = (proc.stdout or "") + "\n" + (proc.stderr or "")
         debug_output = BUILD_DIR / "debug_gem5.txt"
@@ -285,7 +280,7 @@ class CycleEstimator:
             speedup_factor = speedup_sections.get(section_name, 1.0) # default: no speedup
             total_cycles += cycles / speedup_factor
 
-        workload.estimation_result = int(total_cycles)
+        execution.estimation_result = int(total_cycles)
 
     def compute_speedup(self, setup: Setup, workload: Workload) -> Dict[str, float]:
         # Run llvm-mca on the assembler file
@@ -370,14 +365,22 @@ class CycleEstimator:
         if not self.updates:
             log_info("All workloads up-to-date.")
             return
-        for setup, workloads in self.updates.items():
-            for workload in workloads:
-                log_info(f"Updating cycle estimation for '{workload.source_path}'...")
-                self.prepare_build_directory(setup, workload)
-                self.prepare_workload(workload)
-                self.compile_workload(workload)
-                self.compute_estimation(setup, workload)
-                self.update_database(setup, workload)
+        for setup, pending in self.updates.items():
+            # Executions that share an input hash (same source, model, params,
+            # clock, and memory latency) yield the same count; compute once.
+            computed: Dict[str, int] = {}
+            for workload, execution in pending:
+                if execution.input_hash in computed:
+                    execution.estimation_result = computed[execution.input_hash]
+                else:
+                    log_info(f"Updating cycle estimation for '{workload.source_path}' "
+                             f"on {execution.executor}...")
+                    self.prepare_build_directory(setup, workload)
+                    self.prepare_workload(workload)
+                    self.compile_workload(workload, execution)
+                    self.compute_estimation(setup, workload, execution)
+                    computed[execution.input_hash] = execution.estimation_result
+                self.update_database(setup, workload, execution)
 
 def main():
     # gem5 is the one hard requirement; the cross-compiler is validated per

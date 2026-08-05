@@ -21,9 +21,9 @@ SCRIPT_ROOT = Path(__file__).parent.absolute()
 GEM5_DIR = SCRIPT_ROOT / "gem5"
 GEM5_MODELS_DIR = GEM5_DIR / "models"
 DEFAULT_MODEL = "riscv-minor"
-# Fallbacks used until the values are sourced from the SystemC config.
-DEFAULT_CLOCK = "1GHz"
-DEFAULT_MEM_LATENCY = "30ns"
+DEFAULT_CLK_CYCLE_NS = 1
+DEFAULT_ACCESS_LATENCY_CYCLES = 1
+DEFAULT_MEM_CLK_CYCLE_NS = 3
 ## Configs
 CONFIGS_ROOT = Path(os.environ.get("CE_CONFIGS_DIR", "configs"))
 ACCELERATOR_CONFIGS = CONFIGS_ROOT / "accelerators"

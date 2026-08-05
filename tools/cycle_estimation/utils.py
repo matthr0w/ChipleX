@@ -10,6 +10,26 @@ from classes import *
 from constants import *
 
 
+def sha1_file(path: Path) -> str:
+    hash = hashlib.sha1()
+    with path.open("rb") as file:
+        while True:
+            chunk = file.read(8192)
+            if not chunk:
+                break
+            hash.update(chunk)
+    return hash.hexdigest()
+
+def load_yaml(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+def write_yaml(path: Path, data: dict):
+    with path.open("w", encoding="utf-8") as f:
+        yaml.safe_dump(data, f, sort_keys=False)
+
 def resolve_gem5_home() -> Path:
     """Locate the gem5 source tree (for the m5op header + per-ABI shim).
 
@@ -37,17 +57,143 @@ def model_config(model: dict) -> Path:
     path = Path(config)
     return path if path.is_absolute() else GEM5_DIR / path
 
-def model_cli(model: dict) -> List[str]:
+def model_cli(model: dict, params: Dict[str, Any]) -> List[str]:
     """Build the config-script flags from the model's cpu, mem mode, and params.
 
-    --clock and --mem-latency are appended by the caller from the SystemC config.
+    `params` are the resolved gem5 parameters (model defaults with the chiplet's
+    gem5-block overrides applied). --clock and --mem-latency are appended by the
+    caller from the resolved SystemC config.
     """
     cli = ["--cpu-type", str(model["cpu_type"])]
     if model.get("mem_mode"):
         cli += ["--mem-mode", str(model["mem_mode"])]
-    for key, value in (model.get("params") or {}).items():
+    for key, value in (params or {}).items():
         cli += [f"--{key}", str(value)]
     return cli
+
+def merge_nodes(target: dict, override: dict, path: str = ""):
+    """Deep-merge `override` into `target` in place, mirroring SetupLoader::merge_nodes.
+
+    Only keys already present in `target` are overridden; unknown keys warn and
+    are ignored, so the tool honors the same override contract as the SystemC
+    loader (system.yaml `config:` blocks over configs/chiplets/<type>.yaml).
+    """
+    if not isinstance(override, dict):
+        return
+    for key, value in override.items():
+        full_path = f"{path}.{key}" if path else key
+        if not isinstance(target, dict) or key not in target:
+            log_warn(f"Unknown parameter: {full_path}. Ignoring.")
+            continue
+        if isinstance(value, dict) and isinstance(target[key], dict):
+            merge_nodes(target[key], value, full_path)
+        else:
+            target[key] = value
+
+def resolve_chiplet(setup: Setup, chiplet_name: str):
+    """Return (merged_config, gem5_block) for a chiplet in the setup's system.yaml.
+
+    The merged config is configs/chiplets/<type>.yaml with the system.yaml
+    chiplet `config:` overrides deep-merged on top (same as the SystemC loader).
+    The `gem5:` block is read verbatim; the SystemC loader ignores it.
+    """
+    system = load_yaml(setup.system_file)
+    entry = next((c for c in system.get("chiplets", []) if c.get("name") == chiplet_name), None)
+    if entry is None:
+        return {}, {}
+    base = load_yaml(CHIPLET_CONFIGS / f"{entry.get('type')}.yaml")
+    for section, node in (entry.get("config") or {}).items():
+        if section in base:
+            merge_nodes(base[section], node, section)
+        else:
+            log_warn(f"Unknown parameter: {section}. Ignoring.")
+    return base, (entry.get("gem5") or {})
+
+def find_executors(setup: Setup, region: str):
+    """Return the (chiplet, module) pairs whose code calls wait_cycles("<region>").
+
+    Resolved positionally: each wait_cycles call is attributed to the module
+    header ({"chiplet", "module"}) with the greatest position preceding it. This
+    is robust to the nested braces of CPUCode/AccelCode lambda bodies. The same
+    region may run on several cores, so all distinct executors are returned.
+    """
+    code = setup.program_file.read_text(encoding="utf-8")
+    header_re = re.compile(r'\{\s*\{\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\}\s*,\s*\{')
+    headers = [(m.start(), m.group(1), m.group(2)) for m in header_re.finditer(code)]
+    wait_re = re.compile(r'\.wait_cycles\("' + re.escape(region) + r'"\)')
+
+    executors = []
+    seen = set()
+    for match in wait_re.finditer(code):
+        owner = None
+        for start, chiplet, module in headers:
+            if start < match.start():
+                owner = (chiplet, module)
+            else:
+                break
+        if owner and owner not in seen:
+            seen.add(owner)
+            executors.append(owner)
+    return executors
+
+def execution_hash(source_hash: str, model: dict, execution: Execution) -> str:
+    """Hash the full set of estimation inputs to drive re-estimation.
+
+    Covers the workload source plus everything that can change the gem5 result:
+    CPU model, compiler and flags, resolved gem5 params, core clock, and memory
+    latency. The executor identity is the DB key, not part of the hash, so two
+    identically-configured executors share a result. Any change re-triggers it.
+    """
+    hash = hashlib.sha1()
+    hash.update(source_hash.encode())
+    hash.update(str(execution.model).encode())
+    hash.update(str(model.get("compiler", RISCV_COMPILER)).encode())
+    hash.update(str(model.get("compiler_flags", RISCV_COMPILER_FLAGS)).encode())
+    hash.update(str(sorted(execution.params.items())).encode())
+    hash.update(execution.clock.encode())
+    hash.update(execution.mem_latency.encode())
+    return hash.hexdigest()
+
+def resolve_workload(setup: Setup, workload: Workload):
+    """Build one Execution per (chiplet, module) that runs this workload region.
+
+    Each execution resolves its CPU model, gem5 params, core-clock period,
+    backing-memory latency, and invalidation hash from its owning chiplet.
+    """
+    executors = find_executors(setup, workload.id)
+    if not executors:
+        log_warn(f"No wait_cycles('{workload.id}') found in program.cpp; skipping estimation.")
+        return
+
+    for chiplet, module in executors:
+        config, gem5_block = resolve_chiplet(setup, chiplet)
+
+        model_name = gem5_block.get("cpu_model", DEFAULT_MODEL)
+        model = load_model(model_name)
+
+        params = dict(model.get("params") or {})
+        for key, value in (gem5_block.get("params") or {}).items():
+            if key in params:
+                params[key] = value
+            else:
+                log_warn(f"Unknown gem5 param '{key}' for model '{model_name}'. Ignoring.")
+
+        cores = config.get("cores") or {}
+        memory = config.get("memory") or {}
+        clk_cycle = cores.get("clk_cycle", DEFAULT_CLK_CYCLE_NS)
+        access_latency = memory.get("access_latency", DEFAULT_ACCESS_LATENCY_CYCLES)
+        mem_clk_cycle = memory.get("clk_cycle", DEFAULT_MEM_CLK_CYCLE_NS)
+
+        execution = Execution(
+            chiplet=chiplet,
+            module=module,
+            model=model_name,
+            params=params,
+            clock=f"{clk_cycle}ns",
+            mem_latency=f"{access_latency * mem_clk_cycle}ns",
+        )
+        execution.input_hash = execution_hash(workload.source_hash, model, execution)
+        workload.executions.append(execution)
 
 def parse_gem5_cycles(stats_path: Path, num_sections: int) -> Dict[str, int]:
     """Map the first `num_sections` gem5 stat dumps to SECTION1..N cycle counts.
@@ -66,25 +212,6 @@ def parse_gem5_cycles(stats_path: Path, num_sections: int) -> Dict[str, int]:
             cycles.append(int(match.group(1)))
     return {f"SECTION{i + 1}": cycles[i] for i in range(min(num_sections, len(cycles)))}
 
-def sha1_file(path: Path) -> str:
-    hash = hashlib.sha1()
-    with path.open("rb") as file:
-        while True:
-            chunk = file.read(8192)
-            if not chunk:
-                break
-            hash.update(chunk)
-    return hash.hexdigest()
-
-def load_yaml(path: Path) -> dict:
-    if not path.exists():
-        return {}
-    with path.open("r", encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
-
-def write_yaml(path: Path, data: dict):
-    with path.open("w", encoding="utf-8") as f:
-        yaml.safe_dump(data, f, sort_keys=False)
 
 def get_accel_params(setup: Setup, section_id: str):
     # TODO: Use overwritten params from system.yaml 

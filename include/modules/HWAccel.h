@@ -18,10 +18,12 @@ SC_MODULE(HWAccel), public DMAForwardInterface {
 	// -------------------------------------------------------
 	// Config
 	// -------------------------------------------------------
-	const unsigned chiplet_id;
-	const unsigned axi_width;
-	const CyclesDB cycles;
-	const sc_time  clk_cycle;
+	const std::string chiplet_name;
+	const unsigned    chiplet_id;
+	const std::string accel_name;
+	const unsigned    axi_width;
+	const CyclesDB    cycles;
+	const sc_time     clk_cycle;
 
   public:
 	// -------------------------------------------------------
@@ -34,8 +36,8 @@ SC_MODULE(HWAccel), public DMAForwardInterface {
 	// -------------------------------------------------------
 	ARM::AXI::SimpleTargetSocket<HWAccel> tsocket;
 
-	HWAccel(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config, const CyclesDB &cycles,
-	        DMAEngine *dma_engine);
+	HWAccel(sc_module_name name, const std::string &chiplet_name, unsigned chiplet_id, const std::string &accel_name,
+	        ChipletConfig chiplet_config, const CyclesDB &cycles, DMAEngine *dma_engine);
 
 	void main_thread();
 

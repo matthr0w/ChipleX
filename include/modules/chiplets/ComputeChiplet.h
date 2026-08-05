@@ -87,7 +87,8 @@ struct ComputeChiplet : ChipletBase {
 			std::string core_name = CORE_MODULE_NAME + std::to_string(i);
 			unsigned    num_irqs =
 			    chiplet_desc.num_interconnects() * 2 + 1; // Interconnects + Extension Layers + DMA Engine
-			cores.push_back(std::make_unique<Core>(core_name.c_str(), chiplet_id, i, chiplet_config, cycles, num_irqs));
+			cores.push_back(std::make_unique<Core>(core_name.c_str(), chiplet_name, chiplet_id, core_name, i,
+			                                       chiplet_config, cycles, num_irqs));
 
 			// Bind the core's clock and manager socket directly to the bus.
 			cores[i]->clk.bind(chiplet_clocks.get("cores"));
@@ -113,7 +114,8 @@ struct ComputeChiplet : ChipletBase {
 
 		// Accelerators
 		for (const auto &[name, config] : chiplet_config.accels) {
-			auto accel = std::make_unique<HWAccel>(name.c_str(), chiplet_id, chiplet_config, cycles, &dma_engine);
+			auto accel = std::make_unique<HWAccel>(name.c_str(), chiplet_name, chiplet_id, name, chiplet_config, cycles,
+			                                       &dma_engine);
 
 			// Bind clocks and sockets
 			accel->clk.bind(get_accel_clocks(name).get());

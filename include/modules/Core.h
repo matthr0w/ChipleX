@@ -22,12 +22,14 @@ SC_MODULE(Core) {
 	// -------------------------------------------------------
 	// Config
 	// -------------------------------------------------------
-	const unsigned chiplet_id;
-	const unsigned core_id;
-	const unsigned axi_width;
-	const CyclesDB cycles;
-	const sc_time  clk_cycle;
-	const sc_time  irq_delay;
+	const std::string chiplet_name;
+	const unsigned    chiplet_id;
+	const std::string core_name;
+	const unsigned    core_id;
+	const unsigned    axi_width;
+	const CyclesDB    cycles;
+	const sc_time     clk_cycle;
+	const sc_time     irq_delay;
 
   public:
 	// -------------------------------------------------------
@@ -41,8 +43,8 @@ SC_MODULE(Core) {
 	ARM::AXI::SimpleInitiatorSocket<Core> isocket;
 	simple_target_socket_tagged<Core>    *irq_sockets;
 
-	Core(sc_module_name name, unsigned chiplet_id, unsigned core_id, ChipletConfig chiplet_config,
-	     const CyclesDB &cycles, unsigned num_irqs);
+	Core(sc_module_name name, const std::string &chiplet_name, unsigned chiplet_id, const std::string &core_name,
+	     unsigned core_id, ChipletConfig chiplet_config, const CyclesDB &cycles, unsigned num_irqs);
 	~Core();
 
 	void main_thread();

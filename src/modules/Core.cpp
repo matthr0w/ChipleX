@@ -3,10 +3,12 @@
 #include "modules/chiplets/ChipletRegistry.h"
 #include "modules/DMAEngine.h"
 
-Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id, ChipletConfig chiplet_config,
-           const CyclesDB &cycles, unsigned num_irqs)
+Core::Core(sc_module_name name, const std::string &chiplet_name, unsigned chiplet_id, const std::string &core_name,
+           unsigned core_id, ChipletConfig chiplet_config, const CyclesDB &cycles, unsigned num_irqs)
     : sc_module(name),
+      chiplet_name(chiplet_name),
       chiplet_id(chiplet_id),
+      core_name(core_name),
       core_id(core_id),
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
       cycles(cycles),
@@ -68,7 +70,7 @@ void Core::interrupt_thread() {
 
 void Core::wait_cycles(const std::string &name) {
 	stats.set_active(this->name());
-	wait(cycles.get(name), SC_NS);
+	wait(cycles.get(chiplet_name + "." + core_name + "." + name), SC_NS);
 	stats.set_idle(this->name());
 }
 

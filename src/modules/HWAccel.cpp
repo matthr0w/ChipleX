@@ -3,10 +3,13 @@
 #include "modules/chiplets/ChipletRegistry.h"
 #include "modules/DMAEngine.h"
 
-HWAccel::HWAccel(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config, const CyclesDB &cycles,
+HWAccel::HWAccel(sc_module_name name, const std::string &chiplet_name, unsigned chiplet_id,
+                 const std::string &accel_name, ChipletConfig chiplet_config, const CyclesDB &cycles,
                  DMAEngine *dma_engine)
     : sc_module(name),
+      chiplet_name(chiplet_name),
       chiplet_id(chiplet_id),
+      accel_name(accel_name),
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
       cycles(cycles),
       clk_cycle(chiplet_config.node["cores"]["clk_cycle"].as<unsigned>(), SC_NS),
@@ -58,7 +61,7 @@ void HWAccel::main_thread() {
 
 void HWAccel::wait_cycles(const std::string &name) {
 	stats.set_active(this->name());
-	wait(cycles.get(name), SC_NS);
+	wait(cycles.get(chiplet_name + "." + accel_name + "." + name), SC_NS);
 	stats.set_idle(this->name());
 }
 
