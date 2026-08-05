@@ -69,8 +69,12 @@ void Core::interrupt_thread() {
 }
 
 void Core::wait_cycles(const std::string &name) {
+	wait_cycles(cycles.get(chiplet_name + "." + core_name + "." + name));
+}
+
+void Core::wait_cycles(unsigned count) {
 	stats.set_active(this->name());
-	wait(cycles.get(chiplet_name + "." + core_name + "." + name), SC_NS);
+	wait(count * clk_cycle);
 	stats.set_idle(this->name());
 }
 

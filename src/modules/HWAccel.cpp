@@ -60,8 +60,12 @@ void HWAccel::main_thread() {
 }
 
 void HWAccel::wait_cycles(const std::string &name) {
+	wait_cycles(cycles.get(chiplet_name + "." + accel_name + "." + name));
+}
+
+void HWAccel::wait_cycles(unsigned count) {
 	stats.set_active(this->name());
-	wait(cycles.get(chiplet_name + "." + accel_name + "." + name), SC_NS);
+	wait(count * clk_cycle);
 	stats.set_idle(this->name());
 }
 

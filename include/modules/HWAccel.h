@@ -51,6 +51,7 @@ SC_MODULE(HWAccel), public DMAForwardInterface {
 	unsigned MAX_WRAP_BURST_SIZE  = 0;
 
 	void wait_cycles(const std::string &name);
+	void wait_cycles(unsigned count);
 
 	// -------------------------------------------------------
 	// AXI API
