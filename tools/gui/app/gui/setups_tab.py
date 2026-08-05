@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox,
 
 from .. import setup_writer
 from ..cycle_estimation import run_cycle_estimation
-from ..project import Project, missing_build_tools, missing_cycle_tools
+from ..project import Project, missing_build_tools
 from ..setup_builder import BuildResult, build_setup
 from .setup_editor import SetupEditorDialog
 from .theme import link
@@ -20,10 +20,6 @@ from .theme import link
 _TOOL_URLS = {
     "cmake": "https://cmake.org/download/",
     "C++ compiler (g++ or clang++)": "https://gcc.gnu.org/install/",
-    "LLVM": "https://llvm.org",
-    "RISC-V GNU Compiler Toolchain": "https://github.com/riscv-collab/riscv-gnu-toolchain",
-    "RISC-V Proxy Kernel and Boot Loader": "https://github.com/riscv-software-src/riscv-pk",
-    "Spike RISC-V ISA Simulator": "https://github.com/riscv-software-src/riscv-isa-sim",
 }
 
 
@@ -58,7 +54,12 @@ class _BuildWorker(QThread):
         cycles = run_cycle_estimation(self._project, self._name)
         result = build_setup(self._project, self._name)
         log = f"=== Cycle estimation ===\n{cycles.log}\n\n=== Build ===\n{result.log}"
-        note = "Cycle estimation failed; see log." if cycles.status == "failed" else ""
+        if cycles.status == "failed":
+            note = "Cycle estimation failed; see log."
+        elif cycles.status == "skipped":
+            note = "Cycle estimation skipped; see log."
+        else:
+            note = ""
         self.done.emit(BuildResult(result.ok, log, note))
 
 
@@ -104,7 +105,12 @@ class SetupsTab(QWidget):
         self.refresh()
 
     def _environment_banners(self) -> list:
-        """Warning banners for missing build and cycle-estimation tools."""
+        """Warning banners for missing build tools.
+
+        Cycle-estimation tool requirements are reported by the estimator itself
+        in the build log, so its needs (gem5, RISC-V toolchain, llvm-mca) are
+        surfaced only when a build actually invokes it.
+        """
         banners = []
         build_missing = missing_build_tools()
         if build_missing:
@@ -114,14 +120,6 @@ class SetupsTab(QWidget):
                 "setups cannot be built without:",
                 build_missing,
                 "You can still create and edit setups; install these to build and run them.",
-            ))
-        cycle_missing = missing_cycle_tools()
-        if cycle_missing:
-            banners.append(_warning_banner(
-                "cycle estimation is disabled and will be skipped without:",
-                cycle_missing,
-                "Setups run with their existing workload cycle counts; new or "
-                "changed workloads are not estimated.",
             ))
         return banners
 

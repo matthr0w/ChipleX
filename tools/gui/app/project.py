@@ -15,16 +15,10 @@ def is_frozen() -> bool:
     return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
 
-# Tools required to compile a setup plugin, and the cycle-estimation toolchain
-# (see tools/cycle_estimation/constants.py). Each cycle tool is an (executable
-# to probe, display name) pair; missing_* return the display names.
+# Tools required to compile a setup plugin. The cycle-estimation toolchain
+# (gem5, RISC-V toolchain, llvm-mca) is validated by the estimator itself, which
+# reports what is missing in its output, so it is not probed here.
 _CXX_COMPILERS = ("c++", "g++", "clang++")
-_CYCLE_TOOLS = (
-    ("llvm-mca", "LLVM"),
-    ("riscv64-unknown-elf-gcc", "RISC-V GNU Compiler Toolchain"),
-    ("pk", "RISC-V Proxy Kernel and Boot Loader"),
-    ("spike", "Spike RISC-V ISA Simulator"),
-)
 
 
 def missing_build_tools() -> List[str]:
@@ -35,11 +29,6 @@ def missing_build_tools() -> List[str]:
     if not any(shutil.which(cxx) for cxx in _CXX_COMPILERS):
         missing.append("C++ compiler (g++ or clang++)")
     return missing
-
-
-def missing_cycle_tools() -> List[str]:
-    """Return the display names of absent cycle-estimation tools."""
-    return [name for exe, name in _CYCLE_TOOLS if shutil.which(exe) is None]
 
 
 def user_data_dir() -> Path:

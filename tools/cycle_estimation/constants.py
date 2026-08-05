@@ -1,6 +1,10 @@
 import os
 from pathlib import Path
 
+# Exit code used when estimation is skipped because a required tool is absent
+# (distinct from 0 = ran and 1 = failed, so callers can surface the skip).
+EXIT_SKIPPED = 3
+
 # RISC-V Compiler
 RISCV_COMPILER = "riscv64-unknown-elf-g++"
 RISCV_COMPILER_FLAGS = ["-O2"]

@@ -2,9 +2,9 @@
 
 The command-line flow runs cycle estimation before every simulation; the GUI
 runs it as part of building a setup so a setup's workload cycle counts stay in
-sync with its workload sources. Estimation needs the RISC-V toolchain (see
-project.missing_cycle_tools()) and a Python interpreter, so it is skipped in a
-frozen bundle and when the tools are absent.
+sync with its workload sources. It is skipped only in a frozen bundle; when the
+estimator's tools (gem5, the RISC-V toolchain, llvm-mca) are absent, the tool
+itself reports this in its output, which the caller surfaces in the build log.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 
-from .project import Project, is_frozen, missing_cycle_tools
+from .project import Project, is_frozen
 
 
 @dataclass
@@ -26,10 +26,10 @@ class CycleResult:
 def run_cycle_estimation(project: Project, setup: str, timeout_s: int = 900) -> CycleResult:
     if is_frozen():
         return CycleResult("skipped", "Cycle estimation is unavailable in the bundled application.")
-    missing = missing_cycle_tools()
-    if missing:
-        return CycleResult("skipped", "Cycle estimation skipped; not installed: " + ", ".join(missing))
 
+    # The estimator reports its own missing tools (gem5, RISC-V toolchain, and
+    # llvm-mca only when a workload needs it) in its output, so it is always run
+    # here and its log is surfaced in the build output.
     tool_dir = project.root / "tools" / "cycle_estimation"
     main_py = tool_dir / "main.py"
     if not main_py.is_file():
@@ -50,4 +50,8 @@ def run_cycle_estimation(project: Project, setup: str, timeout_s: int = 900) -> 
         return CycleResult("failed", str(exc))
 
     log = (proc.stdout or "") + (proc.stderr or "")
+    # Exit code 3 means the estimator skipped because a tool is missing (see
+    # tools/cycle_estimation/constants.py EXIT_SKIPPED); surface it distinctly.
+    if proc.returncode == 3:
+        return CycleResult("skipped", log)
     return CycleResult("ran" if proc.returncode == 0 else "failed", log)

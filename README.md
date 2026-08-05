@@ -32,7 +32,7 @@ setups out of the box. On first launch it seeds an editable workspace under
 Two optional capabilities depend on tools installed on your machine:
 
 - **Building new or edited setups** requires a C++ compiler and `cmake`.
-- **Cycle estimation** requires LLVM, the RISC-V toolchain, and Spike (see below); without them,
+- **Cycle estimation** requires LLVM, the RISC-V toolchain, and gem5 (see below); without them,
   setups run with their existing workload cycle counts.
 
 ## Build from source
@@ -54,11 +54,13 @@ To use an existing SystemC instead, set
 `SYSTEMC_PATH` to its install prefix (containing `include/` and
 `lib/libsystemc.so`).
 
-## LLVM, RISC-V Toolchain & Spike
+## LLVM, RISC-V Toolchain & gem5
 
-LLVM, the RISC-V toolchain and the Spike simulator are used to estimate the execution cycle counts of the setup programs. While their installation is optional, it is highly recommended in order to obtain realistic processing delay estimations. Please refer to the links listed below for installation instructions.
+LLVM, the RISC-V toolchain and the gem5 simulator are used to estimate the execution cycle counts of the setup programs. While their installation is optional, it is highly recommended in order to obtain realistic processing delay estimations. Please refer to the links listed below for installation instructions.
 
 Cycle estimation runs automatically: the CLI runs it before every `make run`, and the GUI runs it when you build a setup. If the toolchain is not installed it is skipped, and setups run with their existing workload cycle counts.
+
+gem5 must be built with the ISAs of the CPU models you use (a `build/ALL` build covers all of them) and be discoverable at run time: put `gem5.opt` on your `PATH` (or point `GEM5_BIN` at the binary), and set `GEM5_HOME` to the gem5 source tree so the m5 pseudo-op header and shim are found (otherwise it is inferred from the binary location). The RISC-V toolchain must likewise be on your `PATH`.
 
 **LLVM**
 
@@ -68,13 +70,9 @@ https://llvm.org
 
 https://github.com/riscv-collab/riscv-gnu-toolchain
 
-**RISC-V Proxy Kernel and Boot Loader**
+**gem5**
 
-https://github.com/riscv-software-src/riscv-pk
-
-**Spike RISC-V ISA Simulator**
-
-https://github.com/riscv-software-src/riscv-isa-sim
+https://www.gem5.org
 
 ## Usage
 
