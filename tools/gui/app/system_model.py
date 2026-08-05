@@ -81,6 +81,7 @@ class SystemModel:
         self.instances: List[Instance] = []
         self._type_cache: Dict[Path, Dict[str, Any]] = {}
         self._unit_cache: Dict[Path, Dict[str, str]] = {}
+        self._constant_cache: Dict[Path, set] = {}
         self._build()
 
     # -- construction -----------------------------------------------------
@@ -100,6 +101,12 @@ class SystemModel:
             self._unit_cache[path] = _parse_units(path.read_text()) if path.is_file() else {}
         return self._unit_cache[path]
 
+    def _constants(self, kind: str, type_name: str) -> set:
+        path = self._type_path(kind, type_name)
+        if path not in self._constant_cache:
+            self._constant_cache[path] = _parse_constants(path.read_text()) if path.is_file() else set()
+        return self._constant_cache[path]
+
     def _build(self) -> None:
         for ci, chiplet in enumerate(self.doc.get("chiplets", [])):
             name = chiplet.get("name", f"chiplet{ci}")
@@ -109,7 +116,8 @@ class SystemModel:
 
             node = Instance(name=name, type_name=type_name, scope="chiplet")
             node.params = self._params_for(
-                type_file, self._units("chiplets", type_name), effective, scope="chiplet",
+                type_file, self._units("chiplets", type_name), self._constants("chiplets", type_name),
+                effective, scope="chiplet",
                 label_prefix=name, id_prefix=f"chiplet:{ci}", chiplet_index=ci,
             )
 
@@ -120,7 +128,8 @@ class SystemModel:
                 a_eff = _deep_merge(a_file, accel.get("config", {}))
                 child = Instance(name=a_name, type_name=a_type, scope="accelerator")
                 child.params = self._params_for(
-                    a_file, self._units("accelerators", a_type), a_eff, scope="accelerator",
+                    a_file, self._units("accelerators", a_type), self._constants("accelerators", a_type),
+                    a_eff, scope="accelerator",
                     label_prefix=f"{name}.{a_name}", id_prefix=f"accel:{ci}:{si}",
                     chiplet_index=ci, sub_kind="accelerators", sub_index=si,
                 )
@@ -133,7 +142,8 @@ class SystemModel:
                 i_eff = _deep_merge(i_file, ic.get("config", {}))
                 child = Instance(name=i_name, type_name=i_type, scope="interconnect")
                 child.params = self._params_for(
-                    i_file, self._units("interconnects", i_type), i_eff, scope="interconnect",
+                    i_file, self._units("interconnects", i_type), self._constants("interconnects", i_type),
+                    i_eff, scope="interconnect",
                     label_prefix=f"{name}.{i_name}", id_prefix=f"ic:{ci}:{si}",
                     chiplet_index=ci, sub_kind="interconnects", sub_index=si,
                 )
@@ -157,9 +167,10 @@ class SystemModel:
 
             label = f"connection[{idx}] {ep0} <-> {ep1}"
             i_units = self._units("interconnects", i_type) if i_type else {}
+            i_constants = self._constants("interconnects", i_type) if i_type else set()
             node = Instance(name=label, type_name=i_type or "", scope="connection")
             node.params = self._params_for(
-                i_file, i_units, effective, scope="connection", label_prefix=label,
+                i_file, i_units, i_constants, effective, scope="connection", label_prefix=label,
                 id_prefix=f"conn:{idx}", conn_index=idx,
             )
             node.params.append(
@@ -180,9 +191,12 @@ class SystemModel:
             )
             self.instances.append(node)
 
-    def _params_for(self, type_file, units, effective, scope, label_prefix, id_prefix, **locators) -> List[ParamRef]:
+    def _params_for(self, type_file, units, constants, effective, scope, label_prefix, id_prefix, **locators) -> List[ParamRef]:
         params: List[ParamRef] = []
         for dotted, value_type, _default in _flatten(type_file):
+            # "do not edit" defaults are structural; hide them from the editor.
+            if dotted in constants:
+                continue
             current = _get_dotted(effective, dotted, _default)
             params.append(
                 ParamRef(
@@ -255,15 +269,16 @@ def render(doc: Dict[str, Any]) -> str:
 # -- yaml helpers ---------------------------------------------------------
 
 
-def _parse_units(text: str) -> Dict[str, str]:
-    """Extract inline-comment units keyed by dotted path from a type YAML file.
+_LOCKED_MARKER = re.compile(r"do\s+not\s+edit", re.IGNORECASE)
+
+
+def _leaf_comments(text: str):
+    """Yield (dotted_key, comment) for each scalar leaf with a trailing comment.
 
     Type files annotate scalars with a trailing comment, e.g. `size: 256 # bytes`.
     Indentation is tracked so nested keys resolve to their full dotted path.
-    Standalone comment lines are ignored; only leaves with an inline comment
-    contribute a unit.
+    Standalone comment lines and map keys (which have no inline value) are skipped.
     """
-    units: Dict[str, str] = {}
     stack: List[tuple] = []  # (indent, key) for the enclosing maps
     for line in text.splitlines():
         if not line.strip() or line.lstrip().startswith("#"):
@@ -280,11 +295,38 @@ def _parse_units(text: str) -> Dict[str, str]:
         if value_part.strip() == "":
             stack.append((indent, key))
             continue
-        unit = comment.strip()
+        dotted = ".".join([k for _, k in stack] + [key])
+        yield dotted, comment.strip()
+
+
+def _split_comment(comment: str):
+    """Split a trailing comment into (unit, is_locked).
+
+    A comment may carry a unit, a "do not edit" marker, or both in any order
+    (e.g. `# ns`, `# DO NOT EDIT`, `# ns, DO NOT EDIT`).
+    """
+    is_locked = bool(_LOCKED_MARKER.search(comment))
+    unit = _LOCKED_MARKER.sub("", comment).strip().strip(",").strip()
+    return (unit or None), is_locked
+
+
+def _parse_units(text: str) -> Dict[str, str]:
+    """Map dotted path to its inline-comment unit, ignoring the lock marker."""
+    units: Dict[str, str] = {}
+    for dotted, comment in _leaf_comments(text):
+        unit, _ = _split_comment(comment)
         if unit:
-            dotted = ".".join([k for _, k in stack] + [key])
             units[dotted] = unit
     return units
+
+
+def _parse_constants(text: str) -> set:
+    """Return the dotted paths marked "do not edit".
+
+    These are structural defaults that break the simulation if
+    overridden, so the GUI hides them from the editable surfaces.
+    """
+    return {dotted for dotted, comment in _leaf_comments(text) if _split_comment(comment)[1]}
 
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-from .system_model import _flatten, _parse_units
+from .system_model import _flatten, _parse_constants, _parse_units
 
 KINDS = ("chiplets", "accelerators", "interconnects")
 
@@ -34,8 +34,11 @@ def type_params(configs_dir: Path, kind: str, type_name: str) -> List[TypeParam]
     if not path.is_file():
         return []
     data = yaml.safe_load(path.read_text()) or {}
-    units = _parse_units(path.read_text())
+    text = path.read_text()
+    units = _parse_units(text)
+    constants = _parse_constants(text)
     return [
         TypeParam(dotted, value_type, default, units.get(dotted))
         for dotted, value_type, default in _flatten(data)
+        if dotted not in constants
     ]
