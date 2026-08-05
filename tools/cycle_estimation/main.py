@@ -387,10 +387,10 @@ def main():
     # workload (from its model), and llvm-mca only when a speedup region exists.
     if shutil.which(GEM5_BINARY) is None and not Path(GEM5_BINARY).exists():
         log_warn(f"gem5 binary '{GEM5_BINARY}' not found (set GEM5_BIN). Skipping cycle estimation.")
-        sys.exit(EXIT_SKIPPED)
+        sys.exit(0)
     if not resolve_gem5_home() or not resolve_gem5_home().exists():
         log_warn("gem5 source tree not found (set GEM5_HOME). Skipping cycle estimation.")
-        sys.exit(EXIT_SKIPPED)
+        sys.exit(0)
 
     cycle_estimator = CycleEstimator()
     cycle_estimator.run()

@@ -73,7 +73,7 @@ run: build
 		$(CE_VENV)/bin/pip install -r $(CE_REQ) > /dev/null; \
 		$(LOG_INFO) "Creating virtual environment done."; \
 	fi
-	@$(CE_VENV)/bin/python $(CE_MAIN) || [ $$? -eq 3 ]
+	@$(CE_VENV)/bin/python $(CE_MAIN)
 	@SYSTEMC_DISABLE_COPYRIGHT_MESSAGE=1 $(SIM_BINARY) $(ARGS)
 	@$(LOG_INFO) "Simulation finished."
 
