@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QLineEdit,
                                QVBoxLayout, QWidget)
 
 from ..gem5_models import DEFAULT_MODEL, list_models, model_params
+from .theme import GEM5_MARK_STYLE
 
 
 def _coerce(text: str, default: Any) -> Any:
@@ -57,9 +58,10 @@ class Gem5Form(QWidget):
 
         note = QLabel(
             "Changing the model or a parameter invalidates cached cycle "
-            "estimates, so the next build re-runs gem5 and takes longer."
+            "estimates, so the next run re-runs gem5 and takes longer."
         )
         note.setWordWrap(True)
+        note.setStyleSheet(GEM5_MARK_STYLE)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)

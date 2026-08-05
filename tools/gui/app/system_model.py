@@ -38,6 +38,7 @@ class ParamRef:
     dotted_key: Optional[str] = None
     special: Optional[str] = None  # "ber_scalar" | "wire_length_mm"
     unit: Optional[str] = None
+    gem5: bool = False  # passed to gem5; editing it invalidates cycle estimates
 
     def parse(self, text: str) -> Any:
         text = text.strip()
@@ -82,6 +83,7 @@ class SystemModel:
         self._type_cache: Dict[Path, Dict[str, Any]] = {}
         self._unit_cache: Dict[Path, Dict[str, str]] = {}
         self._constant_cache: Dict[Path, set] = {}
+        self._gem5_cache: Dict[Path, set] = {}
         self._build()
 
     # -- construction -----------------------------------------------------
@@ -107,6 +109,12 @@ class SystemModel:
             self._constant_cache[path] = _parse_constants(path.read_text()) if path.is_file() else set()
         return self._constant_cache[path]
 
+    def _gem5(self, kind: str, type_name: str) -> set:
+        path = self._type_path(kind, type_name)
+        if path not in self._gem5_cache:
+            self._gem5_cache[path] = _parse_gem5(path.read_text()) if path.is_file() else set()
+        return self._gem5_cache[path]
+
     def _build(self) -> None:
         for ci, chiplet in enumerate(self.doc.get("chiplets", [])):
             name = chiplet.get("name", f"chiplet{ci}")
@@ -117,7 +125,7 @@ class SystemModel:
             node = Instance(name=name, type_name=type_name, scope="chiplet")
             node.params = self._params_for(
                 type_file, self._units("chiplets", type_name), self._constants("chiplets", type_name),
-                effective, scope="chiplet",
+                self._gem5("chiplets", type_name), effective, scope="chiplet",
                 label_prefix=name, id_prefix=f"chiplet:{ci}", chiplet_index=ci,
             )
 
@@ -129,7 +137,7 @@ class SystemModel:
                 child = Instance(name=a_name, type_name=a_type, scope="accelerator")
                 child.params = self._params_for(
                     a_file, self._units("accelerators", a_type), self._constants("accelerators", a_type),
-                    a_eff, scope="accelerator",
+                    self._gem5("accelerators", a_type), a_eff, scope="accelerator",
                     label_prefix=f"{name}.{a_name}", id_prefix=f"accel:{ci}:{si}",
                     chiplet_index=ci, sub_kind="accelerators", sub_index=si,
                 )
@@ -143,7 +151,7 @@ class SystemModel:
                 child = Instance(name=i_name, type_name=i_type, scope="interconnect")
                 child.params = self._params_for(
                     i_file, self._units("interconnects", i_type), self._constants("interconnects", i_type),
-                    i_eff, scope="interconnect",
+                    self._gem5("interconnects", i_type), i_eff, scope="interconnect",
                     label_prefix=f"{name}.{i_name}", id_prefix=f"ic:{ci}:{si}",
                     chiplet_index=ci, sub_kind="interconnects", sub_index=si,
                 )
@@ -168,9 +176,10 @@ class SystemModel:
             label = f"connection[{idx}] {ep0} <-> {ep1}"
             i_units = self._units("interconnects", i_type) if i_type else {}
             i_constants = self._constants("interconnects", i_type) if i_type else set()
+            i_gem5 = self._gem5("interconnects", i_type) if i_type else set()
             node = Instance(name=label, type_name=i_type or "", scope="connection")
             node.params = self._params_for(
-                i_file, i_units, i_constants, effective, scope="connection", label_prefix=label,
+                i_file, i_units, i_constants, i_gem5, effective, scope="connection", label_prefix=label,
                 id_prefix=f"conn:{idx}", conn_index=idx,
             )
             node.params.append(
@@ -191,7 +200,7 @@ class SystemModel:
             )
             self.instances.append(node)
 
-    def _params_for(self, type_file, units, constants, effective, scope, label_prefix, id_prefix, **locators) -> List[ParamRef]:
+    def _params_for(self, type_file, units, constants, gem5, effective, scope, label_prefix, id_prefix, **locators) -> List[ParamRef]:
         params: List[ParamRef] = []
         for dotted, value_type, _default in _flatten(type_file):
             # "do not edit" defaults are structural; hide them from the editor.
@@ -207,6 +216,7 @@ class SystemModel:
                     default=current,
                     dotted_key=dotted,
                     unit=units.get(dotted),
+                    gem5=dotted in gem5,
                     **locators,
                 )
             )

@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QFormLayout, QHBoxLayout, QLabel, QLineEdit,
 
 from ..system_model import _get_dotted, _set_dotted
 from ..type_catalog import TypeParam
+from .theme import GEM5_MARK_STYLE
 
 
 def _parse(value_type: str, text: str) -> Any:
@@ -41,11 +42,10 @@ class ConfigForm(QWidget):
                 row_layout.addWidget(QLabel(param.unit))
             if getattr(param, "gem5", False):
                 warn = QLabel("gem5")
-                warn.setStyleSheet("color: #c07000; font-weight: bold;")
+                warn.setStyleSheet(GEM5_MARK_STYLE)
                 warn.setToolTip(
-                    "Changing this parameter invalidates cached cycle "
-                    "estimates, so the next build re-runs gem5 and takes "
-                    "longer."
+                    "Changing this parameter invalidates cached cycle estimates, so the next "
+                    "run re-runs gem5 and takes longer."
                 )
                 row_layout.addWidget(warn)
             form.addRow(param.dotted_key, row)
