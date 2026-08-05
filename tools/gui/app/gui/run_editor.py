@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import List
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
                                QDoubleSpinBox, QFormLayout, QGroupBox,
                                QLineEdit, QVBoxLayout)
@@ -19,7 +20,9 @@ class RunEditorDialog(QDialog):
         super().__init__(parent)
         self._project = project
         self.setWindowTitle("Edit run" if spec else "New run")
+        # Restored size when un-maximized; the dialog opens maximized.
         self.resize(640, 700)
+        self.setWindowState(Qt.WindowState.WindowMaximized)
 
         self._setup = QComboBox()
         self._setup.addItems(setups)
