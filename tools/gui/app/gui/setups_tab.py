@@ -1,19 +1,20 @@
-"""Manage the workspace setups: create, edit, duplicate, remove, and build."""
+"""Manage the workspace setups: create, edit, duplicate, and remove.
+
+Setups are built and cycle-estimated automatically as part of running them
+(see runner.py).
+"""
 
 from __future__ import annotations
 
 import shutil
 
-from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox,
-                               QHBoxLayout, QInputDialog, QLabel, QListWidget,
-                               QMessageBox, QPlainTextEdit, QPushButton,
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QInputDialog,
+                               QLabel, QListWidget, QMessageBox, QPushButton,
                                QVBoxLayout, QWidget)
 
 from .. import setup_writer
-from ..cycle_estimation import run_cycle_estimation
 from ..project import Project, missing_build_tools
-from ..setup_builder import BuildResult, build_setup
 from .setup_editor import SetupEditorDialog
 from .theme import link
 
@@ -41,28 +42,6 @@ def _warning_banner(intro: str, tools: list, outro: str) -> QLabel:
     return label
 
 
-class _BuildWorker(QThread):
-    done = Signal(object)
-
-    def __init__(self, project: Project, name: str):
-        super().__init__()
-        self._project = project
-        self._name = name
-
-    def run(self) -> None:
-        # Refresh workload cycle counts, then compile the setup plugin.
-        cycles = run_cycle_estimation(self._project, self._name)
-        result = build_setup(self._project, self._name)
-        log = f"=== Cycle estimation ===\n{cycles.log}\n\n=== Build ===\n{result.log}"
-        if cycles.status == "failed":
-            note = "Cycle estimation failed; see log."
-        elif cycles.status == "skipped":
-            note = "Cycle estimation skipped; see log."
-        else:
-            note = ""
-        self.done.emit(BuildResult(result.ok, log, note))
-
-
 def _valid_name(name: str) -> bool:
     return bool(name) and all(c.isalnum() or c == "_" for c in name)
 
@@ -74,7 +53,6 @@ class SetupsTab(QWidget):
     def __init__(self, project: Project, parent=None):
         super().__init__(parent)
         self.project = project
-        self._worker: _BuildWorker | None = None
 
         self._list = QListWidget()
         self._list.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -84,15 +62,13 @@ class SetupsTab(QWidget):
         edit_btn = QPushButton("Edit...")
         dup_btn = QPushButton("Duplicate")
         rm_btn = QPushButton("Remove")
-        self._build_btn = QPushButton("Build")
         new_btn.clicked.connect(self._new)
         edit_btn.clicked.connect(self._edit)
         dup_btn.clicked.connect(self._duplicate)
         rm_btn.clicked.connect(self._remove)
-        self._build_btn.clicked.connect(self._build)
 
         buttons = QHBoxLayout()
-        for btn in (new_btn, edit_btn, dup_btn, rm_btn, self._build_btn):
+        for btn in (new_btn, edit_btn, dup_btn, rm_btn):
             buttons.addWidget(btn)
         buttons.addStretch(1)
 
@@ -105,19 +81,12 @@ class SetupsTab(QWidget):
         self.refresh()
 
     def _environment_banners(self) -> list:
-        """Warning banners for missing build tools.
-
-        Cycle-estimation tool requirements are reported by the estimator itself
-        in the build log, so its needs (gem5, RISC-V toolchain, llvm-mca) are
-        surfaced only when a build actually invokes it.
-        """
+        """Warning banner for missing build tools."""
         banners = []
         build_missing = missing_build_tools()
         if build_missing:
-            self._build_btn.setEnabled(False)
-            self._build_btn.setToolTip("Install " + ", ".join(build_missing))
             banners.append(_warning_banner(
-                "setups cannot be built without:",
+                "Setups cannot be built or run without:",
                 build_missing,
                 "You can still create and edit setups; install these to build and run them.",
             ))
@@ -151,7 +120,7 @@ class SetupsTab(QWidget):
         if dialog.exec() and dialog.saved_name:
             self.refresh()
             self.setups_changed.emit()
-            self.status.emit(f"Created setup '{dialog.saved_name}'. Build it before running.")
+            self.status.emit(f"Created setup '{dialog.saved_name}'.")
 
     def _edit(self) -> None:
         name = self._selected()
@@ -161,7 +130,7 @@ class SetupsTab(QWidget):
         if dialog.exec():
             self.refresh()
             self.setups_changed.emit()
-            self.status.emit(f"Edited setup '{name}'. Rebuild it before running.")
+            self.status.emit(f"Edited setup '{name}'.")
 
     def _duplicate(self) -> None:
         name = self._selected()
@@ -193,43 +162,3 @@ class SetupsTab(QWidget):
             setup_writer.delete_setup(self.project.setups_dir, name)
             self.refresh()
             self.setups_changed.emit()
-
-    def _build(self) -> None:
-        name = self._selected()
-        if not name or self._worker is not None:
-            return
-        self._build_btn.setEnabled(False)
-        self.status.emit(f"Building '{name}'...")
-        self._worker = _BuildWorker(self.project, name)
-        self._worker.done.connect(self._build_done)
-        self._worker.start()
-
-    def _build_done(self, result: BuildResult) -> None:
-        self._worker = None
-        self._build_btn.setEnabled(True)
-        name = self._selected() or ""
-        if result.ok:
-            self.status.emit(f"Built '{name}' successfully.")
-            if result.note:
-                _show_log(f"Built '{name}' ({result.note})", result.log, self)
-            else:
-                QMessageBox.information(self, "Build", f"Built '{name}' successfully.")
-        else:
-            self.status.emit(f"Build of '{name}' failed.")
-            _show_log("Build failed", result.log, self)
-
-
-def _show_log(title: str, text: str, parent) -> None:
-    dialog = QDialog(parent)
-    dialog.setWindowTitle(title)
-    dialog.resize(760, 480)
-    view = QPlainTextEdit()
-    view.setReadOnly(True)
-    view.setPlainText(text)
-    buttons = QDialogButtonBox(QDialogButtonBox.Close)
-    buttons.rejected.connect(dialog.reject)
-    buttons.accepted.connect(dialog.accept)
-    layout = QVBoxLayout(dialog)
-    layout.addWidget(view)
-    layout.addWidget(buttons)
-    dialog.exec()

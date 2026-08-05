@@ -7,6 +7,7 @@ SYSTEMC_PATH in the environment, as the rest of the build does.
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from dataclasses import dataclass
 
@@ -18,6 +19,44 @@ class BuildResult:
     ok: bool
     log: str
     note: str = ""
+
+
+def _source_hash(project: Project, name: str) -> str:
+    """Hash a setup's program sources to decide whether libsetup.so is stale.
+
+    Covers src/ and include/ (program.cpp and any headers); system.yaml is not
+    part of the plugin, as overrides are applied by the simulator at run time.
+    """
+    setup_dir = project.setups_dir / name
+    digest = hashlib.sha1()
+    for sub in ("src", "include"):
+        base = setup_dir / sub
+        if not base.is_dir():
+            continue
+        for path in sorted(p for p in base.rglob("*") if p.is_file()):
+            digest.update(str(path.relative_to(setup_dir)).encode())
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def build_setup_if_needed(project: Project, name: str, timeout_s: int = 900) -> BuildResult:
+    """Build the setup plugin only when its sources changed since the last build.
+
+    The compiled libsetup.so depends only on the program sources, so a run
+    reuses it across parameter overrides. Returns an up-to-date result without
+    invoking CMake when the stored source hash matches and the library exists.
+    """
+    lib = project.setups_dir / name / "libsetup.so"
+    hash_file = project.build_dir / f"{name}.buildhash"
+    current = _source_hash(project, name)
+    if lib.is_file() and hash_file.is_file() and hash_file.read_text().strip() == current:
+        return BuildResult(True, f"Setup '{name}' is up to date. Skipping compilation.")
+
+    result = build_setup(project, name, timeout_s)
+    if result.ok:
+        hash_file.parent.mkdir(parents=True, exist_ok=True)
+        hash_file.write_text(current)
+    return result
 
 
 def build_setup(project: Project, name: str, timeout_s: int = 900) -> BuildResult:

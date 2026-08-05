@@ -8,6 +8,7 @@ the simulator's own merge path.
 from __future__ import annotations
 
 import copy
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List, Tuple
@@ -63,6 +64,12 @@ class RunSpec:
         setup_dst.mkdir(parents=True, exist_ok=True)
         for entry in setup_src.iterdir():
             if entry.name == "system.yaml":
+                continue
+            if entry.name == "workloads.yaml":
+                # Copy (not symlink) so per-run cycle estimation can update the
+                # counts for this run's overrides without touching the workspace,
+                # while reusing the workspace estimate as a warm cache.
+                shutil.copy2(entry, setup_dst / entry.name)
                 continue
             link = setup_dst / entry.name
             if not link.exists():

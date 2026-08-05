@@ -19,8 +19,10 @@ from threading import Event, Thread
 from typing import Callable, Dict, List, Optional, TextIO
 
 from . import stats
+from .cycle_estimation import run_cycle_estimation
 from .project import Project
 from .runspec import RunSpec
+from .setup_builder import build_setup_if_needed
 
 DEFAULT_TIMEOUT_S = 3600
 _TAIL_CHARS = 20000
@@ -40,6 +42,7 @@ class RunResult:
     stats_path: Optional[Path] = None
     error: Optional[str] = None
     cancelled: bool = False
+    estimation_status: str = "ran"  # "ran" | "skipped" | "failed"
 
 
 class Runner:
@@ -73,6 +76,16 @@ class Runner:
         self._cancel.clear()
         self.workdir_root.mkdir(parents=True, exist_ok=True)
         results: List[RunResult] = []
+
+        # Build each distinct setup's plugin once up front (hash-gated), before
+        # the run pool. The compiled libsetup.so is shared by all runs of that
+        # setup regardless of their overrides, and building here avoids
+        # concurrent CMake invocations racing on the shared build directory.
+        self._builds = {}
+        for setup in dict.fromkeys(spec.setup for spec in specs):
+            if self._cancel.is_set():
+                break
+            self._builds[setup] = build_setup_if_needed(self.project, setup, self.timeout_s)
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
             future_to_spec = {}
@@ -113,8 +126,31 @@ class Runner:
         try:
             log_file = _open_log(spec.log_path)
             self._emit(spec, on_output, log_file,
-                       f"Simulation '{spec.label}' of setup '{spec.setup}' started {_timestamp()}")
+                       f"Run '{spec.label}' of setup '{spec.setup}' started {_timestamp()}")
             spec.build_sandbox(self.project, sandbox)
+
+            # Plugin build: compiled once per setup in run_batch; replay its log
+            # here and fail the run if that setup did not build.
+            self._emit(spec, on_output, log_file, "Build")
+            build = self._builds.get(spec.setup)
+            if build is not None:
+                self._emit_raw(spec, on_output, log_file, build.log)
+                if not build.ok:
+                    result.error = "Setup build failed"
+                    result.duration_s = time.monotonic() - started
+                    return result
+
+            # Cycle estimation against this run's sandbox, so the workload cycle
+            # counts match the exact system.yaml (with overrides) the sim loads.
+            self._emit(spec, on_output, log_file, "Cycle Estimation")
+            estimation = run_cycle_estimation(
+                self.project, spec.setup,
+                setups_dir=sandbox / "setups", build_dir=sandbox / "ce_build",
+            )
+            result.estimation_status = estimation.status
+            self._emit_raw(spec, on_output, log_file, estimation.log)
+
+            self._emit(spec, on_output, log_file, "Simulation")
             argv = spec.argv(self.project.sim_binary, stats_path, self.log_level)
             proc = subprocess.Popen(
                 argv,
@@ -134,11 +170,11 @@ class Runner:
             outcome = ("cancelled" if result.cancelled
                        else f"exited with code {result.returncode}")
             self._emit(spec, on_output, log_file,
-                       f"Simulation '{spec.label}' of setup '{spec.setup}' {outcome} after {result.duration_s:.1f} s")
+                       f"Run '{spec.label}' of setup '{spec.setup}' {outcome} after {result.duration_s:.1f} s")
         except Exception as exc:  # noqa: BLE001 - surface any launch failure to the UI
             result.error = str(exc)
             result.duration_s = time.monotonic() - started
-            self._emit(spec, on_output, log_file, f"Simulation '{spec.label}' of setup '{spec.setup}' failed: {exc}")
+            self._emit(spec, on_output, log_file, f"Run '{spec.label}' of setup '{spec.setup}' failed: {exc}")
             return result
         finally:
             if log_file is not None:
@@ -200,10 +236,21 @@ class Runner:
     def _emit(self, spec: RunSpec, on_output: Optional[Callable],
               log_file: Optional[TextIO], text: str) -> None:
         """Send a framework-generated marker line to the live output and the log."""
-        line = f"=== {text} ===\n"
+        line = f"\n=== {text} ===\n"
         _write_log(log_file, line)
         if on_output is not None:
             on_output(spec, line)
+
+    def _emit_raw(self, spec: RunSpec, on_output: Optional[Callable],
+                  log_file: Optional[TextIO], text: str) -> None:
+        """Send captured multi-line tool output verbatim to the live output and log."""
+        if not text:
+            return
+        if not text.endswith("\n"):
+            text += "\n"
+        _write_log(log_file, text)
+        if on_output is not None:
+            on_output(spec, text)
 
 
 def _open_log(log_path: Optional[Path]) -> Optional[TextIO]:
