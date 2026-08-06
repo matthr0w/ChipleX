@@ -3,9 +3,10 @@
 Estimation runs before every simulation so a run's workload cycle counts stay
 consistent with the exact system.yaml the simulator loads. Because each run
 estimates against its own sandbox (with that run's overrides applied), the
-caller can point it at the sandbox's setups directory. It is skipped only in a
-frozen bundle; when the estimator's tools (gem5, the RISC-V toolchain, llvm-mca)
-are absent, the tool reports this in its output, which the caller surfaces.
+caller can point it at the sandbox's setups directory. The estimator runs from
+source as main.py and in a bundle as a standalone executable; when its tools
+(gem5, the workload compiler, llvm-mca) are absent, it reports this in its
+output, which the caller surfaces.
 """
 
 from __future__ import annotations
@@ -33,26 +34,36 @@ def run_cycle_estimation(
     setups_dir: Optional[Path] = None,
     build_dir: Optional[Path] = None,
 ) -> CycleResult:
-    if is_frozen():
-        return CycleResult("skipped", "Cycle estimation is unavailable in the bundled application.")
-
     # The estimator reports its own missing tools (gem5, RISC-V toolchain, and
     # llvm-mca only when a workload needs it) in its output, so it is always run
-    # here and its log is surfaced to the caller.
-    tool_dir = project.root / "tools" / "cycle_estimation"
-    main_py = tool_dir / "main.py"
-    if not main_py.is_file():
-        return CycleResult("skipped", f"Cycle estimation tool not found: {main_py}")
+    # here and its log is surfaced to the caller. In a bundle it is a standalone
+    # PyInstaller executable (no system Python); from source it is main.py run
+    # with the current interpreter.
+    if is_frozen():
+        exe = project.root / "tools" / "cycle-estimation"
+        if not exe.is_file():
+            return CycleResult("skipped", f"Cycle estimation tool not found: {exe}")
+        command = [str(exe)]
+        cwd = str(exe.parent)
+    else:
+        tool_dir = project.root / "tools" / "cycle_estimation"
+        main_py = tool_dir / "main.py"
+        if not main_py.is_file():
+            return CycleResult("skipped", f"Cycle estimation tool not found: {main_py}")
+        command = [sys.executable, str(main_py)]
+        cwd = str(tool_dir)
 
     env = dict(os.environ)
     env["CE_SETUPS_DIR"] = str(setups_dir or project.setups_dir)
     env["CE_CONFIGS_DIR"] = str(project.configs_dir)
     env["CE_BUILD_DIR"] = str(build_dir or (project.build_dir / "cycle_estimation"))
     env["CE_ONLY_SETUP"] = setup
+    if project.user_models_dir is not None:
+        env["CE_USER_MODELS_DIR"] = str(project.user_models_dir)
 
     try:
         proc = subprocess.run(
-            [sys.executable, str(main_py)], cwd=str(tool_dir), env=env,
+            command, cwd=cwd, env=env,
             capture_output=True, text=True, timeout=timeout_s,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:

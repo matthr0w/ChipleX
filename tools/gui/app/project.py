@@ -47,6 +47,10 @@ class Project:
     build_dir: Path
     systemc_path: Optional[Path] = None
     yaml_cpp_dir: Optional[Path] = None
+    # Bundled gem5 CPU-model manifests (read by the setup editor); and, for
+    # bundle installs, a persistent user-writable directory for custom models.
+    gem5_models_dir: Optional[Path] = None
+    user_models_dir: Optional[Path] = None
 
     @classmethod
     def discover(cls, start: Optional[Path] = None) -> "Project":
@@ -62,6 +66,10 @@ class Project:
         """
         if is_frozen():
             root = Path(sys._MEIPASS) / "framework"
+            # Persistent, user-writable directory for custom CPU models; seeded
+            # empty so bundle users can drop in their own model manifests.
+            user_models = user_data_dir() / "gem5-models"
+            user_models.mkdir(parents=True, exist_ok=True)
             return cls(
                 root=root,
                 sim_binary=root / "sim",
@@ -70,6 +78,8 @@ class Project:
                 build_dir=user_data_dir() / "build",
                 systemc_path=root / "systemc",
                 yaml_cpp_dir=root / "deps" / "yaml-cpp",
+                gem5_models_dir=root / "tools" / "cycle_estimation" / "gem5" / "models",
+                user_models_dir=user_models,
             )
 
         here = (start or Path(__file__)).resolve()
@@ -88,6 +98,7 @@ class Project:
             configs_dir=root / "configs",
             setups_dir=root / "setups",
             build_dir=root / "build",
+            gem5_models_dir=root / "tools" / "cycle_estimation" / "gem5" / "models",
         )
 
     def with_setups_dir(self, setups_dir: Path) -> "Project":

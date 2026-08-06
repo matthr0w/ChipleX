@@ -8,10 +8,18 @@ compiles each workload, runs it under a gem5 CPU model, and records the measured
 per-region cycles in the setup's `workloads.yaml`.
 
 Estimation runs automatically - the CLI runs it before every `make run`, and the
-GUI before every run - and skips silently when its tools are missing, leaving
-the existing cycle counts in place. The tools and how they are discovered are
-listed in the [Cycle-estimation tools](../README.md#cycle-estimation-tools)
-section of the README.
+GUI before every simulation run - but it only invokes gem5 when a workload
+actually needs re-measuring. A workload is skipped when its cached count is
+still valid (nothing that affects the result has changed since it was recorded;
+see [The cycle-estimation workflow](#the-cycle-estimation-workflow)), so a run
+whose counts are up to date starts the simulation immediately. It is also
+skipped, silently and for every workload, when its tools are missing, leaving
+the existing cycle counts in place. It runs in the bundled application too (the
+estimator ships as a standalone executable), so a bundle install estimates
+cycles whenever gem5 and the workload compiler are on `PATH`. The tools and how
+they are discovered are listed in the
+[Cycle-estimation tools](../README.md#cycle-estimation-tools) section of the
+README.
 
 ## The memory-latency boundary
 
@@ -101,12 +109,7 @@ chiplets:
         l1d-size: 64kB
 ```
 
-Models live in `tools/cycle_estimation/gem5/models/*.yaml`; each names a gem5
-config script, a compiler, the m5op ABI, and the parameters it exposes with
-defaults. These parameters are model-specific and are not part of a chiplet's
-default config.
-
-Three SystemC config values are also fed to gem5: the core clock period
+Three SystemC config values are fed to gem5: the core clock period
 (`cores.clk_cycle`) becomes gem5's CPU clock, and the memory clock period
 (`memory.clk_cycle`) together with the access latency in cycles
 (`memory.access_latency`) give the backing-memory latency, passed as
@@ -114,7 +117,33 @@ Three SystemC config values are also fed to gem5: the core clock period
 default configs; changing any of them, a gem5 parameter, the model, or the
 compiler invalidates the cached estimate so the next run re-runs gem5.
 
-To add a model, drop a manifest in the models directory declaring its
-`cpu_type`, `compiler`, `m5op_abi`, and `params`; the gem5 build must include
-that ISA. A custom config script must accept and use `--clock` and
-`--mem-latency` (see `se_model.py` for the reference).
+To add a model, provide a manifest and a gem5 config script (the manifest may
+reuse the bundled `se_model.py` instead of shipping its own).
+
+The manifest (`<model>.yaml`) declares:
+
+- `name` - the model name, shown in the editor and referenced by `cpu_model`.
+- `description` - optional description shown in the editor.
+- `config` - the gem5 config script to run (defaults to `se_model.py`).
+- `cpu_type` - the gem5 CPU class, e.g. `RiscvMinorCPU`.
+- `mem_mode` - optional memory simulation mode.
+- `m5op_abi` - the m5op shim ABI to assemble, e.g. `riscv` or `arm64`.
+- `compiler` and optional `compiler_flags` - the workload cross-compiler.
+- `params` - the model-specific gem5 parameters it exposes, with defaults;
+  these appear in the editor's gem5 block and are passed to the config script.
+
+The gem5 build must include the model's ISA. The config script is run as
+`gem5 <config.py> --cmd <workload-elf> --cpu-type <type> [--mem-mode <mode>]
+--<param> <value> ... --clock <core-period> --mem-latency <latency>`: it
+receives `--cmd`, `--cpu-type` (and `--mem-mode` when the manifest sets it), one
+`--<param>` flag per declared parameter, and `--clock`/`--mem-latency` derived
+from the SystemC config. It must build the gem5 system from those arguments and
+dump per-region stats; use `se_model.py` as the reference.
+
+Place the files by install type. From source, put the manifest (and any custom
+script) in `tools/cycle_estimation/gem5/models/`. In the bundled application,
+put them in `~/.local/share/chiplet-sim/gem5-models/` (created on first launch);
+this directory is searched before the bundled models, so a manifest there also
+overrides a bundled model of the same name. A config script placed next to its
+manifest is found automatically. The manifest file name must be the model name
+with dashes as underscores (e.g. `riscv-minor` -> `riscv_minor.yaml`).

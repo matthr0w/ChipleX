@@ -1,7 +1,7 @@
 import hashlib
 import re
 import shutil
-from logging import log_error, log_info, log_warn
+from ce_logging import log_error, log_info, log_warn
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -44,18 +44,53 @@ def resolve_gem5_home() -> Path:
             return parent
     return Path("")
 
+def model_search_dirs() -> List[Path]:
+    """Directories searched for CPU-model manifests, most specific first.
+
+    The optional user models directory (bundle installs) is searched before the
+    bundled models so users can add or override CPU models.
+    """
+    dirs: List[Path] = []
+    if USER_MODELS_DIR:
+        dirs.append(USER_MODELS_DIR)
+    dirs.append(GEM5_MODELS_DIR)
+    return dirs
+
 def load_model(name: str) -> dict:
     """Load a CPU-model manifest by name (e.g. 'riscv-minor')."""
-    manifest = GEM5_MODELS_DIR / f"{name.replace('-', '_')}.yaml"
-    if not manifest.exists():
-        log_error(f"Unknown CPU model '{name}': manifest not found at {manifest}.")
-    return load_yaml(manifest)
+    filename = f"{name.replace('-', '_')}.yaml"
+    for directory in model_search_dirs():
+        manifest = directory / filename
+        if manifest.exists():
+            model = load_yaml(manifest)
+            # Record the manifest's directory so model_config can resolve a
+            # config script that ships alongside a user-provided model.
+            model["_dir"] = str(directory)
+            return model
+    searched = ", ".join(str(d) for d in model_search_dirs())
+    log_error(f"Unknown CPU model '{name}': no manifest '{filename}' in {searched}.")
 
 def model_config(model: dict) -> Path:
-    """Resolve the gem5 config script named by the model."""
+    """Resolve the gem5 config script named by the model.
+
+    Relative paths are resolved against the manifest's own directory first (so a
+    user model can ship its own script), then its parent, then the bundled gem5
+    directory that holds the reference se_model.py.
+    """
     config = model.get("config", "se_model.py")
     path = Path(config)
-    return path if path.is_absolute() else GEM5_DIR / path
+    if path.is_absolute():
+        return path
+    candidates: List[Path] = []
+    src_dir = model.get("_dir")
+    if src_dir:
+        candidates.append(Path(src_dir) / path)
+        candidates.append(Path(src_dir).parent / path)
+    candidates.append(GEM5_DIR / path)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return GEM5_DIR / path
 
 def model_cli(model: dict, params: Dict[str, Any]) -> List[str]:
     """Build the config-script flags from the model's cpu, mem mode, and params.

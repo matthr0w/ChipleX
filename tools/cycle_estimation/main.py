@@ -3,7 +3,7 @@ import re
 import shutil
 import subprocess
 import sys
-from logging import log_error, log_info, log_warn
+from ce_logging import log_error, log_info, log_warn
 from pathlib import Path
 from typing import Dict, List
 

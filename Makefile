@@ -26,6 +26,7 @@ DIST_DIR := dist
 STAGE_DIR := $(DIST_DIR)/framework
 RELEASE_VENV := $(BUILD_DIR_RELEASE)/venv
 GUI_SPEC := tools/gui/chiplet-sim.spec
+CE_SPEC := tools/cycle_estimation/cycle-estimation.spec
 
 # Logging
 LOG_INFO = printf "\033[0m[INFO]\033[0m  | %-16s | %s\n" "$(shell date +'%H:%M:%S')" 
@@ -140,11 +141,14 @@ if [ -n "$${YAML_CPP_DIR:-}" ]; then YI="$$YAML_CPP_DIR/include/yaml-cpp"; YL="$
 if [ ! -d "$$YI" ] || [ ! -f "$$YL" ]; then echo "yaml-cpp artifacts not found: $$YI, $$YL" >&2; exit 1; fi
 cp -r "$$YI" "$(CURDIR)/$(STAGE_DIR)/deps/yaml-cpp/include/"
 cp "$$YL" "$(CURDIR)/$(STAGE_DIR)/deps/yaml-cpp/lib/"
-mkdir -p "$(CURDIR)/$(STAGE_DIR)/tools"
-cp -r "$(CURDIR)/tools/cycle_estimation" "$(CURDIR)/$(STAGE_DIR)/tools/cycle_estimation"
+mkdir -p "$(CURDIR)/$(STAGE_DIR)/tools/cycle_estimation"
+cp -r "$(CURDIR)/tools/cycle_estimation/gem5" "$(CURDIR)/$(STAGE_DIR)/tools/cycle_estimation/gem5"
 if [ ! -d "$(RELEASE_VENV)" ]; then python3 -m venv "$(RELEASE_VENV)"; fi
 "$(RELEASE_VENV)/bin/pip" install -q --upgrade pip
 "$(RELEASE_VENV)/bin/pip" install -q -r "$(GUI_REQ)" pyinstaller
+CE_TOOL_DIR="$(CURDIR)/tools/cycle_estimation" "$(RELEASE_VENV)/bin/pyinstaller" --clean --noconfirm --distpath "$(CURDIR)/$(BUILD_DIR_RELEASE)/ce-dist" --workpath "$(CURDIR)/$(BUILD_DIR_RELEASE)/ce-pyinstaller" "$(CURDIR)/$(CE_SPEC)"
+cp "$(CURDIR)/$(BUILD_DIR_RELEASE)/ce-dist/cycle-estimation" "$(CURDIR)/$(STAGE_DIR)/tools/cycle-estimation"
+chmod +x "$(CURDIR)/$(STAGE_DIR)/tools/cycle-estimation"
 REPO_ROOT="$(CURDIR)" RELEASE_STAGE="$(CURDIR)/$(STAGE_DIR)" "$(RELEASE_VENV)/bin/pyinstaller" --clean --noconfirm --distpath "$(CURDIR)/$(DIST_DIR)" --workpath "$(CURDIR)/$(BUILD_DIR_RELEASE)/pyinstaller" "$(CURDIR)/$(GUI_SPEC)"
 endef
 export BUNDLE_RECIPE

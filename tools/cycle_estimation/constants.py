@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 # RISC-V Compiler
@@ -17,9 +18,16 @@ GEM5_HOME = os.environ.get("GEM5_HOME", "")
 # Paths
 # Setup/config/build locations default to the repo layout and can be
 # overridden via the environment so the GUI can use its managed workspace.
-SCRIPT_ROOT = Path(__file__).parent.absolute()
+# When frozen by PyInstaller the bundled gem5 data (CPU-model manifests and the
+# reference config script) is extracted under sys._MEIPASS; otherwise it sits
+# next to this file.
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    SCRIPT_ROOT = Path(sys._MEIPASS)
+else:
+    SCRIPT_ROOT = Path(__file__).parent.absolute()
 GEM5_DIR = SCRIPT_ROOT / "gem5"
 GEM5_MODELS_DIR = GEM5_DIR / "models"
+USER_MODELS_DIR = Path(os.environ["CE_USER_MODELS_DIR"]) if os.environ.get("CE_USER_MODELS_DIR") else None
 DEFAULT_MODEL = "riscv-minor"
 DEFAULT_CLK_CYCLE_NS = 1
 DEFAULT_ACCESS_LATENCY_CYCLES = 1

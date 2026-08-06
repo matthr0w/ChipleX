@@ -14,7 +14,8 @@ from typing import Any, Dict
 from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QLineEdit,
                                QVBoxLayout, QWidget)
 
-from ..gem5_models import DEFAULT_MODEL, list_models, model_params
+from ..gem5_models import (DEFAULT_MODEL, list_models, model_description,
+                           model_params)
 from .theme import GEM5_MARK_STYLE
 
 
@@ -51,6 +52,11 @@ class Gem5Form(QWidget):
             self._combo.setCurrentText(self._initial_model)
         self._combo.currentTextChanged.connect(self._reload_params)
 
+        # Optional per-model description from the manifest; hidden when absent.
+        self._description = QLabel()
+        self._description.setWordWrap(True)
+        self._description.setStyleSheet("font-style: italic;")
+
         self._param_form = QFormLayout()
         self._param_form.setContentsMargins(0, 0, 0, 0)
         param_host = QWidget()
@@ -69,12 +75,16 @@ class Gem5Form(QWidget):
         model_row.setContentsMargins(0, 0, 0, 0)
         model_row.addRow("CPU model", self._combo)
         layout.addLayout(model_row)
+        layout.addWidget(self._description)
         layout.addWidget(param_host)
         layout.addWidget(note)
 
         self._reload_params(self._combo.currentText())
 
     def _reload_params(self, model_name: str) -> None:
+        description = model_description(self._project, model_name)
+        self._description.setText(description)
+        self._description.setVisible(bool(description))
         while self._param_form.rowCount():
             self._param_form.removeRow(0)
         self._editors.clear()
