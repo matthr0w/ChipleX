@@ -171,13 +171,15 @@ def find_executors(setup: Setup, region: str):
             executors.append(owner)
     return executors
 
-def execution_hash(source_hash: str, model: dict, execution: Execution) -> str:
+def execution_hash(source_hash: str, model: dict, execution: Execution, accel_params: dict) -> str:
     """Hash the full set of estimation inputs to drive re-estimation.
 
-    Covers the workload source plus everything that can change the gem5 result:
-    CPU model, compiler and flags, resolved gem5 params, core clock, and memory
-    latency. The executor identity is the DB key, not part of the hash, so two
-    identically-configured executors share a result. Any change re-triggers it.
+    Covers the workload source plus everything that can change the result: CPU
+    model, compiler and flags, resolved gem5 params, core clock, memory latency,
+    and the executor's accelerator params (its speedup differs by accelerator
+    type/config). The executor identity itself is the DB key, not part of the
+    hash, so two identically-configured executors share a result. Any change
+    re-triggers estimation.
     """
     hash = hashlib.sha1()
     hash.update(source_hash.encode())
@@ -187,6 +189,7 @@ def execution_hash(source_hash: str, model: dict, execution: Execution) -> str:
     hash.update(str(sorted(execution.params.items())).encode())
     hash.update(execution.clock.encode())
     hash.update(execution.mem_latency.encode())
+    hash.update(str(sorted((accel_params or {}).items())).encode())
     return hash.hexdigest()
 
 def resolve_workload(setup: Setup, workload: Workload):
@@ -227,7 +230,11 @@ def resolve_workload(setup: Setup, workload: Workload):
             clock=f"{clk_cycle}ns",
             mem_latency=f"{access_latency * mem_clk_cycle}ns",
         )
-        execution.input_hash = execution_hash(workload.source_hash, model, execution)
+        # The accelerator's speedup config is part of what determines this
+        # executor's result, so it enters the hash. Resolve it quietly: a core
+        # executor legitimately has no accelerator.
+        accel_params = get_accel_params(setup, chiplet, module, quiet=True)
+        execution.input_hash = execution_hash(workload.source_hash, model, execution, accel_params)
         workload.executions.append(execution)
 
 def parse_gem5_cycles(stats_path: Path, num_sections: int) -> Dict[str, int]:
@@ -248,82 +255,60 @@ def parse_gem5_cycles(stats_path: Path, num_sections: int) -> Dict[str, int]:
     return {f"SECTION{i + 1}": cycles[i] for i in range(min(num_sections, len(cycles)))}
 
 
-def get_accel_params(setup: Setup, section_id: str):
-    # TODO: Use overwritten params from system.yaml 
-    code = setup.program_file.read_text(encoding="utf-8")
-    module_defs = set()
+def get_accel_params(setup: Setup, chiplet_name: str, module_name: str, quiet: bool = False):
+    """Resolve accelerator resource params for one executor (chiplet.module).
 
-    # Extract module definitions (chiplet, module)
-    module_pattern = re.compile(r'\{\s*\{\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\}\s*,\s*\{AccelCode\{.*?\}\}\s*\}', re.DOTALL)
-    for module_match in module_pattern.finditer(code):
-        chiplet_name = module_match.group(1)
-        module_name = module_match.group(2)
-        module_block = module_match.group(0)
+    Looks up the accelerator instance in system.yaml, loads its type's config
+    from configs/accelerators/, and applies any per-instance `config:` override
+    (the same contract as the SystemC loader). Resolving the exact executor
+    matters when one workload runs on several accelerator types whose speedups
+    differ. `quiet` suppresses the diagnostic warnings when the result is only
+    needed for the invalidation hash (a core executor has no accelerator).
+    """
+    defaults = {
+        "accel_type": None,
+        "speedup_factor": None,
+        "num_alu": 1,
+        "num_branch": 1,
+        "num_fpalu": 1,
+        "num_fpdivsqrt": 1,
+        "num_idiv": 1,
+        "num_imul": 1,
+        "num_mem": 1,
+    }
 
-        # Matching only wait_cycles("<section_id>")
-        wait_regex = re.compile(r'\.wait_cycles\("' + re.escape(section_id) + r'"\)')
-        if wait_regex.search(module_block):
-            module_defs.add((chiplet_name, module_name))
-
-    if not module_defs:
-        log_warn(f"No accelerator found containing wait_cycles('{section_id}') in program.cpp")
-        return {
-            "accel_type": None,
-            "speedup_factor": None,
-            "num_alu": 1,
-            "num_branch": 1,
-            "num_fpalu": 1,
-            "num_fpdivsqrt": 1,
-            "num_idiv": 1,
-            "num_imul": 1,
-            "num_mem": 1
-        }
-
-    # Load system.yaml
     if not setup.system_file.exists():
         log_error(f"Required system description file for setup '{setup.id}' not found: {setup.system_file}")
     system_data = load_yaml(setup.system_file)
 
-    chiplets_section = system_data.get("chiplets", [])
+    # Find the accelerator instance for this exact executor.
+    accel_entry = None
+    for chiplet in system_data.get("chiplets", []):
+        if chiplet.get("name") != chiplet_name:
+            continue
+        for accel in chiplet.get("accelerators", []) or []:
+            if accel.get("name") == module_name:
+                accel_entry = accel
+                break
+        break
+    if accel_entry is None:
+        if not quiet:
+            log_warn(f"No accelerator '{chiplet_name}.{module_name}' found in system description.")
+        return dict(defaults)
 
-    found_types = []
+    accel_type = accel_entry.get("type")
+    if not accel_type:
+        if not quiet:
+            log_warn(f"Accelerator '{chiplet_name}.{module_name}' has no type in system description.")
+        return dict(defaults)
 
-    for chiplet_name, module_name in module_defs:
-        for chiplet in chiplets_section:
-            if chiplet.get("name") != chiplet_name:
-                continue
-
-            accels = chiplet.get("accelerators", [])
-            for accel in accels:
-                if accel.get("name") == module_name:
-                    accel_type = accel.get("type")
-                    if accel_type:
-                        found_types.append(accel_type)
-
-    if not found_types:
-        log_warn(f"No corresponding accelerator type found in system description.")
-        return {
-            "accel_type": None,
-            "speedup_factor": None,
-            "num_alu": 1,
-            "num_branch": 1,
-            "num_fpalu": 1,
-            "num_fpdivsqrt": 1,
-            "num_idiv": 1,
-            "num_imul": 1,
-            "num_mem": 1
-        }
-
-    if len(found_types) > 1:
-        log_warn(f"Multiple accelerator types using same workload model. Using first: {found_types[0]}")
-
-    accel_type = found_types[0]
-
-    # Load accelerator config
+    # Load the accelerator config and apply the instance's system.yaml override
+    # (flat merge, matching the SystemC loader for a flat accelerator config).
     accel_config = ACCELERATOR_CONFIGS / f"{accel_type}.yaml"
     if not accel_config.exists():
         log_error(f"Required config file for accelerator type '{accel_type}' not found: {accel_config}.")
     accel_data = load_yaml(accel_config)
+    merge_nodes(accel_data, accel_entry.get("config") or {})
 
     # Extract parameters with defaults
     speedup_factor = accel_data.get("speedup_factor", None)
@@ -337,7 +322,8 @@ def get_accel_params(setup: Setup, section_id: str):
 
     # Warn if accelerator is useless
     if (
-        speedup_factor is None
+        not quiet
+        and speedup_factor is None
         and num_alu == 1
         and num_branch == 1
         and num_fpalu == 1

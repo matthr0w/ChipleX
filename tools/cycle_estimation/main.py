@@ -279,7 +279,7 @@ class CycleEstimator:
             if shutil.which(LLVM_ANALYZER) is None:
                 log_warn(f"'{LLVM_ANALYZER}' not found; skipping accelerator speedup (factor 1.0).")
             else:
-                speedup_sections = self.compute_speedup(setup, workload)
+                speedup_sections = self.compute_speedup(setup, workload, execution)
 
         # Compute total cycles
         total_cycles = 0
@@ -289,7 +289,7 @@ class CycleEstimator:
 
         execution.estimation_result = int(total_cycles)
 
-    def compute_speedup(self, setup: Setup, workload: Workload) -> Dict[str, float]:
+    def compute_speedup(self, setup: Setup, workload: Workload, execution: Execution) -> Dict[str, float]:
         # Run llvm-mca on the assembler file
         command = [LLVM_ANALYZER] + LLVM_ANALYZER_FLAGS + [str(workload.asm_path)]
         proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -334,8 +334,8 @@ class CycleEstimator:
             except IndexError:
                 log_error(f"Resource pressure line malformed for {section_name}: {values_line}")
 
-            # Compute speedup factor
-            params = get_accel_params(setup, workload.id)
+            # Compute speedup factor for this exact executor's accelerator.
+            params = get_accel_params(setup, execution.chiplet, execution.module)
 
             if params["speedup_factor"]:
                 speedup_factor = params["speedup_factor"]
