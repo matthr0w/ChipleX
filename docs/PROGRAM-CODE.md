@@ -32,8 +32,8 @@ ModuleCodeMap *get_program_code() {
   multi-core chiplet) and takes a `CPUCode`.
 - An accelerator uses its own name as the module and takes an `AccelCode`.
 
-Provide an entry for every accelerator declared in `system.yaml`. Cores without
-an entry simply stay idle.
+An entry is optional for every module. A core or accelerator with no entry
+simply stays idle.
 
 ## Core programs (`CPUCode`)
 

@@ -97,7 +97,7 @@ struct ComputeChiplet : ChipletBase {
 			// Assign program code
 			auto it = chiplet_config.module_code.find(core_name);
 			if (it == chiplet_config.module_code.end()) {
-				LOG_WARN(chiplet_name << "." << core_name << " has no code assigned. Ignoring.");
+				LOG_WARN(chiplet_name << "." << core_name << " has no code assigned. Staying idle.");
 				continue;
 			}
 			std::visit(
@@ -114,17 +114,19 @@ struct ComputeChiplet : ChipletBase {
 
 		// Accelerators
 		for (const auto &[name, config] : chiplet_config.accels) {
-			auto accel = std::make_unique<HWAccel>(name.c_str(), chiplet_name, chiplet_id, name, chiplet_config, cycles,
-			                                       &dma_engine);
+			HWAccel &accel = *accels
+			                      .emplace(name, std::make_unique<HWAccel>(name.c_str(), chiplet_name, chiplet_id, name,
+			                                                               chiplet_config, cycles, &dma_engine))
+			                      .first->second;
 
 			// Bind clocks and sockets
-			accel->clk.bind(get_accel_clocks(name).get());
-			accel->tsocket.bind(*bus.subordinates[chiplet_desc.get_sub_port(name)]);
+			accel.clk.bind(get_accel_clocks(name).get());
+			accel.tsocket.bind(*bus.subordinates[chiplet_desc.get_sub_port(name)]);
 
 			// Assign program code
 			auto it = chiplet_config.module_code.find(name);
 			if (it == chiplet_config.module_code.end()) {
-				LOG_WARN(chiplet_name << "." << name << " has no code assigned. Ignoring.");
+				LOG_WARN(chiplet_name << "." << name << " has no code assigned. Staying idle.");
 				continue;
 			}
 			std::visit(
@@ -132,12 +134,10 @@ struct ComputeChiplet : ChipletBase {
 				    using T = std::decay_t<decltype(code)>;
 				    if constexpr (std::is_same_v<T, AccelCode>) {
 					    // Assign accelerator functions
-					    accel->main_fn = code.main;
+					    accel.main_fn = code.main;
 				    }
 			    },
 			    it->second);
-
-			accels.emplace(name, std::move(accel));
 		}
 
 		// DMA Engine
