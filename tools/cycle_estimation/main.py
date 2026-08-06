@@ -207,6 +207,13 @@ class CycleEstimator:
         flags = list(model.get("compiler_flags", RISCV_COMPILER_FLAGS))
         abi = model.get("m5op_abi", "riscv")
 
+        if shutil.which(compiler) is None and not Path(compiler).exists():
+            log_warn(
+                f"Workload compiler '{compiler}' for model '{execution.model}' "
+                f"not found on PATH. Skipping cycle estimation."
+            )
+            sys.exit(0)
+
         gem5_home = resolve_gem5_home()
         if not gem5_home or not gem5_home.exists():
             log_error(
