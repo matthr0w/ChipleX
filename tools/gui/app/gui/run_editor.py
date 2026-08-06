@@ -19,7 +19,7 @@ class RunEditorDialog(QDialog):
     def __init__(self, project: Project, setups: List[str], spec: RunSpec | None = None, parent=None):
         super().__init__(parent)
         self._project = project
-        self.setWindowTitle("Edit run" if spec else "New run")
+        self.setWindowTitle("Edit Run" if spec else "New Run")
         # Restored size when un-maximized; the dialog opens maximized.
         self.resize(640, 700)
         self.setWindowState(Qt.WindowState.WindowMaximized)
@@ -51,7 +51,7 @@ class RunEditorDialog(QDialog):
         form.addRow("RNG seed", self._seed)
 
         self._tree = InstanceParamTree()
-        overrides_box = QGroupBox("Per-instance overrides (blank = default)")
+        overrides_box = QGroupBox("Per-Instance Overrides")
         box_layout = QVBoxLayout(overrides_box)
         box_layout.addWidget(self._tree)
 

@@ -122,7 +122,7 @@ class SweepTab(QWidget):
         base_form.addRow("Base time (ns)", self._time)
         base_form.addRow("Base BER", self._ber)
         base_form.addRow("Base seed", self._seed)
-        base_box = QGroupBox("Base configuration")
+        base_box = QGroupBox("Base Configuration")
         base_box.setLayout(base_form)
 
         self._axes_container = QVBoxLayout()
@@ -141,7 +141,7 @@ class SweepTab(QWidget):
 
         add_axis = QPushButton("Add axis")
         add_axis.clicked.connect(self._add_axis)
-        axes_box = QGroupBox("Sweep axes")
+        axes_box = QGroupBox("Sweep Axes")
         axes_layout = QVBoxLayout(axes_box)
         axes_layout.addWidget(hint)
         axes_layout.addWidget(add_axis)

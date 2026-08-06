@@ -106,15 +106,15 @@ class SetupsTab(QWidget):
         return item.text() if item is not None else None
 
     def _new(self) -> None:
-        name, ok = QInputDialog.getText(self, "New setup", "Setup name:")
+        name, ok = QInputDialog.getText(self, "New Setup", "Setup name:")
         name = name.strip()
         if not ok or not name:
             return
         if not _valid_name(name):
-            QMessageBox.warning(self, "New setup", "Use only letters, digits, or underscores.")
+            QMessageBox.warning(self, "New Setup", "Use only letters, digits, or underscores.")
             return
         if (self.project.setups_dir / name).exists():
-            QMessageBox.warning(self, "New setup", f"A setup named '{name}' already exists.")
+            QMessageBox.warning(self, "New Setup", f"A setup named '{name}' already exists.")
             return
         dialog = SetupEditorDialog(self.project, name, is_new=True, parent=self)
         if dialog.exec() and dialog.saved_name:
@@ -136,7 +136,7 @@ class SetupsTab(QWidget):
         name = self._selected()
         if not name:
             return
-        new_name, ok = QInputDialog.getText(self, "Duplicate setup", "Setup name:", text=f"{name}_copy")
+        new_name, ok = QInputDialog.getText(self, "Duplicate Setup", "Setup name:", text=f"{name}_copy")
         new_name = new_name.strip()
         if not ok or not new_name:
             return
