@@ -13,6 +13,7 @@ from ..project import Project
 from ..schema import cli_parameters
 from ..sweep import Sweep, SweepAxis
 from ..system_model import ParamRef, SystemModel
+from .theme import GEM5_MARK_STYLE
 
 
 class _AxisRow(QWidget):
@@ -32,6 +33,13 @@ class _AxisRow(QWidget):
         self._unit.setMinimumWidth(64)
         self._unit.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
+        self._gem5_mark = QLabel("")
+        self._gem5_mark.setStyleSheet(GEM5_MARK_STYLE)
+        self._gem5_mark.setToolTip(
+            "Sweeping this parameter invalidates cached cycle estimates, so each run "
+            "re-runs gem5 and takes longer."
+        )
+
         remove = QPushButton("Remove")
         remove.clicked.connect(lambda: self.removed.emit(self))
 
@@ -40,6 +48,7 @@ class _AxisRow(QWidget):
         layout.addWidget(self._param, 3)
         layout.addWidget(self._values, 4)
         layout.addWidget(self._unit)
+        layout.addWidget(self._gem5_mark)
         layout.addWidget(remove)
 
         self.set_parameters(parameters)
@@ -77,6 +86,7 @@ class _AxisRow(QWidget):
     def _refresh_unit(self) -> None:
         param = self.parameter()
         self._unit.setText(param.unit if param is not None and param.unit else "")
+        self._gem5_mark.setText("gem5" if param is not None and param.gem5 else "")
 
     def parameter(self) -> ParamRef | None:
         return self._param.currentData()

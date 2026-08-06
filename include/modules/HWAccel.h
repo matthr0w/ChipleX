@@ -18,10 +18,12 @@ SC_MODULE(HWAccel), public DMAForwardInterface {
 	// -------------------------------------------------------
 	// Config
 	// -------------------------------------------------------
-	const unsigned chiplet_id;
-	const unsigned axi_width;
-	const CyclesDB cycles;
-	const sc_time  clk_cycle;
+	const std::string chiplet_name;
+	const unsigned    chiplet_id;
+	const std::string accel_name;
+	const unsigned    axi_width;
+	const CyclesDB    cycles;
+	const sc_time     clk_cycle;
 
   public:
 	// -------------------------------------------------------
@@ -34,8 +36,8 @@ SC_MODULE(HWAccel), public DMAForwardInterface {
 	// -------------------------------------------------------
 	ARM::AXI::SimpleTargetSocket<HWAccel> tsocket;
 
-	HWAccel(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config, const CyclesDB &cycles,
-	        DMAEngine *dma_engine);
+	HWAccel(sc_module_name name, const std::string &chiplet_name, unsigned chiplet_id, const std::string &accel_name,
+	        ChipletConfig chiplet_config, const CyclesDB &cycles, DMAEngine *dma_engine);
 
 	void main_thread();
 
@@ -49,19 +51,18 @@ SC_MODULE(HWAccel), public DMAForwardInterface {
 	unsigned MAX_WRAP_BURST_SIZE  = 0;
 
 	void wait_cycles(const std::string &name);
+	void wait_cycles(unsigned count);
 
 	// -------------------------------------------------------
 	// AXI API
 	// -------------------------------------------------------
   private:
-	std::shared_ptr<RequestHandle> read_internal(uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
-	                                             uint8_t dst_module, uint32_t address, bool fixed_address,
-	                                             unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
-	                                             uint8_t extension_mask, bool is_volatile);
-	std::shared_ptr<RequestHandle> write_internal(uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
-	                                              uint8_t dst_module, uint32_t address, bool fixed_address,
-	                                              unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
-	                                              uint8_t extension_mask, bool is_volatile);
+	std::shared_ptr<RequestHandle> read_internal(
+	    uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet, uint8_t dst_module, uint32_t address,
+	    bool fixed_address, unsigned char *data, unsigned data_length, ARM::AXI::Burst burst, uint8_t extension_mask);
+	std::shared_ptr<RequestHandle> write_internal(
+	    uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet, uint8_t dst_module, uint32_t address,
+	    bool fixed_address, unsigned char *data, unsigned data_length, ARM::AXI::Burst burst, uint8_t extension_mask);
 
   public:
 	std::shared_ptr<RequestHandle> read(const AxiRequest &req);

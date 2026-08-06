@@ -2,8 +2,9 @@
 
 Each setup describes *what hardware exists* in `system.yaml` and *what that
 hardware does* in `src/program.cpp`. This document explains how to write the
-program code: the module entry points, the AXI and DMA transfer APIs, and how to
-model per-workload compute time with the cycle-estimation tool.
+program code: the module entry points and the AXI and DMA transfer APIs.
+Modeling per-workload compute time is covered separately in
+[CYCLE-ESTIMATION.md](CYCLE-ESTIMATION.md).
 
 ## The entry point
 
@@ -18,7 +19,7 @@ It returns a map from a *module key* to the code that runs on that module:
 ```cpp
 ModuleCodeMap *get_program_code() {
     static ModuleCodeMap code = {
-        {{"fpga", "core0"}, {CPUCode{ .main = ..., .irq = ... }}},
+        {{"chiplet0", "core0"}, {CPUCode{ .main = ..., .irq = ... }}},
         {{"chiplet1", "dfp"}, {AccelCode{ .main = ... }}},
     };
     return &code;
@@ -50,29 +51,28 @@ struct CPUCode {
 
 ```cpp
 struct IRQ {
-    uint32_t request_id;     // tag supplied by the sender
+    uint32_t request_id;      // tag supplied by the sender
     uint8_t  target_module;
-    uint32_t target_address; // address associated with the interrupt
+    uint32_t target_address;  // address associated with the interrupt
     uint8_t  burst;
-    unsigned data_length;    // payload size in bytes
+    unsigned data_length;     // payload size in bytes
 };
 ```
 
 Call `sc_stop()` from either handler to end the simulation.
 
 ```cpp
-{{"fpga", "core0"},
+{{"chiplet0", "core0"},
  {CPUCode{
      .main = [](Core &core) {
          auto *buf = new unsigned char[64];
          auto  req = AxiRequest(0, buf, 64)
-                         .to_via("chiplet0", "memory", "interconnect")
-                         .skip_cache();
+                         .to_via("chiplet0", "memory", "interconnect");
          core.write(req)->wait();
          delete[] buf;
      },
      .irq = [](Core &core, const IRQ &irq) {
-         // react to an incoming interrupt; call sc_stop() when done
+         // react to an incoming interrupt
      }}}}
 ```
 
@@ -93,8 +93,8 @@ input buffer; process it in place and write the result back out.
      for (size_t i = 0; i < size; ++i) {
          data[i] = transform(data[i]);
      }
-     accel.wait_cycles("matalu");            // model compute time
-     auto req = AxiRequest(4, data, size);   // send the result on
+     accel.wait_cycles("matalu");           // model compute time
+     auto req = AxiRequest(4, data, size);  // send the result on
      accel.write(req)->wait();
  }}}}
 ```
@@ -116,23 +116,20 @@ chain the builder methods you need:
 
 ```cpp
 auto req = AxiRequest(request_id, buffer, length)
-               .set_addr(0x1000)
-               .skip_cache();
+               .set_addr(0x1000);
 ```
 
 | Method | Effect |
 |--------|--------|
 | `AxiRequest(id, data, len)` | `id` is a caller-chosen tag; `data`/`len` is the buffer (source bytes for a write, destination for a read). |
-| `.set_addr(addr)` | Destination address. Required for reads; optional for writes. |
+| `.set_addr(addr)` | Destination address. Required for reads; optional for writes - if omitted, the target module allocates a free address dynamically. |
 | `.to(module)` | Issue through the named local module (default `memory`). |
 | `.to_via(chiplet, module, via)` | Target a specific `chiplet`/`module`, leaving through the local interconnect `via`. |
 | `.set_burst(type)` | `ARM::AXI::BURST_INCR` (default), `BURST_FIXED`, or `BURST_WRAP`. |
-| `.skip_cache()` | Bypass the cache (volatile access). |
 | `.use_ext(id)` | Attach a `SmartExtension::ID` (e.g. a crypto extension) to the transfer. |
 
 If no destination is given, the request stays on the caller's own chiplet and
-targets its `memory` module. Cross-chiplet and unaddressed writes are treated as
-volatile automatically.
+targets its `memory` module.
 
 You own the data buffer: allocate it before the call and free it after the
 transfer completes.
@@ -143,7 +140,7 @@ transfer completes.
 
 ```cpp
 auto handle = core.read(req);
-handle->wait();          // suspends this process until the transfer finishes
+handle->wait();  // suspends this process until the transfer finishes
 // for a read, `buffer` now holds the result
 ```
 
@@ -176,7 +173,6 @@ core.dma(dma);
 | `.to(chiplet, module, addr)` | Destination module and address. |
 | `.to_via(chiplet, module, addr, via)` | Destination, reached through local interconnect `via`. |
 | `.set_burst(type)` | Burst type, as for `AxiRequest`. |
-| `.skip_cache()` | Bypass the cache. |
 | `.use_ext(id)` | Attach a `SmartExtension::ID`. |
 
 Use `from_via`/`to_via` when the transfer crosses a chiplet boundary and you
@@ -188,56 +184,22 @@ Program code models *communication* explicitly (the AXI/DMA transfers above).
 *Computation* is modeled by advancing simulation time for a named workload:
 
 ```cpp
-core.wait_cycles("matmul");    // or accel.wait_cycles("matmul")
+core.wait_cycles("matmul");  // or accel.wait_cycles("matmul")
 ```
 
 This suspends the caller for the number of clock cycles associated with the
-workload `matmul`. Cycle counts live in the setup's `workloads.yaml` and are
-produced by the cycle-estimation tool.
+workload `matmul`, scaled by the core's clock period (so a chiplet with a
+non-default `cores.clk_cycle` advances time accordingly). Cycle counts live in
+the setup's `workloads.yaml` and are produced by the cycle-estimation tool.
 
-### The cycle-estimation workflow
-
-1. Write a small, self-contained C++ program in
-   `setups/<name>/workloads/<workload>.cpp` with an `int main()`. It should
-   perform the same computation the real module does.
-2. Mark the region to measure:
-
-   ```cpp
-   //@BEGIN_CYCLE_MEASURE
-   for (size_t i = header; i < total; ++i) {
-       out[i] = 255 - in[i];
-   }
-   //@END_CYCLE_MEASURE
-   ```
-
-3. Run `make run ARGS="--setup=<name>"` (the estimator runs automatically before
-   the simulation), or
-   run it directly with `tools/cycle_estimation/main.py`. It compiles the
-   workload for RISC-V, measures cycles with Spike, and records the result in
-   `workloads.yaml` under a key equal to the file name (`<workload>`).
-4. Reference that name from `program.cpp`: `wait_cycles("<workload>")`.
-
-The estimator re-measures a workload only when its source changes (it tracks a
-hash), and it skips silently if the RISC-V toolchain (`riscv64-unknown-elf-gcc`,
-`spike`, `llvm-mca`) is not installed.
-
-### Modeling accelerator speedup (optional)
-
-To model an accelerator that executes a region faster than a scalar core, wrap
-that region with a speedup annotation *inside* the cycle block:
+To wait a fixed number of cycles without an estimation entry, pass a count
+directly:
 
 ```cpp
-//@BEGIN_CYCLE_MEASURE
-//@BEGIN_SPEEDUP_MEASURE
-    heavy_alu_loop();
-//@END_SPEEDUP_MEASURE
-//@END_CYCLE_MEASURE
+core.wait_cycles(500);
 ```
 
-The estimator analyzes the instruction mix of that region and scales its cycles
-by the resources declared in the accelerator's config
-(`configs/accelerators/<type>.yaml`): `num_alu`, `num_branch`, `num_fpalu`,
-`num_fpdivsqrt`, `num_idiv`, `num_imul`, `num_mem`. Alternatively, set an
-explicit `speedup_factor` in that config to override the analysis. The
-accelerator is identified by matching the `wait_cycles("<workload>")` call in its
-`AccelCode`.
+A workload's own loads and stores are already charged inside `wait_cycles`, so
+do not move that data with API calls as well. See
+[CYCLE-ESTIMATION.md](CYCLE-ESTIMATION.md) for how counts are produced, the
+memory-latency boundary, accelerator speedup, and CPU-model selection.

@@ -16,7 +16,6 @@ ModuleCodeMap *get_program_code() {
 
 		                  auto reqw = AxiRequest(1, reinterpret_cast<unsigned char *>(data), num_bytes)
 		                                  .to_via("chiplet2", "memory", "interconnect")
-		                                  .skip_cache()
 		                                  .use_ext(SmartExtension::CRYPTO);
 
 		                  auto h = core.write(reqw);
@@ -24,7 +23,6 @@ ModuleCodeMap *get_program_code() {
 		                  auto reqr = AxiRequest(2, reinterpret_cast<unsigned char *>(data), num_bytes)
 		                                  .to_via("chiplet2", "memory", "interconnect")
 		                                  .set_addr(0x0)
-		                                  .skip_cache()
 		                                  .use_ext(SmartExtension::CRYPTO);
 
 		                  h = core.read(reqr);

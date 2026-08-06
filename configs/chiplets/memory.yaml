@@ -1,5 +1,5 @@
 cores:
-  num: 0
+  num: 0 # DO NOT EDIT
 memory:
   size: 512 # KB
   clk_cycle: 3 # ns

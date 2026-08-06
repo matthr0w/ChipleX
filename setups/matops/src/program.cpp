@@ -24,64 +24,62 @@ void inline print_matrix(const int *matrix, int rows, int cols, const std::strin
 ModuleCodeMap *get_program_code() {
 	static ModuleCodeMap code = {
 	    {{"fpga", "core0"},
-	     {CPUCode{
-	         .main =
-	             [](Core &core) {
-		             const unsigned MATRIX_ROWS = 10;
-		             const unsigned MATRIX_COLS = 10;
+	     {CPUCode{.main =
+	                  [](Core &core) {
+		                  const unsigned MATRIX_ROWS = 10;
+		                  const unsigned MATRIX_COLS = 10;
 
-		             size_t header_size = sizeof(MatrixHeader);
-		             size_t matrix_size = MATRIX_ROWS * MATRIX_COLS * sizeof(int);
-		             size_t buffer_size = header_size + matrix_size;
+		                  size_t header_size = sizeof(MatrixHeader);
+		                  size_t matrix_size = MATRIX_ROWS * MATRIX_COLS * sizeof(int);
+		                  size_t buffer_size = header_size + matrix_size;
 
-		             auto *data = new unsigned char[buffer_size];
+		                  auto *data = new unsigned char[buffer_size];
 
-		             MatrixHeader *header = reinterpret_cast<MatrixHeader *>(data);
-		             header->rows         = MATRIX_ROWS;
-		             header->cols         = MATRIX_COLS;
+		                  MatrixHeader *header = reinterpret_cast<MatrixHeader *>(data);
+		                  header->rows         = MATRIX_ROWS;
+		                  header->cols         = MATRIX_COLS;
 
-		             int *matrix = reinterpret_cast<int *>(data + header_size);
-		             for (int i = 0; i < MATRIX_ROWS * MATRIX_COLS; ++i) {
-			             matrix[i] = i + 1;
-		             }
+		                  int *matrix = reinterpret_cast<int *>(data + header_size);
+		                  for (int i = 0; i < MATRIX_ROWS * MATRIX_COLS; ++i) {
+			                  matrix[i] = i + 1;
+		                  }
 
-		             print_matrix(matrix, MATRIX_ROWS, MATRIX_COLS, "Input");
+		                  print_matrix(matrix, MATRIX_ROWS, MATRIX_COLS, "Input");
 
-		             auto reqw =
-		                 AxiRequest(0, data, buffer_size).to_via("chiplet0", "memory", "interconnect").skip_cache();
+		                  auto reqw = AxiRequest(0, data, buffer_size).to_via("chiplet0", "memory", "interconnect");
 
-		             auto handle = core.write(reqw);
+		                  auto handle = core.write(reqw);
 
-		             handle->wait();
+		                  handle->wait();
 
-		             delete[] data;
-	             },
-	         .irq =
-	             [](Core &core, const IRQ &irq) {
-		             auto addr = irq.target_address;
-		             auto len  = irq.data_length;
+		                  delete[] data;
+	                  },
+	              .irq =
+	                  [](Core &core, const IRQ &irq) {
+		                  auto addr = irq.target_address;
+		                  auto len  = irq.data_length;
 
-		             // Read from FPGA RAM
-		             auto *data   = new unsigned char[len];
-		             auto  reqr   = AxiRequest(0, data, len).set_addr(addr).skip_cache();
-		             auto  handle = core.read(reqr);
-		             handle->wait();
+		                  // Read from FPGA RAM
+		                  auto *data   = new unsigned char[len];
+		                  auto  reqr   = AxiRequest(0, data, len).set_addr(addr);
+		                  auto  handle = core.read(reqr);
+		                  handle->wait();
 
-		             // Matrix header
-		             size_t        header_size = sizeof(MatrixHeader);
-		             MatrixHeader *header      = reinterpret_cast<MatrixHeader *>(data);
-		             uint32_t      rows        = header->rows;
-		             uint32_t      cols        = header->cols;
+		                  // Matrix header
+		                  size_t        header_size = sizeof(MatrixHeader);
+		                  MatrixHeader *header      = reinterpret_cast<MatrixHeader *>(data);
+		                  uint32_t      rows        = header->rows;
+		                  uint32_t      cols        = header->cols;
 
-		             // Matrix
-		             int *matrix = reinterpret_cast<int *>(data + header_size);
+		                  // Matrix
+		                  int *matrix = reinterpret_cast<int *>(data + header_size);
 
-		             print_matrix(matrix, rows, cols, "Output");
+		                  print_matrix(matrix, rows, cols, "Output");
 
-		             delete[] data;
+		                  delete[] data;
 
-		             sc_stop();
-	             }}}     },
+		                  sc_stop();
+	                  }}}},
 
 	    {{"chiplet0", "core0"},
 	     {CPUCode{.main = [](Core &core) {},
@@ -92,7 +90,7 @@ ModuleCodeMap *get_program_code() {
 
 		                  // Read from Chiplet0 RAM
 		                  auto *read_buf = new unsigned char[len];
-		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
+		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr);
 		                  auto  handle   = core.read(reqr);
 		                  handle->wait();
 
@@ -118,9 +116,8 @@ ModuleCodeMap *get_program_code() {
 		                  auto *write_buf = new unsigned char[len];
 		                  memcpy(write_buf, read_buf, len);
 
-		                  auto reqw =
-		                      AxiRequest(0, write_buf, len).to_via("chiplet1", "memory", "interconnect").skip_cache();
-		                  handle = core.write(reqw);
+		                  auto reqw = AxiRequest(0, write_buf, len).to_via("chiplet1", "memory", "interconnect");
+		                  handle    = core.write(reqw);
 		                  handle->wait();
 
 		                  delete[] read_buf;
@@ -136,7 +133,7 @@ ModuleCodeMap *get_program_code() {
 
 		                  // Read from Chiplet1 RAM
 		                  auto *read_buf = new unsigned char[len];
-		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
+		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr);
 		                  auto  handle   = core.read(reqr);
 		                  handle->wait();
 
@@ -162,9 +159,8 @@ ModuleCodeMap *get_program_code() {
 		                  auto *write_buf = new unsigned char[len];
 		                  memcpy(write_buf, read_buf, len);
 
-		                  auto reqw =
-		                      AxiRequest(0, write_buf, len).to_via("chiplet2", "memory", "interconnect").skip_cache();
-		                  handle = core.write(reqw);
+		                  auto reqw = AxiRequest(0, write_buf, len).to_via("chiplet2", "memory", "interconnect");
+		                  handle    = core.write(reqw);
 		                  handle->wait();
 
 		                  delete[] read_buf;
@@ -180,7 +176,7 @@ ModuleCodeMap *get_program_code() {
 
 		                  // Read from Chiplet2 RAM
 		                  auto *read_buf = new unsigned char[len];
-		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
+		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr);
 		                  auto  handle   = core.read(reqr);
 		                  handle->wait();
 
@@ -213,9 +209,8 @@ ModuleCodeMap *get_program_code() {
 		                  auto *write_buf = new unsigned char[len];
 		                  memcpy(write_buf, read_buf, len);
 
-		                  auto reqw =
-		                      AxiRequest(0, write_buf, len).to_via("chiplet3", "memory", "interconnect").skip_cache();
-		                  handle = core.write(reqw);
+		                  auto reqw = AxiRequest(0, write_buf, len).to_via("chiplet3", "memory", "interconnect");
+		                  handle    = core.write(reqw);
 		                  handle->wait();
 
 		                  delete[] read_buf;
@@ -231,7 +226,7 @@ ModuleCodeMap *get_program_code() {
 
 		                  // Read from Chiplet3 RAM
 		                  auto *read_buf = new unsigned char[len];
-		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr).skip_cache();
+		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr);
 		                  auto  handle   = core.read(reqr);
 		                  handle->wait();
 
@@ -257,9 +252,8 @@ ModuleCodeMap *get_program_code() {
 		                  auto *write_buf = new unsigned char[len];
 		                  memcpy(write_buf, read_buf, len);
 
-		                  auto reqw =
-		                      AxiRequest(0, write_buf, len).to_via("fpga", "memory", "interconnect").skip_cache();
-		                  handle = core.write(reqw);
+		                  auto reqw = AxiRequest(0, write_buf, len).to_via("fpga", "memory", "interconnect");
+		                  handle    = core.write(reqw);
 		                  handle->wait();
 
 		                  delete[] read_buf;

@@ -15,8 +15,9 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
 
 from .. import setup_doc
 from ..project import Project
-from ..type_catalog import list_types, type_params
+from ..type_catalog import list_types, type_default, type_params
 from .config_form import ConfigForm
+from .gem5_form import Gem5Form
 from .graph_items import ChipletNode, ConnectionEdge
 from .graph_scene import GraphScene
 
@@ -255,6 +256,19 @@ class ChipletPanel(QWidget):
         cbl = QVBoxLayout(config_box)
         cbl.addWidget(self._config)
 
+        # The gem5 model only applies to chiplets that run code, i.e. have cores.
+        base_cores = (type_default(editor.project.configs_dir, "chiplets", chiplet.get("type", "")).get("cores") or {})
+        override_num = ((chiplet.get("config") or {}).get("cores") or {}).get("num")
+        num_cores = override_num if override_num is not None else base_cores.get("num", 0)
+
+        self._gem5 = None
+        gem5_box = None
+        if num_cores and num_cores > 0:
+            self._gem5 = Gem5Form(editor.project, chiplet.get("gem5", {}))
+            gem5_box = QGroupBox("gem5 model (cycle estimation)")
+            gbl = QVBoxLayout(gem5_box)
+            gbl.addWidget(self._gem5)
+
         accel_box = self._build_list_box(
             "Accelerators", editor._accel_types,
             [f"{a.get('name')} [{a.get('type')}]" for a in chiplet.get("accelerators", []) or []],
@@ -269,6 +283,8 @@ class ChipletPanel(QWidget):
         layout = QVBoxLayout(self)
         layout.addLayout(header)
         layout.addWidget(config_box)
+        if gem5_box is not None:
+            layout.addWidget(gem5_box)
         layout.addWidget(accel_box)
         layout.addWidget(ic_box)
         layout.addStretch(1)
@@ -420,6 +436,14 @@ class ChipletPanel(QWidget):
             chiplet["config"] = cfg
         else:
             chiplet.pop("config", None)
+
+        # Leave the gem5 block untouched for core-less chiplets (no editor shown).
+        if self._gem5 is not None:
+            gem5 = self._gem5.gem5()
+            if gem5:
+                chiplet["gem5"] = gem5
+            else:
+                chiplet.pop("gem5", None)
 
 
 class ConnectionPanel(QWidget):

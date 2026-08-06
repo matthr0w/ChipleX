@@ -42,8 +42,7 @@ ModuleCodeMap *get_program_code() {
 			                  size_t chunk_size = std::min(buffer_size - offset, max_size);
 
 			                  auto reqw = AxiRequest(req_id, write_buf + offset, chunk_size)
-			                                  .to_via("chiplet0", "memory", "interconnect")
-			                                  .skip_cache();
+			                                  .to_via("chiplet0", "memory", "interconnect");
 
 			                  handle  = core.write(reqw);
 			                  offset += chunk_size;
@@ -83,9 +82,8 @@ ModuleCodeMap *get_program_code() {
 		                  while (offset < total_len) {
 			                  size_t chunk_size = std::min(total_len - offset, max_size);
 
-			                  auto reqr = AxiRequest(req_id, read_buf + offset, chunk_size)
-			                                  .set_addr(base_addr + offset)
-			                                  .skip_cache();
+			                  auto reqr =
+			                      AxiRequest(req_id, read_buf + offset, chunk_size).set_addr(base_addr + offset);
 
 			                  handle  = core.read(reqr);
 			                  offset += chunk_size;
@@ -133,9 +131,8 @@ ModuleCodeMap *get_program_code() {
 		                  while (offset < total_len) {
 			                  size_t chunk_size = std::min(total_len - offset, max_size);
 
-			                  auto reqr = AxiRequest(req_id, read_buf + offset, chunk_size)
-			                                  .set_addr(base_addr + offset)
-			                                  .skip_cache();
+			                  auto reqr =
+			                      AxiRequest(req_id, read_buf + offset, chunk_size).set_addr(base_addr + offset);
 
 			                  handle  = core.read(reqr);
 			                  offset += chunk_size;
@@ -175,8 +172,7 @@ ModuleCodeMap *get_program_code() {
 			                  size_t chunk_size = std::min(new_buf_size - offset, max_size);
 
 			                  auto reqw = AxiRequest(req_id, write_buf + offset, chunk_size)
-			                                  .to_via("chiplet1", "memory", "interconnect")
-			                                  .skip_cache();
+			                                  .to_via("chiplet1", "memory", "interconnect");
 
 			                  handle  = core.write(reqw);
 			                  offset += chunk_size;
@@ -217,9 +213,8 @@ ModuleCodeMap *get_program_code() {
 		                  while (offset < total_len) {
 			                  size_t chunk_size = std::min(total_len - offset, max_size);
 
-			                  auto reqr = AxiRequest(req_id, read_buf + offset, chunk_size)
-			                                  .set_addr(base_addr + offset)
-			                                  .skip_cache();
+			                  auto reqr =
+			                      AxiRequest(req_id, read_buf + offset, chunk_size).set_addr(base_addr + offset);
 
 			                  handle  = core.read(reqr);
 			                  offset += chunk_size;
@@ -245,8 +240,7 @@ ModuleCodeMap *get_program_code() {
 			                  size_t chunk_size = std::min(total_len - offset, max_size);
 
 			                  auto reqw = AxiRequest(req_id, write_buf + offset, chunk_size)
-			                                  .to_via("fpga", "memory", "interconnect")
-			                                  .skip_cache();
+			                                  .to_via("fpga", "memory", "interconnect");
 
 			                  handle  = core.write(reqw);
 			                  offset += chunk_size;

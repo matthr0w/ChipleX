@@ -5,10 +5,12 @@ from __future__ import annotations
 from typing import Any, List, Tuple
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QLineEdit, QTreeWidget, QTreeWidgetItem,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QStyle,
+                               QTreeWidget, QTreeWidgetItem, QVBoxLayout,
+                               QWidget)
 
 from ..system_model import Instance, ParamRef, SystemModel
+from .theme import GEM5_MARK_STYLE
 
 _REF_ROLE = Qt.UserRole + 1
 
@@ -67,7 +69,9 @@ class InstanceParamTree(QWidget):
 
     def _add_param(self, ref: ParamRef, parent: QTreeWidgetItem) -> None:
         key = ref.special or ref.dotted_key or ref.label
-        leaf = QTreeWidgetItem([key, str(ref.default), "", ref.unit or ""])
+        # The unit cell also carries the gem5 mark, so leave it blank here and
+        # fill it with a widget below when the parameter is gem5-relevant.
+        leaf = QTreeWidgetItem([key, str(ref.default), "", "" if ref.gem5 else (ref.unit or "")])
         leaf.setData(0, _REF_ROLE, ref.id)
         parent.addChild(leaf)
 
@@ -75,3 +79,20 @@ class InstanceParamTree(QWidget):
         editor.setPlaceholderText(str(ref.default))
         self._tree.setItemWidget(leaf, 2, editor)
         self._editors.append((ref, editor))
+
+        if ref.gem5:
+            cell = QWidget()
+            cell_layout = QHBoxLayout(cell)
+            hmargin = self._tree.style().pixelMetric(QStyle.PM_FocusFrameHMargin) + 1
+            cell_layout.setContentsMargins(hmargin, 0, 0, 0)
+            if ref.unit:
+                cell_layout.addWidget(QLabel(ref.unit))
+            mark = QLabel("gem5")
+            mark.setStyleSheet(GEM5_MARK_STYLE)
+            mark.setToolTip(
+                "Changing this parameter invalidates cached cycle estimates, so the next "
+                "run re-runs gem5 and takes longer."
+            )
+            cell_layout.addWidget(mark)
+            cell_layout.addStretch(1)
+            self._tree.setItemWidget(leaf, 3, cell)

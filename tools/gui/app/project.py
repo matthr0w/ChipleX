@@ -15,16 +15,10 @@ def is_frozen() -> bool:
     return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
 
-# Tools required to compile a setup plugin, and the cycle-estimation toolchain
-# (see tools/cycle_estimation/constants.py). Each cycle tool is an (executable
-# to probe, display name) pair; missing_* return the display names.
+# Tools required to compile a setup plugin. The cycle-estimation toolchain
+# (gem5, RISC-V toolchain, llvm-mca) is validated by the estimator itself, which
+# reports what is missing in its output, so it is not probed here.
 _CXX_COMPILERS = ("c++", "g++", "clang++")
-_CYCLE_TOOLS = (
-    ("llvm-mca", "LLVM"),
-    ("riscv64-unknown-elf-gcc", "RISC-V GNU Compiler Toolchain"),
-    ("pk", "RISC-V Proxy Kernel and Boot Loader"),
-    ("spike", "Spike RISC-V ISA Simulator"),
-)
 
 
 def missing_build_tools() -> List[str]:
@@ -35,11 +29,6 @@ def missing_build_tools() -> List[str]:
     if not any(shutil.which(cxx) for cxx in _CXX_COMPILERS):
         missing.append("C++ compiler (g++ or clang++)")
     return missing
-
-
-def missing_cycle_tools() -> List[str]:
-    """Return the display names of absent cycle-estimation tools."""
-    return [name for exe, name in _CYCLE_TOOLS if shutil.which(exe) is None]
 
 
 def user_data_dir() -> Path:
@@ -58,6 +47,10 @@ class Project:
     build_dir: Path
     systemc_path: Optional[Path] = None
     yaml_cpp_dir: Optional[Path] = None
+    # Bundled gem5 CPU-model manifests (read by the setup editor); and, for
+    # bundle installs, a persistent user-writable directory for custom models.
+    gem5_models_dir: Optional[Path] = None
+    user_models_dir: Optional[Path] = None
 
     @classmethod
     def discover(cls, start: Optional[Path] = None) -> "Project":
@@ -73,6 +66,10 @@ class Project:
         """
         if is_frozen():
             root = Path(sys._MEIPASS) / "framework"
+            # Persistent, user-writable directory for custom CPU models; seeded
+            # empty so bundle users can drop in their own model manifests.
+            user_models = user_data_dir() / "gem5-models"
+            user_models.mkdir(parents=True, exist_ok=True)
             return cls(
                 root=root,
                 sim_binary=root / "sim",
@@ -81,6 +78,8 @@ class Project:
                 build_dir=user_data_dir() / "build",
                 systemc_path=root / "systemc",
                 yaml_cpp_dir=root / "deps" / "yaml-cpp",
+                gem5_models_dir=root / "tools" / "cycle_estimation" / "gem5" / "models",
+                user_models_dir=user_models,
             )
 
         here = (start or Path(__file__)).resolve()
@@ -99,6 +98,7 @@ class Project:
             configs_dir=root / "configs",
             setups_dir=root / "setups",
             build_dir=root / "build",
+            gem5_models_dir=root / "tools" / "cycle_estimation" / "gem5" / "models",
         )
 
     def with_setups_dir(self, setups_dir: Path) -> "Project":

@@ -16,11 +16,16 @@ The build stages a `framework/` tree that PyInstaller embeds:
   of the box.
 - `include/`, `CMakeLists.txt`, `deps/yaml-cpp/` - everything needed to compile a
   setup plugin offline on the target.
-- `configs/`, `docs/`, `tools/cycle_estimation/`.
+- `configs/` - the default module parameters.
+- `tools/cycle-estimation` - the cycle estimator frozen as a standalone
+  executable (its own PyInstaller build, with PyYAML and the gem5 model data
+  embedded) so estimation runs without a system Python.
+- `tools/cycle_estimation/gem5/` - the CPU-model manifests and reference config
+  script, read by the setup editor to populate the per-chiplet gem5 block.
 
 At runtime the bundle seeds an editable workspace under
-`~/.local/share/chiplet-sim/` (setups and build outputs) so the read-only bundle
-is never modified.
+`~/.local/share/chiplet-sim/` (setups, build outputs, and a `gem5-models/`
+directory for user-added CPU models) so the read-only bundle is never modified.
 
 ## Build locally
 

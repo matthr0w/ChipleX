@@ -11,14 +11,13 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QSpinBox, QTabWidget,
                                QVBoxLayout, QWidget)
 
+from ..cycle_estimation import EstimationStatus
 from ..project import Project
 from ..runner import RunResult
-from .markdown_viewer import show_markdown
 from .results_tab import ResultsTab
 from .runs_tab import RunsTab
 from .setups_tab import SetupsTab
 from .sweep_tab import SweepTab
-from .theme import link
 from .worker import BatchController
 
 
@@ -67,18 +66,12 @@ class MainWindow(QMainWindow):
         self._progress.setTextVisible(True)
         self._status = QLabel("Ready")
 
-        docs_path = project.root / "docs" / "GUI.md"
-        help_hint = QLabel(link("#", "Help"))
-        help_hint.setToolTip("Open the GUI guide")
-        help_hint.linkActivated.connect(lambda _=None, p=docs_path: show_markdown(self, p))
-
         controls = QHBoxLayout()
         controls.addWidget(self._cores)
         controls.addWidget(self._timeout)
         controls.addWidget(self._run_btn)
         controls.addWidget(self._cancel_btn)
         controls.addWidget(self._progress, 1)
-        controls.addWidget(help_hint)
 
         central = QWidget()
         outer = QVBoxLayout(central)
@@ -128,7 +121,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Run", "No enabled runs in the run list.")
             return
 
-        self._runs_tab.reset_statuses("queued")
+        self._runs_tab.reset_statuses("QUEUED")
         self._runs_tab.clear_output()
         self._total = len(specs)
         self._done = 0
@@ -153,7 +146,7 @@ class MainWindow(QMainWindow):
         self._cancel_btn.setEnabled(False)
 
     def _on_run_started(self, label: str) -> None:
-        self._runs_tab.set_status(label, "running...")
+        self._runs_tab.set_status(label, "RUNNING")
         self._runs_tab.start_output(label)
 
     def _on_run_output(self, label: str, chunk: str) -> None:
@@ -163,11 +156,12 @@ class MainWindow(QMainWindow):
         self._done += 1
         self._progress.setValue(self._done)
         if result.ok:
-            self._runs_tab.set_status(result.spec.label, f"ok ({result.duration_s:.1f}s)")
+            status = "WARNING" if result.estimation_status != EstimationStatus.SUCCESS else "PASS"
         elif result.cancelled:
-            self._runs_tab.set_status(result.spec.label, "cancelled")
+            status = "CANCELLED"
         else:
-            self._runs_tab.set_status(result.spec.label, f"FAILED: {result.error}")
+            status = "FAIL"
+        self._runs_tab.set_status(result.spec.label, status)
 
     def _on_batch_finished(self, results: List[RunResult]) -> None:
         self._run_btn.setEnabled(True)
@@ -175,6 +169,12 @@ class MainWindow(QMainWindow):
         ok = sum(1 for r in results if r.ok)
         failed = len(results) - ok
         self._results_tab.set_results(results)
-        if ok:
+        # Only jump to the results automatically when every run is a clean PASS;
+        # a WARNING (estimation skipped) or FAIL keeps the Runs tab in view so
+        # the status column draws attention to it.
+        all_pass = bool(results) and all(
+            r.ok and r.estimation_status == EstimationStatus.SUCCESS for r in results
+        )
+        if all_pass:
             self._tabs.setCurrentWidget(self._results_tab)
         self._status.setText(f"Done: {ok} succeeded, {failed} failed.")

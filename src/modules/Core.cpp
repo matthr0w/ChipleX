@@ -3,10 +3,12 @@
 #include "modules/chiplets/ChipletRegistry.h"
 #include "modules/DMAEngine.h"
 
-Core::Core(sc_module_name name, unsigned chiplet_id, unsigned core_id, ChipletConfig chiplet_config,
-           const CyclesDB &cycles, unsigned num_irqs)
+Core::Core(sc_module_name name, const std::string &chiplet_name, unsigned chiplet_id, const std::string &core_name,
+           unsigned core_id, ChipletConfig chiplet_config, const CyclesDB &cycles, unsigned num_irqs)
     : sc_module(name),
+      chiplet_name(chiplet_name),
       chiplet_id(chiplet_id),
+      core_name(core_name),
       core_id(core_id),
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
       cycles(cycles),
@@ -67,8 +69,12 @@ void Core::interrupt_thread() {
 }
 
 void Core::wait_cycles(const std::string &name) {
+	wait_cycles(cycles.get(chiplet_name + "." + core_name + "." + name));
+}
+
+void Core::wait_cycles(unsigned count) {
 	stats.set_active(this->name());
-	wait(cycles.get(name), SC_NS);
+	wait(count * clk_cycle);
 	stats.set_idle(this->name());
 }
 
@@ -207,7 +213,7 @@ tlm_sync_enum Core::nb_transport_bw(ARM::AXI::Payload &payload, ARM::AXI::Phase 
 std::shared_ptr<RequestHandle> Core::read_internal(uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
                                                    uint8_t dst_module, uint32_t address, bool fixed_address,
                                                    unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
-                                                   uint8_t extension_mask, bool is_volatile) {
+                                                   uint8_t extension_mask) {
 	auto handle = std::make_shared<RequestHandle>();
 
 	unsigned       axi_bytes = axi_width / 8;
@@ -228,7 +234,7 @@ std::shared_ptr<RequestHandle> Core::read_internal(uint32_t request_id, uint8_t 
 
 	payload->id    = request_id;
 	payload->user  = user.encode();
-	payload->cache = is_volatile ? ARM::AXI::CACHE_AR_DEVICE_NB : ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
+	payload->cache = ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
 
 	handle->payload          = payload;
 	handle->data             = data;
@@ -309,16 +315,14 @@ std::shared_ptr<RequestHandle> Core::read(const AxiRequest &req) {
 	if (req.ext_id) {
 		extension_mask = 1u << static_cast<uint8_t>(*req.ext_id);
 	}
-	bool is_volatile = req.is_volatile || (dst_chiplet_id != chiplet_id);
-
 	return read_internal(req.request_id, src_module->id, dst_chiplet_id, dst_module->id, address, fixed_address,
-	                     req.data, req.data_length, req.burst, extension_mask, is_volatile);
+	                     req.data, req.data_length, req.burst, extension_mask);
 }
 
 std::shared_ptr<RequestHandle> Core::write_internal(uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
                                                     uint8_t dst_module, uint32_t address, bool fixed_address,
                                                     unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
-                                                    uint8_t extension_mask, bool is_volatile) {
+                                                    uint8_t extension_mask) {
 	auto handle = std::make_shared<RequestHandle>();
 
 	unsigned       axi_bytes = axi_width / 8;
@@ -339,7 +343,7 @@ std::shared_ptr<RequestHandle> Core::write_internal(uint32_t request_id, uint8_t
 
 	payload->id    = request_id;
 	payload->user  = user.encode();
-	payload->cache = is_volatile ? ARM::AXI::CACHE_AW_DEVICE_NB : ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
+	payload->cache = ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
 	const unsigned aligned_length = beats * axi_bytes;
 	if (data_length == aligned_length) {
@@ -427,17 +431,15 @@ std::shared_ptr<RequestHandle> Core::write(const AxiRequest &req) {
 	if (req.ext_id) {
 		extension_mask = 1u << static_cast<uint8_t>(*req.ext_id);
 	}
-	bool is_volatile = req.is_volatile || (dst_chiplet_id != chiplet_id) || !fixed_address;
-
 	return write_internal(req.request_id, src_module->id, dst_chiplet_id, dst_module->id, address, fixed_address,
-	                      req.data, req.data_length, req.burst, extension_mask, is_volatile);
+	                      req.data, req.data_length, req.burst, extension_mask);
 }
 
 std::shared_ptr<RequestHandle> Core::dma_internal(uint32_t request_id, uint8_t src_fetch_module,
                                                   uint8_t src_target_module, uint8_t fetch_chiplet,
                                                   uint8_t fetch_module, uint8_t target_chiplet, uint8_t target_module,
                                                   uint32_t fetch_addr, uint32_t target_addr, unsigned data_length,
-                                                  ARM::AXI::Burst burst, bool is_volatile) {
+                                                  ARM::AXI::Burst burst) {
 	DMARequest req = {};
 
 	req.request_id = request_id;
@@ -458,7 +460,6 @@ std::shared_ptr<RequestHandle> Core::dma_internal(uint32_t request_id, uint8_t s
 
 	req.data_length = data_length;
 	req.burst       = burst;
-	req.is_volatile = is_volatile;
 
 	auto chiplet_desc = ChipletRegistry::instance().get(chiplet_id);
 	auto dma_engine   = chiplet_desc->get("dma_engine");
@@ -467,7 +468,7 @@ std::shared_ptr<RequestHandle> Core::dma_internal(uint32_t request_id, uint8_t s
 	              "AXI DMA Request Error: Chiplet " << chiplet_desc->chiplet_name << " does not have a DMA engine");
 
 	return write_internal(request_id, dma_engine->id, chiplet_id, dma_engine->id, 0, true,
-	                      reinterpret_cast<unsigned char *>(&req), sizeof(req), ARM::AXI::BURST_INCR, 0, true);
+	                      reinterpret_cast<unsigned char *>(&req), sizeof(req), ARM::AXI::BURST_INCR, 0);
 }
 
 std::shared_ptr<RequestHandle> Core::dma(const AxiDMARequest &req) {
@@ -590,10 +591,7 @@ std::shared_ptr<RequestHandle> Core::dma(const AxiDMARequest &req) {
 	SC_LOG_ASSERT(this, target_module->is_subordinate(),
 	              "AXI DMA Request Error: Module " << target_module_name << " is not an AXI subordinate");
 
-	// Either end being off-chip makes the transfer volatile.
-	bool is_volatile = req.is_volatile || (fetch_chiplet_id != chiplet_id) || (target_chiplet_id != chiplet_id);
-
 	return dma_internal(req.request_id, src_fetch_module->id, src_target_module->id, fetch_chiplet_id, fetch_module->id,
 	                    target_chiplet_id, target_module->id, req.fetch_addr.value(), req.target_addr.value(),
-	                    req.data_length, req.burst, is_volatile);
+	                    req.data_length, req.burst);
 }

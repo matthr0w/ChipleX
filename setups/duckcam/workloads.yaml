@@ -1,7 +1,0 @@
-workloads:
-  crop:
-    cycles_count: 4276
-    source_hash: 9cc9e23c20f641b98f97397bf382f7205d3e6642
-  grayscale:
-    cycles_count: 27579
-    source_hash: 9b8bfbfe30d69e8e3610b0d972bfec8c54a2d970

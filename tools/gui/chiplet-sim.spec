@@ -1,7 +1,7 @@
 # PyInstaller spec for the Chiplet Simulator GUI release bundle.
 #
 # Bundles the GUI together with a staged "framework" tree (sim, SystemC, headers,
-# configs, setups, vendored yaml-cpp, cycle-estimation tool, docs). The framework
+# configs, setups, vendored yaml-cpp, cycle-estimation tool). The framework
 # tree is added as opaque data so the prebuilt sim keeps its $ORIGIN rpath; at
 # runtime it lands at <_MEIPASS>/framework, which Project.discover() locates.
 

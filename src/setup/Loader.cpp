@@ -233,11 +233,23 @@ void SetupLoader::load_cycles_db(const std::string &workloads_file) {
 		YAML::Node root = YAML::LoadFile(workloads_file);
 		LOG_ASSERT(root["workloads"], "SetupLoader: Missing required section 'workloads' in workloads database");
 
-		for (const auto &entry : root["workloads"]) {
-			std::string       name = entry.first.as<std::string>();
-			const YAML::Node &node = entry.second;
-			LOG_ASSERT(node["cycles_count"], "SetupLoader: Missing required key 'cycles_count' for " + name);
-			sysconf_.cycles.db[name] = node["cycles_count"].as<unsigned>();
+		// Entries are nested region -> executor ("chiplet.module") -> cycles_count.
+		// The runtime key is "<executor>.<region>", matching the composite key that
+		// Core/HWAccel::wait_cycles builds from its own chiplet and module name.
+		for (const auto &region_entry : root["workloads"]) {
+			std::string       region = region_entry.first.as<std::string>();
+			const YAML::Node &execs  = region_entry.second;
+
+			for (const auto &exec_entry : execs) {
+				if (!exec_entry.second.IsMap()) {
+					continue;
+				}
+				std::string       executor = exec_entry.first.as<std::string>();
+				const YAML::Node &node     = exec_entry.second;
+				LOG_ASSERT(node["cycles_count"],
+				           "SetupLoader: Missing required key 'cycles_count' for " + executor + "." + region);
+				sysconf_.cycles.db[executor + "." + region] = node["cycles_count"].as<unsigned>();
+			}
 		}
 	} catch (const YAML::Exception &e) {
 		LOG_ERROR("SetupLoader: Failed to load " + workloads_file + ": " + e.what());

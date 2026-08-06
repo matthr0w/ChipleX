@@ -7,16 +7,14 @@ from pathlib import Path
 from typing import Dict, Optional
 
 import yaml
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QHBoxLayout,
                                QMessageBox, QVBoxLayout)
 
 from .. import setup_writer
 from ..project import Project
 from .graph_editor import GraphEditor
-from .markdown_viewer import show_markdown
-from .theme import link
 
 _LAYOUT_FILE = ".layout.json"
 
@@ -29,7 +27,9 @@ class SetupEditorDialog(QDialog):
         self.is_new = is_new
         self.saved_name: Optional[str] = None
         self.setWindowTitle(f"{'' if is_new else 'Edit'} {setup_name}")
+        # Restored size when un-maximized; the dialog opens maximized.
         self.resize(1080, 720)
+        self.setWindowState(Qt.WindowState.WindowMaximized)
 
         if is_new:
             doc = setup_writer.new_system_doc()
@@ -45,18 +45,12 @@ class SetupEditorDialog(QDialog):
         open_code.button(QDialogButtonBox.Open).setText("Open program code")
         open_code.accepted.connect(self._open_code)
 
-        docs_path = project.root / "docs" / "PROGRAM-CODE.md"
-        hint = QLabel(link("#", "How to write program code"))
-        hint.setToolTip("Open the program-code guide")
-        hint.linkActivated.connect(lambda _=None, p=docs_path: show_markdown(self, p))
-
         buttons = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
 
         footer = QHBoxLayout()
         footer.addWidget(open_code)
-        footer.addWidget(hint)
         footer.addStretch(1)
         footer.addWidget(buttons)
 

@@ -12,61 +12,60 @@ sc_event next_run;
 ModuleCodeMap *get_program_code() {
 	static ModuleCodeMap code = {
 	    {{"fpga", "core0"},
-	     {CPUCode{.main =
-	                  [](Core &core) {
-		                  static unsigned run = 0;
-		                  while (run < TOTAL_RUNS) {
-			                  // For now, we just send dummy data
-			                  size_t   num_bytes = TOTAL_SIZE;
-			                  uint8_t *data      = new uint8_t[num_bytes];
-			                  for (size_t i = 0; i < num_bytes; ++i) {
-				                  data[i] = static_cast<uint8_t>(0);
-			                  }
+	     {CPUCode{
+	         .main =
+	             [](Core &core) {
+		             static unsigned run = 0;
+		             while (run < TOTAL_RUNS) {
+			             // For now, we just send dummy data
+			             size_t   num_bytes = TOTAL_SIZE;
+			             uint8_t *data      = new uint8_t[num_bytes];
+			             for (size_t i = 0; i < num_bytes; ++i) {
+				             data[i] = static_cast<uint8_t>(0);
+			             }
 
-			                  auto request = AxiRequest(1, reinterpret_cast<unsigned char *>(data), num_bytes)
-			                                     .to_via("mem_chiplet1", "memory", "pulp")
-			                                     .set_addr(0x0)
-			                                     .skip_cache();
-			                  auto handle  = core.write(request);
-			                  handle->wait();
+			             auto request = AxiRequest(1, reinterpret_cast<unsigned char *>(data), num_bytes)
+			                                .to_via("mem_chiplet1", "memory", "pulp")
+			                                .set_addr(0x0);
+			             auto handle  = core.write(request);
+			             handle->wait();
 
-			                  delete[] data;
+			             delete[] data;
 
-			                  wait(next_run);
-			                  run++;
-		                  }
-	                  },
-	              .irq =
-	                  [](Core &core, const IRQ &irq) {
-		                  static unsigned run       = 0;
-		                  size_t          num_bytes = TOTAL_SIZE;
-		                  uint8_t        *data      = new uint8_t[num_bytes];
+			             wait(next_run);
+			             run++;
+		             }
+	             },
+	         .irq =
+	             [](Core &core, const IRQ &irq) {
+		             static unsigned run       = 0;
+		             size_t          num_bytes = TOTAL_SIZE;
+		             uint8_t        *data      = new uint8_t[num_bytes];
 
-		                  auto request = AxiRequest(1, reinterpret_cast<unsigned char *>(data), num_bytes)
-		                                     .set_addr(irq.target_address)
-		                                     .skip_cache();
-		                  auto handle  = core.read(request);
-		                  handle->wait();
+		             auto request =
+		                 AxiRequest(1, reinterpret_cast<unsigned char *>(data), num_bytes).set_addr(irq.target_address);
+		             auto handle = core.read(request);
+		             handle->wait();
 
-		                  std::cout << "\nResult on FPGA:" << std::endl;
-		                  for (size_t i = 0; i < num_bytes; ++i) {
-			                  std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
-			                  if ((i + 1) % 16 == 0) {
-				                  std::cout << "\n";
-			                  } else {
-				                  std::cout << " ";
-			                  }
-		                  }
+		             std::cout << "\nResult on FPGA:" << std::endl;
+		             for (size_t i = 0; i < num_bytes; ++i) {
+			             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
+			             if ((i + 1) % 16 == 0) {
+				             std::cout << "\n";
+			             } else {
+				             std::cout << " ";
+			             }
+		             }
 
-		                  delete[] data;
+		             delete[] data;
 
-		                  next_run.notify(SC_ZERO_TIME);
-		                  run++;
+		             next_run.notify(SC_ZERO_TIME);
+		             run++;
 
-		                  if (run == TOTAL_RUNS) {
-			                  sc_stop();
-		                  }
-	                  }}}                 },
+		             if (run == TOTAL_RUNS) {
+			             sc_stop();
+		             }
+	             }}}	                  },
 	    {{"chiplet1", "core0"},
 	     {CPUCode{
 	         .main = [](Core &core) {},
@@ -76,7 +75,7 @@ ModuleCodeMap *get_program_code() {
 			             None,
 			             FetchFromMem,
 			             TransToDFP,
-			             TransToAILC
+			             TransToGEN
 		             };
 		             Operation op = Operation::None;
 
@@ -94,7 +93,7 @@ ModuleCodeMap *get_program_code() {
 			             op = Operation::TransToDFP;
 			             break;
 		             case 4:
-			             op = Operation::TransToAILC;
+			             op = Operation::TransToGEN;
 			             break;
 		             case 6:
 			             // Fetch next data and repeat until whole data
@@ -125,12 +124,12 @@ ModuleCodeMap *get_program_code() {
 			                 AxiDMARequest(3, CHUNK_SIZE).from("chiplet1", "memory", 0x0).to("chiplet1", "dfp", 0x0);
 			             core.dma(dma);
 		             } break;
-		             case Operation::TransToAILC: {
-			             SC_LOG_INFO(&core, "TransToAILC");
-			             // Path 5: SRAM -> GeMM with DMA Engine
+		             case Operation::TransToGEN: {
+			             SC_LOG_INFO(&core, "TransToGEN");
+			             // Path 5: SRAM -> Generic Accelerator with DMA Engine
 			             auto dma = AxiDMARequest(5, CHUNK_SIZE)
 			                            .from("chiplet1", "memory", irq.target_address)
-			                            .to("chiplet1", "gemm", 0x0);
+			                            .to("chiplet1", "gen", 0x0);
 			             core.dma(dma);
 		             } break;
 		             default:
@@ -158,7 +157,7 @@ ModuleCodeMap *get_program_code() {
 		                    auto handle  = accel.write(request);
 		                    handle->wait();
 	                    }}}               },
-	    {{"chiplet1", "gemm"},
+	    {{"chiplet1", "gen"},
 	     {AccelCode{.main =
 	                    [](HWAccel &accel, uint8_t *data, size_t size) {
 		                    int accel_id = 1;
@@ -174,9 +173,9 @@ ModuleCodeMap *get_program_code() {
 
 		                    accel.wait_cycles("matalu");
 
-		                    // Path 6: GeMM -> Chiplet 2 GeMM with DMA Engine
+		                    // Path 6: Generic Accelerator -> Chiplet 2 Generic Accelerator with DMA Engine
 		                    auto request = AxiRequest(6, reinterpret_cast<unsigned char *>(data), size)
-		                                       .to_via("chiplet2", "gemm", "pulp");
+		                                       .to_via("chiplet2", "gen", "pulp");
 		                    auto handle  = accel.write(request);
 		                    handle->wait();
 	                    }}}               },
@@ -265,7 +264,7 @@ ModuleCodeMap *get_program_code() {
 		                    auto handle  = accel.write(request);
 		                    handle->wait();
 	                    }}}               },
-	    {{"chiplet2", "gemm"},  {AccelCode{.main = [](HWAccel &accel, uint8_t *data, size_t size) {
+	    {{"chiplet2", "gen"},  {AccelCode{.main = [](HWAccel &accel, uint8_t *data, size_t size) {
 		     int accel_id = 2;
 		     for (size_t i = accel_id; i < size; i += 4) {
 			     int x = data[i];
@@ -279,7 +278,7 @@ ModuleCodeMap *get_program_code() {
 
 		     accel.wait_cycles("matalu");
 
-		     // Path 7: GeMM -> SRAM with DMA Engine
+		     // Path 7: Generic Accelerator -> SRAM with DMA Engine
 		     auto request = AxiRequest(7, reinterpret_cast<unsigned char *>(data), size);
 		     auto handle  = accel.write(request);
 		     handle->wait();

@@ -8,6 +8,9 @@ from PySide6.QtWidgets import QApplication
 
 LINK_COLOR = "#58a6ff"
 
+GEM5_MARK_COLOR = "#58a6ff"
+GEM5_MARK_STYLE = f"color: {GEM5_MARK_COLOR}; font-weight: bold;"
+
 
 def link(href: str, text: str) -> str:
     """Return a rich-text anchor with the app's standard link color."""

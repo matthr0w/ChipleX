@@ -5,7 +5,6 @@
 #include "logging.h"
 
 #include "modules/Bus.h"
-#include "modules/Cache.h"
 #include "modules/chiplets/ChipletBase.h"
 #include "modules/chiplets/ChipletDescriptor.h"
 #include "modules/Core.h"
@@ -22,11 +21,10 @@ struct ComputeChiplet : ChipletBase {
 		desc.chiplet_id   = id;
 		desc.chiplet_name = name;
 
-		// Cores + Caches
+		// Cores
 		unsigned num_cores = chiplet_config.node["cores"]["num"].as<unsigned>();
 		for (unsigned i = 0; i < num_cores; i++) {
-			desc.add_module(CORE_MODULE_NAME + std::to_string(i), {AXIModuleType::MANAGER});
-			desc.add_module(CACHE_MODULE_NAME + std::to_string(i), {AXIModuleType::BUS_MANAGER});
+			desc.add_module(CORE_MODULE_NAME + std::to_string(i), {AXIModuleType::BUS_MANAGER});
 		}
 
 		// Accelerators
@@ -56,10 +54,9 @@ struct ComputeChiplet : ChipletBase {
 		return desc;
 	}
 
-	// Cores + Caches
-	const unsigned                      num_cores;
-	std::vector<std::unique_ptr<Core>>  cores;
-	std::vector<std::unique_ptr<Cache>> caches;
+	// Cores
+	const unsigned                     num_cores;
+	std::vector<std::unique_ptr<Core>> cores;
 
 	// Accelerators
 	std::map<std::string, std::unique_ptr<HWAccel>> accels;
@@ -85,20 +82,17 @@ struct ComputeChiplet : ChipletBase {
 		               (chiplet_config.node["axi"]["width"].as<unsigned>() % 8) == 0,
 		           "Parameter Error: AXI size must be a multiple of 8");
 
-		// Cores + Caches
+		// Cores
 		for (unsigned i = 0; i < num_cores; ++i) {
-			std::string core_name  = CORE_MODULE_NAME + std::to_string(i);
-			std::string cache_name = CACHE_MODULE_NAME + std::to_string(i);
+			std::string core_name = CORE_MODULE_NAME + std::to_string(i);
 			unsigned    num_irqs =
 			    chiplet_desc.num_interconnects() * 2 + 1; // Interconnects + Extension Layers + DMA Engine
-			cores.push_back(std::make_unique<Core>(core_name.c_str(), chiplet_id, i, chiplet_config, cycles, num_irqs));
-			caches.push_back(std::make_unique<Cache>(cache_name.c_str(), chiplet_id, chiplet_config));
+			cores.push_back(std::make_unique<Core>(core_name.c_str(), chiplet_name, chiplet_id, core_name, i,
+			                                       chiplet_config, cycles, num_irqs));
 
-			// Bind clocks and sockets
+			// Bind the core's clock and manager socket directly to the bus.
 			cores[i]->clk.bind(chiplet_clocks.get("cores"));
-			cores[i]->isocket.bind(caches[i]->tsocket);
-			caches[i]->clk.bind(chiplet_clocks.get("caches"));
-			caches[i]->isocket.bind(*bus.managers[chiplet_desc.get_mgr_port(cache_name)]);
+			cores[i]->isocket.bind(*bus.managers[chiplet_desc.get_mgr_port(core_name)]);
 
 			// Assign program code
 			auto it = chiplet_config.module_code.find(core_name);
@@ -120,7 +114,8 @@ struct ComputeChiplet : ChipletBase {
 
 		// Accelerators
 		for (const auto &[name, config] : chiplet_config.accels) {
-			auto accel = std::make_unique<HWAccel>(name.c_str(), chiplet_id, chiplet_config, cycles, &dma_engine);
+			auto accel = std::make_unique<HWAccel>(name.c_str(), chiplet_name, chiplet_id, name, chiplet_config, cycles,
+			                                       &dma_engine);
 
 			// Bind clocks and sockets
 			accel->clk.bind(get_accel_clocks(name).get());

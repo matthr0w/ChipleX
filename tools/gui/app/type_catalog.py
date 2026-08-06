@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List
 
-from .system_model import _flatten, _parse_units
+from .system_model import _flatten, _parse_constants, _parse_gem5, _parse_units
 
 KINDS = ("chiplets", "accelerators", "interconnects")
 
@@ -18,6 +18,7 @@ class TypeParam:
     value_type: str
     default: object
     unit: str | None = None
+    gem5: bool = False
 
 
 def list_types(configs_dir: Path, kind: str) -> List[str]:
@@ -27,6 +28,16 @@ def list_types(configs_dir: Path, kind: str) -> List[str]:
     return sorted(p.stem for p in directory.glob("*.yaml"))
 
 
+def type_default(configs_dir: Path, kind: str, type_name: str) -> dict:
+    """Return the raw parsed type-default config (unfiltered, before overrides)."""
+    import yaml
+
+    path = configs_dir / kind / f"{type_name}.yaml"
+    if not path.is_file():
+        return {}
+    return yaml.safe_load(path.read_text()) or {}
+
+
 def type_params(configs_dir: Path, kind: str, type_name: str) -> List[TypeParam]:
     import yaml
 
@@ -34,8 +45,12 @@ def type_params(configs_dir: Path, kind: str, type_name: str) -> List[TypeParam]
     if not path.is_file():
         return []
     data = yaml.safe_load(path.read_text()) or {}
-    units = _parse_units(path.read_text())
+    text = path.read_text()
+    units = _parse_units(text)
+    constants = _parse_constants(text)
+    gem5 = _parse_gem5(text)
     return [
-        TypeParam(dotted, value_type, default, units.get(dotted))
+        TypeParam(dotted, value_type, default, units.get(dotted), dotted in gem5)
         for dotted, value_type, default in _flatten(data)
+        if dotted not in constants
     ]

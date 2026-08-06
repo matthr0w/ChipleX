@@ -9,8 +9,8 @@ chiplets:
     type: compute
     accelerators:
       - name: dfp
-        type: generic
-      - name: gemm
+        type: dfp
+      - name: gen
         type: generic
     interconnects:
       - name: pulp
@@ -28,8 +28,8 @@ chiplets:
     type: compute
     accelerators:
       - name: dfp
-        type: generic
-      - name: gemm
+        type: dfp
+      - name: gen
         type: generic
     interconnects:
       - name: pulp

@@ -6,10 +6,12 @@ its statistics are parsed into a RunResult.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import signal
 import subprocess
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -19,8 +21,10 @@ from threading import Event, Thread
 from typing import Callable, Dict, List, Optional, TextIO
 
 from . import stats
+from .cycle_estimation import EstimationStatus, run_cycle_estimation
 from .project import Project
 from .runspec import RunSpec
+from .setup_builder import build_setup_if_needed
 
 DEFAULT_TIMEOUT_S = 3600
 _TAIL_CHARS = 20000
@@ -40,6 +44,7 @@ class RunResult:
     stats_path: Optional[Path] = None
     error: Optional[str] = None
     cancelled: bool = False
+    estimation_status: EstimationStatus = EstimationStatus.SUCCESS
 
 
 class Runner:
@@ -73,6 +78,16 @@ class Runner:
         self._cancel.clear()
         self.workdir_root.mkdir(parents=True, exist_ok=True)
         results: List[RunResult] = []
+
+        # Build each distinct setup's plugin once up front (hash-gated), before
+        # the run pool. The compiled libsetup.so is shared by all runs of that
+        # setup regardless of their overrides, and building here avoids
+        # concurrent CMake invocations racing on the shared build directory.
+        self._builds = {}
+        for setup in dict.fromkeys(spec.setup for spec in specs):
+            if self._cancel.is_set():
+                break
+            self._builds[setup] = build_setup_if_needed(self.project, setup, self.timeout_s)
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
             future_to_spec = {}
@@ -113,8 +128,33 @@ class Runner:
         try:
             log_file = _open_log(spec.log_path)
             self._emit(spec, on_output, log_file,
-                       f"Simulation '{spec.label}' of setup '{spec.setup}' started {_timestamp()}")
+                       f"Run '{spec.label}' of setup '{spec.setup}' started {_timestamp()}")
             spec.build_sandbox(self.project, sandbox)
+
+            # Plugin build: compiled once per setup in run_batch; replay its log
+            # here and fail the run if that setup did not build.
+            self._emit(spec, on_output, log_file, "Build")
+            build = self._builds.get(spec.setup)
+            if build is not None:
+                self._emit_raw(spec, on_output, log_file, build.log)
+                if not build.ok:
+                    result.error = "Setup build failed"
+                    result.duration_s = time.monotonic() - started
+                    return result
+
+            # Cycle estimation against this run's sandbox, so the workload cycle
+            # counts match the exact system.yaml (with overrides) the sim loads.
+            self._emit(spec, on_output, log_file, "Cycle Estimation")
+            estimation = run_cycle_estimation(
+                self.project, spec.setup,
+                setups_dir=sandbox / "setups", build_dir=sandbox / "ce_build",
+            )
+            result.estimation_status = estimation.status
+            self._emit_raw(spec, on_output, log_file, estimation.log)
+            if estimation.status == EstimationStatus.SUCCESS:
+                self._write_back_estimate(spec, sandbox)
+
+            self._emit(spec, on_output, log_file, "Simulation")
             argv = spec.argv(self.project.sim_binary, stats_path, self.log_level)
             proc = subprocess.Popen(
                 argv,
@@ -134,11 +174,11 @@ class Runner:
             outcome = ("cancelled" if result.cancelled
                        else f"exited with code {result.returncode}")
             self._emit(spec, on_output, log_file,
-                       f"Simulation '{spec.label}' of setup '{spec.setup}' {outcome} after {result.duration_s:.1f} s")
+                       f"Run '{spec.label}' of setup '{spec.setup}' {outcome} after {result.duration_s:.1f} s")
         except Exception as exc:  # noqa: BLE001 - surface any launch failure to the UI
             result.error = str(exc)
             result.duration_s = time.monotonic() - started
-            self._emit(spec, on_output, log_file, f"Simulation '{spec.label}' of setup '{spec.setup}' failed: {exc}")
+            self._emit(spec, on_output, log_file, f"Run '{spec.label}' of setup '{spec.setup}' failed: {exc}")
             return result
         finally:
             if log_file is not None:
@@ -164,6 +204,36 @@ class Runner:
         except Exception as exc:  # noqa: BLE001
             result.error = f"failed to parse statistics: {exc}"
         return result
+
+    def _write_back_estimate(self, spec: RunSpec, sandbox: Path) -> None:
+        """Cache a fresh estimate into the workspace when it matches the default.
+
+        Each run estimates in its own sandbox, so a default run's result would
+        otherwise be discarded and gem5 would re-run for every run. The cycle
+        counts depend only on gem5-relevant inputs, so a run that changed no
+        gem5-relevant parameter produces the same input hash as the setup's
+        default config; its sandbox workloads.yaml is therefore valid for the
+        workspace and is copied back, letting later default runs (and the CLI)
+        reuse it. A run that changed a gem5 parameter keeps its counts in the
+        sandbox only, leaving the default cache intact.
+        """
+        if _has_gem5_override(spec):
+            return
+        src = sandbox / "setups" / spec.setup / "workloads.yaml"
+        dst = self.project.setup_dir(spec.setup) / "workloads.yaml"
+        if not src.is_file():
+            return
+        # Replace atomically: a sweep over a non-gem5 parameter runs many same
+        # setup write-backs concurrently, and other runs read this file while
+        # seeding their sandbox.
+        fd, tmp_name = tempfile.mkstemp(dir=str(dst.parent), suffix=".tmp")
+        os.close(fd)
+        tmp = Path(tmp_name)
+        try:
+            shutil.copyfile(src, tmp)
+            os.replace(tmp, dst)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     def _stream(self, proc: subprocess.Popen, spec: RunSpec, on_output: Optional[Callable],
                 log_file: Optional[TextIO] = None) -> str:
@@ -200,10 +270,21 @@ class Runner:
     def _emit(self, spec: RunSpec, on_output: Optional[Callable],
               log_file: Optional[TextIO], text: str) -> None:
         """Send a framework-generated marker line to the live output and the log."""
-        line = f"=== {text} ===\n"
+        line = f"\n=== {text} ===\n"
         _write_log(log_file, line)
         if on_output is not None:
             on_output(spec, line)
+
+    def _emit_raw(self, spec: RunSpec, on_output: Optional[Callable],
+                  log_file: Optional[TextIO], text: str) -> None:
+        """Send captured multi-line tool output verbatim to the live output and log."""
+        if not text:
+            return
+        if not text.endswith("\n"):
+            text += "\n"
+        _write_log(log_file, text)
+        if on_output is not None:
+            on_output(spec, text)
 
 
 def _open_log(log_path: Optional[Path]) -> Optional[TextIO]:
@@ -242,6 +323,15 @@ def _kill(proc: subprocess.Popen) -> None:
         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
     except (ProcessLookupError, PermissionError):
         proc.terminate()
+
+
+def _has_gem5_override(spec: RunSpec) -> bool:
+    """True when the run overrides a gem5-relevant parameter.
+
+    Such a run resolves to a different gem5 input hash than the setup default,
+    so its estimate must not overwrite the default cache.
+    """
+    return any(getattr(ref, "gem5", False) for ref, _ in spec.overrides)
 
 
 def _slug(text: str) -> str:

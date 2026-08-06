@@ -3,10 +3,13 @@
 #include "modules/chiplets/ChipletRegistry.h"
 #include "modules/DMAEngine.h"
 
-HWAccel::HWAccel(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config, const CyclesDB &cycles,
+HWAccel::HWAccel(sc_module_name name, const std::string &chiplet_name, unsigned chiplet_id,
+                 const std::string &accel_name, ChipletConfig chiplet_config, const CyclesDB &cycles,
                  DMAEngine *dma_engine)
     : sc_module(name),
+      chiplet_name(chiplet_name),
       chiplet_id(chiplet_id),
+      accel_name(accel_name),
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
       cycles(cycles),
       clk_cycle(chiplet_config.node["cores"]["clk_cycle"].as<unsigned>(), SC_NS),
@@ -57,8 +60,12 @@ void HWAccel::main_thread() {
 }
 
 void HWAccel::wait_cycles(const std::string &name) {
+	wait_cycles(cycles.get(chiplet_name + "." + accel_name + "." + name));
+}
+
+void HWAccel::wait_cycles(unsigned count) {
 	stats.set_active(this->name());
-	wait(cycles.get(name), SC_NS);
+	wait(count * clk_cycle);
 	stats.set_idle(this->name());
 }
 
@@ -237,7 +244,7 @@ tlm_sync_enum HWAccel::nb_transport_bw_axi(ARM::AXI::Payload &payload, ARM::AXI:
 std::shared_ptr<RequestHandle> HWAccel::read_internal(uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
                                                       uint8_t dst_module, uint32_t address, bool fixed_address,
                                                       unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
-                                                      uint8_t extension_mask, bool is_volatile) {
+                                                      uint8_t extension_mask) {
 	auto handle = std::make_shared<RequestHandle>();
 
 	unsigned       axi_bytes = axi_width / 8;
@@ -257,7 +264,7 @@ std::shared_ptr<RequestHandle> HWAccel::read_internal(uint32_t request_id, uint8
 
 	payload->id    = request_id;
 	payload->user  = user.encode();
-	payload->cache = is_volatile ? ARM::AXI::CACHE_AR_DEVICE_NB : ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
+	payload->cache = ARM::AXI::CACHE_AR_WRITE_THROUGH_RWA;
 
 	handle->payload          = payload;
 	handle->data             = data;
@@ -338,16 +345,14 @@ std::shared_ptr<RequestHandle> HWAccel::read(const AxiRequest &req) {
 	if (req.ext_id) {
 		extension_mask = 1u << static_cast<uint8_t>(*req.ext_id);
 	}
-	bool is_volatile = req.is_volatile || (dst_chiplet_id != chiplet_id);
-
 	return read_internal(req.request_id, src_module->id, dst_chiplet_id, dst_module->id, address, fixed_address,
-	                     req.data, req.data_length, req.burst, extension_mask, is_volatile);
+	                     req.data, req.data_length, req.burst, extension_mask);
 }
 
 std::shared_ptr<RequestHandle> HWAccel::write_internal(uint32_t request_id, uint8_t src_module, uint8_t dst_chiplet,
                                                        uint8_t dst_module, uint32_t address, bool fixed_address,
                                                        unsigned char *data, unsigned data_length, ARM::AXI::Burst burst,
-                                                       uint8_t extension_mask, bool is_volatile) {
+                                                       uint8_t extension_mask) {
 	auto handle = std::make_shared<RequestHandle>();
 
 	unsigned       axi_bytes = axi_width / 8;
@@ -367,7 +372,7 @@ std::shared_ptr<RequestHandle> HWAccel::write_internal(uint32_t request_id, uint
 
 	payload->id    = request_id;
 	payload->user  = user.encode();
-	payload->cache = is_volatile ? ARM::AXI::CACHE_AW_DEVICE_NB : ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
+	payload->cache = ARM::AXI::CACHE_AW_WRITE_THROUGH_RWA;
 
 	const unsigned aligned_length = beats * axi_bytes;
 	if (data_length == aligned_length) {
@@ -455,8 +460,6 @@ std::shared_ptr<RequestHandle> HWAccel::write(const AxiRequest &req) {
 	if (req.ext_id) {
 		extension_mask = 1u << static_cast<uint8_t>(*req.ext_id);
 	}
-	bool is_volatile = req.is_volatile || (dst_chiplet_id != chiplet_id) || !fixed_address;
-
 	return write_internal(req.request_id, src_module->id, dst_chiplet_id, dst_module->id, address, fixed_address,
-	                      req.data, req.data_length, req.burst, extension_mask, is_volatile);
+	                      req.data, req.data_length, req.burst, extension_mask);
 }
