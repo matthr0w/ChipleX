@@ -6,10 +6,12 @@ its statistics are parsed into a RunResult.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 import signal
 import subprocess
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -149,6 +151,8 @@ class Runner:
             )
             result.estimation_status = estimation.status
             self._emit_raw(spec, on_output, log_file, estimation.log)
+            if estimation.status == "ran":
+                self._write_back_estimate(spec, sandbox)
 
             self._emit(spec, on_output, log_file, "Simulation")
             argv = spec.argv(self.project.sim_binary, stats_path, self.log_level)
@@ -200,6 +204,36 @@ class Runner:
         except Exception as exc:  # noqa: BLE001
             result.error = f"failed to parse statistics: {exc}"
         return result
+
+    def _write_back_estimate(self, spec: RunSpec, sandbox: Path) -> None:
+        """Cache a fresh estimate into the workspace when it matches the default.
+
+        Each run estimates in its own sandbox, so a default run's result would
+        otherwise be discarded and gem5 would re-run for every run. The cycle
+        counts depend only on gem5-relevant inputs, so a run that changed no
+        gem5-relevant parameter produces the same input hash as the setup's
+        default config; its sandbox workloads.yaml is therefore valid for the
+        workspace and is copied back, letting later default runs (and the CLI)
+        reuse it. A run that changed a gem5 parameter keeps its counts in the
+        sandbox only, leaving the default cache intact.
+        """
+        if _has_gem5_override(spec):
+            return
+        src = sandbox / "setups" / spec.setup / "workloads.yaml"
+        dst = self.project.setup_dir(spec.setup) / "workloads.yaml"
+        if not src.is_file():
+            return
+        # Replace atomically: a sweep over a non-gem5 parameter runs many same
+        # setup write-backs concurrently, and other runs read this file while
+        # seeding their sandbox.
+        fd, tmp_name = tempfile.mkstemp(dir=str(dst.parent), suffix=".tmp")
+        os.close(fd)
+        tmp = Path(tmp_name)
+        try:
+            shutil.copyfile(src, tmp)
+            os.replace(tmp, dst)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     def _stream(self, proc: subprocess.Popen, spec: RunSpec, on_output: Optional[Callable],
                 log_file: Optional[TextIO] = None) -> str:
@@ -289,6 +323,15 @@ def _kill(proc: subprocess.Popen) -> None:
         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
     except (ProcessLookupError, PermissionError):
         proc.terminate()
+
+
+def _has_gem5_override(spec: RunSpec) -> bool:
+    """True when the run overrides a gem5-relevant parameter.
+
+    Such a run resolves to a different gem5 input hash than the setup default,
+    so its estimate must not overwrite the default cache.
+    """
+    return any(getattr(ref, "gem5", False) for ref, _ in spec.overrides)
 
 
 def _slug(text: str) -> str:
