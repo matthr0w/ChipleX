@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Tuple
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import (QBrush, QColor, QFont, QPainterPath,
                            QPainterPathStroker, QPen)
 from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsItem,
@@ -15,6 +15,9 @@ NODE_WIDTH = 180.0
 HEADER_HEIGHT = 40.0
 LINE_HEIGHT = 16.0
 PORT_RADIUS = 9.0
+
+# Spacing of the editor's background grid; chiplet nodes snap to it.
+GRID_SIZE = 20.0
 
 _COMPUTE_BRUSH = QColor(60, 90, 140)
 _MEMORY_BRUSH = QColor(110, 80, 130)
@@ -117,6 +120,10 @@ class ChipletNode(QGraphicsRectItem):
         return None
 
     def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionChange:
+            # Snap the node's top-left corner to the background grid.
+            return QPointF(round(value.x() / GRID_SIZE) * GRID_SIZE,
+                           round(value.y() / GRID_SIZE) * GRID_SIZE)
         if change == QGraphicsItem.ItemPositionHasChanged and self.scene() is not None:
             self.scene().update_edges()
         return super().itemChange(change, value)

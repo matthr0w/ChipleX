@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Tuple
 
-from PySide6.QtCore import QPointF, Qt, Signal
+from PySide6.QtCore import QLineF, QPointF, Qt, Signal
 from PySide6.QtGui import QColor, QPen
 from PySide6.QtWidgets import QGraphicsLineItem, QGraphicsScene
 
 from .. import setup_doc
-from .graph_items import ChipletNode, ConnectionEdge, PortItem
+from .graph_items import GRID_SIZE, ChipletNode, ConnectionEdge, PortItem
 
 
 class GraphScene(QGraphicsScene):
@@ -31,6 +31,24 @@ class GraphScene(QGraphicsScene):
         self._temp_line: Optional[QGraphicsLineItem] = None
         self.selectionChanged.connect(self._on_selection_changed)
         self.rebuild()
+
+    # -- grid -------------------------------------------------------------
+
+    def drawBackground(self, painter, rect) -> None:
+        super().drawBackground(painter, rect)
+        left = (rect.left() // GRID_SIZE) * GRID_SIZE
+        top = (rect.top() // GRID_SIZE) * GRID_SIZE
+        lines = []
+        x = left
+        while x < rect.right():
+            lines.append(QLineF(x, rect.top(), x, rect.bottom()))
+            x += GRID_SIZE
+        y = top
+        while y < rect.bottom():
+            lines.append(QLineF(rect.left(), y, rect.right(), y))
+            y += GRID_SIZE
+        painter.setPen(QPen(QColor(128, 128, 128, 40), 0))
+        painter.drawLines(lines)
 
     # -- build ------------------------------------------------------------
 
