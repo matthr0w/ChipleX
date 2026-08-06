@@ -1,5 +1,6 @@
 clk_cycle: 1 # ns
-num_alu: 8
+speedup_factor: null
+num_alu: 1
 num_branch: 1
 num_fpalu: 1
 num_fpdivsqrt: 1

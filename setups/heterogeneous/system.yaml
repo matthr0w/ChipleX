@@ -1,0 +1,63 @@
+chiplets:
+  - name: fpga
+    type: compute
+    interconnects:
+      - name: pulp
+        type: serial-link
+
+  - name: chiplet1
+    type: compute
+    accelerators:
+      - name: dfp
+        type: dfp
+      - name: gen
+        type: generic
+    interconnects:
+      - name: pulp
+        type: serial-link
+      - name: spi
+        type: spi
+
+  - name: mem_chiplet1
+    type: memory
+    interconnects:
+      - name: spi
+        type: spi
+
+  - name: chiplet2
+    type: compute
+    accelerators:
+      - name: dfp
+        type: dfp
+      - name: gen
+        type: generic
+    interconnects:
+      - name: pulp
+        type: serial-link
+      - name: spi
+        type: spi
+
+  - name: mem_chiplet2
+    type: memory
+    interconnects:
+      - name: spi
+        type: spi
+
+connections:
+  - endpoints: [fpga.pulp, chiplet1.pulp]
+    config:
+      phy:
+        clk_cycle: 5
+        num_channels: 1
+  - endpoints: [fpga.pulp, chiplet2.pulp]
+    config:
+      phy:
+        clk_cycle: 5
+        num_channels: 1
+  - endpoints: [chiplet1.spi, mem_chiplet1.spi]
+  - endpoints: [chiplet2.spi, mem_chiplet2.spi]
+  - endpoints: [chiplet1.pulp, chiplet2.pulp]
+    config:
+      phy:
+        clk_cycle: 2
+        num_channels: 1
