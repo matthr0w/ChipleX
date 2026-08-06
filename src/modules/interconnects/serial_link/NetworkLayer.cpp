@@ -418,6 +418,17 @@ void SLNetworkLayer::sender_thread() {
 			payload_out->user = user.encode();
 		}
 
+		// An interconnect with no links (e.g. an unconnected serial link) has no
+		// route for the periodic credit-only packets. An idle header means there
+		// is no real AXI work this cycle, so keep the stream idle instead of
+		// attempting a routing lookup that would abort. Traffic actually sent
+		// over an unconnected interconnect still reaches the routing error below.
+		if (payload_out->hdr == TagIdle && num_links == 0) {
+			axis_reg_valid_in.write(false);
+			axis_reg_ready_in.write(false);
+			continue;
+		}
+
 		// Credit only packets
 		if (payload_out->hdr == TagIdle) {
 			UserSignals user;
