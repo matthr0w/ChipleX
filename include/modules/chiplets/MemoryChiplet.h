@@ -21,20 +21,21 @@ struct MemoryChiplet : ChipletBase {
 		desc.add_module(MEMORY_MODULE_NAME, {AXIModuleType::SUBORDINATE});
 
 		// Extension Layer + Interconnect
-		const auto               &first_it            = *chiplet_config.interconnects.begin();
-		const std::string        &interconnect_name   = first_it.first;
-		const InterconnectConfig &interconnect_config = first_it.second;
-		const std::string         ext_name            = EXT_LAYER_MODULE_NAME + "_" + interconnect_name;
+		if (!chiplet_config.interconnects.empty()) {
+			const auto        &first_it          = *chiplet_config.interconnects.begin();
+			const std::string &interconnect_name = first_it.first;
+			const std::string  ext_name          = EXT_LAYER_MODULE_NAME + "_" + interconnect_name;
 
-		if (chiplet_config.interconnects.size() > 1) {
-			LOG_WARN("Chiplet " << name << " of type " << chiplet_config.type.to_string()
-			                    << " has multiple interconnects defined. Interconnect " << interconnect_name
-			                    << " will be used.");
+			if (chiplet_config.interconnects.size() > 1) {
+				LOG_WARN("Chiplet " << name << " of type " << chiplet_config.type.to_string()
+				                    << " has multiple interconnects defined. Interconnect " << interconnect_name
+				                    << " will be used.");
+			}
+
+			desc.add_module(ext_name, {AXIModuleType::MANAGER, AXIModuleType::SUBORDINATE});
+			desc.add_module(interconnect_name,
+			                {AXIModuleType::INTERCONNECT, AXIModuleType::MANAGER, AXIModuleType::SUBORDINATE});
 		}
-
-		desc.add_module(ext_name, {AXIModuleType::MANAGER, AXIModuleType::SUBORDINATE});
-		desc.add_module(interconnect_name,
-		                {AXIModuleType::INTERCONNECT, AXIModuleType::MANAGER, AXIModuleType::SUBORDINATE});
 
 		// Generate LUTs
 		desc.generate_luts();
@@ -84,6 +85,10 @@ struct MemoryChiplet : ChipletBase {
 			// Move into base class
 			ext_layers.emplace(ext_name, std::move(ext_layer));
 			interconnects.emplace(name, std::move(interconnect));
+		}
+
+		if (chiplet_config.interconnects.empty()) {
+			dummy_axi_port.bind(memory.tsocket);
 		}
 	}
 };
