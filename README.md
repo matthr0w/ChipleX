@@ -1,6 +1,6 @@
-# Simulation Environment for Chiplet-Based Systems
+# ChipleX
 
-This project provides a high-level simulation environment for chiplet-based systems using SystemC.
+ChipleX is a high-level simulation environment for chiplet-based systems using SystemC.
 
 There are two ways to use it:
 
@@ -18,17 +18,17 @@ There are two ways to use it:
 
 ## Download (recommended)
 
-Download the latest `chiplet-sim` from the project's **Releases** page (or the
+Download the latest `chiplex` from the project's **Releases** page (or the
 CI pipeline artifacts), then run it:
 
 ```bash
-chmod +x chiplet-sim
-./chiplet-sim
+chmod +x chiplex
+./chiplex
 ```
 
 The bundle is a self-contained Linux x86_64 executable. It runs the included
 setups out of the box. On first launch it seeds an editable workspace under
-`~/.local/share/chiplet-sim/`.
+`~/.local/share/chiplex/`.
 
 Two optional capabilities depend on tools installed on your machine:
 
@@ -76,7 +76,7 @@ Each tool is discovered independently, as described below.
   location.
 - **Note:** build gem5 with the ISAs of the CPU models you use (a `build/ALL`
   build covers all of them).
-- **Homepage:** https://gem5.org
+- **Link:** https://gem5.org
 
 ### Workload compiler toolchain
 
@@ -85,7 +85,7 @@ Each tool is discovered independently, as described below.
   `riscv-minor` model uses the RISC-V GNU toolchain (`riscv64-unknown-elf-g++`);
   another CPU model may name a different compiler in its manifest.
 - **Found via:** the model's compiler on your `PATH`.
-- **Homepage (RISC-V, the default):**
+- **Link (RISC-V, the default):**
   https://github.com/riscv-collab/riscv-gnu-toolchain
 
 ### LLVM (`llvm-mca`)
@@ -93,7 +93,7 @@ Each tool is discovered independently, as described below.
 - **Used for:** modeling accelerator speedup only; plain core cycle estimation
   does not need it.
 - **Found via:** `llvm-mca` on your `PATH`.
-- **Homepage:** https://llvm.org
+- **Link:** https://llvm.org
 
 ## Usage
 
@@ -122,7 +122,7 @@ make run ARGS="--help"
 Build the self-contained bundle described in [Download](#download-recommended):
 
 ```bash
-make bundle  # produces dist/chiplet-sim
+make bundle  # produces dist/chiplex
 ```
 
 See [docs/RELEASE.md](docs/RELEASE.md) for details and CI.
@@ -138,3 +138,9 @@ make test
 
 After an intentional, reviewed behavior change, regenerate the golden files with
 `make test-update`.
+
+## License
+
+ChipleX is released under the MIT License. It also incorporates and bundles
+third-party components under their own licenses. See [LICENSE.md](LICENSE.md)
+for the full terms and notices.

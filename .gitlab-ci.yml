@@ -30,9 +30,9 @@ release:linux-x86_64:
   script:
     - make bundle
   artifacts:
-    name: "chiplet-sim-$CI_COMMIT_REF_SLUG"
+    name: "chiplex-$CI_COMMIT_REF_SLUG"
     paths:
-      - dist/chiplet-sim
+      - dist/chiplex
     expire_in: 30 days
   rules:
     - if: $CI_COMMIT_TAG

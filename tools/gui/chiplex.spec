@@ -1,4 +1,4 @@
-# PyInstaller spec for the Chiplet Simulator GUI release bundle.
+# PyInstaller spec for the ChipleX GUI release bundle.
 #
 # Bundles the GUI together with a staged "framework" tree (sim, SystemC, headers,
 # configs, setups, vendored yaml-cpp, cycle-estimation tool). The framework
@@ -32,7 +32,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name="chiplet-sim",
+    name="chiplex",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

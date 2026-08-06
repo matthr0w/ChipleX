@@ -35,7 +35,7 @@ def user_data_dir() -> Path:
     """Persistent, writable location for the workspace and build outputs."""
     base = os.environ.get("XDG_DATA_HOME")
     root = Path(base) if base else Path.home() / ".local" / "share"
-    return root / "chiplet-sim"
+    return root / "chiplex"
 
 
 @dataclass

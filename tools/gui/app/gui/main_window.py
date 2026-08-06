@@ -25,7 +25,7 @@ class MainWindow(QMainWindow):
     def __init__(self, project: Project):
         super().__init__()
         self._project = project
-        self.setWindowTitle("Chiplet Simulator")
+        self.setWindowTitle("ChipleX")
         self.resize(1080, 720)
 
         setups = project.list_setups()

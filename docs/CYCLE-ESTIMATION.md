@@ -142,7 +142,7 @@ dump per-region stats; use `se_model.py` as the reference.
 
 Place the files by install type. From source, put the manifest (and any custom
 script) in `tools/cycle_estimation/gem5/models/`. In the bundled application,
-put them in `~/.local/share/chiplet-sim/gem5-models/` (created on first launch);
+put them in `~/.local/share/chiplex/gem5-models/` (created on first launch);
 this directory is searched before the bundled models, so a manifest there also
 overrides a bundled model of the same name. A config script placed next to its
 manifest is found automatically. The manifest file name must be the model name

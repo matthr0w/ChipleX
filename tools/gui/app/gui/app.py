@@ -23,7 +23,7 @@ def _ensure_executable(path) -> None:
 
 def main() -> int:
     app = QApplication(sys.argv)
-    app.setApplicationName("Chiplet Simulator")
+    app.setApplicationName("ChipleX")
 
     if is_frozen():
         apply_theme(app)
@@ -31,7 +31,7 @@ def main() -> int:
     try:
         project = Project.discover()
     except FileNotFoundError as exc:
-        QMessageBox.critical(None, "Chiplet Simulator", str(exc))
+        QMessageBox.critical(None, "ChipleX", str(exc))
         return 1
 
     # Operate on a managed setups workspace seeded from the bundled originals.

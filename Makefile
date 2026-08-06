@@ -25,7 +25,7 @@ GUI_MAIN := tools/gui/main.py
 DIST_DIR := dist
 STAGE_DIR := $(DIST_DIR)/framework
 RELEASE_VENV := $(BUILD_DIR_RELEASE)/venv
-GUI_SPEC := tools/gui/chiplet-sim.spec
+GUI_SPEC := tools/gui/chiplex.spec
 CE_SPEC := tools/cycle_estimation/cycle-estimation.spec
 
 # Logging
@@ -116,7 +116,7 @@ systemc:
 		$(LOG_INFO) "SystemC $(SYSTEMC_VERSION) installed to $(SYSTEMC_PREFIX)"; \
 	fi
 
-# Build the self-contained GUI release bundle (dist/chiplet-sim).
+# Build the self-contained GUI release bundle (dist/chiplex).
 # Requires SYSTEMC_PATH; set YAML_CPP_DIR to build yaml-cpp offline.
 define BUNDLE_RECIPE
 set -euo pipefail
@@ -178,4 +178,4 @@ export BUNDLE_RECIPE
 bundle: systemc
 	@$(LOG_INFO) "Building release bundle..."
 	@bash -c "$$BUNDLE_RECIPE"
-	@$(LOG_INFO) "Release bundle ready: $(DIST_DIR)/chiplet-sim"
+	@$(LOG_INFO) "Release bundle ready: $(DIST_DIR)/chiplex"
