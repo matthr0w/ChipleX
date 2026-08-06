@@ -9,9 +9,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
                                QFormLayout, QGraphicsView, QGroupBox,
-                               QHBoxLayout, QInputDialog, QLabel, QLineEdit,
-                               QListWidget, QMessageBox, QPushButton,
-                               QScrollArea, QSplitter, QVBoxLayout, QWidget)
+                               QHBoxLayout, QLabel, QLineEdit, QListWidget,
+                               QMessageBox, QPushButton, QScrollArea,
+                               QSplitter, QVBoxLayout, QWidget)
 
 from .. import setup_doc
 from ..project import Project
@@ -203,26 +203,47 @@ class GraphEditor(QWidget):
 
 
 class SubConfigDialog(QDialog):
-    """Edit the config of an accelerator or interconnect sub-instance."""
+    """Edit the name and configuration of an accelerator or interconnect sub-instance."""
 
-    def __init__(self, project: Project, kind: str, type_name: str, config: Dict[str, Any], title: str, parent=None):
+    def __init__(self, project: Project, kind: str, type_name: str, name: str, config: Dict[str, Any],
+                 existing_names, title: str, parent=None):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(420, 480)
+        self._existing = set(existing_names)
+
+        self._name = QLineEdit(name)
+        name_form = QFormLayout()
+        name_form.addRow("Name", self._name)
+
         self._form = ConfigForm(type_params(project.configs_dir, kind, type_name))
         self._form.set_config(config or {})
 
-        box = QGroupBox(f"{type_name} config (blank = default)")
+        box = QGroupBox(f"{type_name} Configuration")
         box_layout = QVBoxLayout(box)
         box_layout.addWidget(self._form)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
+        buttons.accepted.connect(self._on_accept)
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
+        layout.addLayout(name_form)
         layout.addWidget(box, 1)
         layout.addWidget(buttons)
+
+    def _on_accept(self) -> None:
+        name = self._name.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Edit", "The name must not be empty.")
+            return
+        if name in self._existing:
+            QMessageBox.warning(self, "Edit", f"'{name}' already exists on this chiplet.")
+            return
+        self.accept()
+
+    def result_name(self) -> str:
+        return self._name.text().strip()
 
     def result_config(self) -> Dict[str, Any]:
         return self._form.config()
@@ -252,7 +273,7 @@ class ChipletPanel(QWidget):
         params = type_params(editor.project.configs_dir, "chiplets", chiplet.get("type", ""))
         self._config = ConfigForm(params)
         self._config.set_config(chiplet.get("config", {}))
-        config_box = QGroupBox("Config (blank = default)")
+        config_box = QGroupBox("Configuration")
         cbl = QVBoxLayout(config_box)
         cbl.addWidget(self._config)
 
@@ -265,19 +286,19 @@ class ChipletPanel(QWidget):
         gem5_box = None
         if num_cores and num_cores > 0:
             self._gem5 = Gem5Form(editor.project, chiplet.get("gem5", {}))
-            gem5_box = QGroupBox("gem5 model (cycle estimation)")
+            gem5_box = QGroupBox("gem5 Model (Cycle Estimation)")
             gbl = QVBoxLayout(gem5_box)
             gbl.addWidget(self._gem5)
 
         accel_box = self._build_list_box(
             "Accelerators", editor._accel_types,
             [f"{a.get('name')} [{a.get('type')}]" for a in chiplet.get("accelerators", []) or []],
-            self._add_accel, self._remove_accel, self._edit_accel, self._rename_accel,
+            self._add_accel, self._remove_accel, self._edit_accel,
         )
         ic_box = self._build_list_box(
             "Interconnects", editor._ic_types,
             [f"{i.get('name')} [{i.get('type')}]" for i in chiplet.get("interconnects", []) or []],
-            self._add_ic, self._remove_ic, self._edit_ic, self._rename_ic,
+            self._add_ic, self._remove_ic, self._edit_ic,
         )
 
         layout = QVBoxLayout(self)
@@ -289,7 +310,7 @@ class ChipletPanel(QWidget):
         layout.addWidget(ic_box)
         layout.addStretch(1)
 
-    def _build_list_box(self, title, types, items, on_add, on_remove, on_edit, on_rename) -> QGroupBox:
+    def _build_list_box(self, title, types, items, on_add, on_remove, on_edit) -> QGroupBox:
         box = QGroupBox(title)
         layout = QVBoxLayout(box)
         listw = QListWidget()
@@ -299,48 +320,18 @@ class ChipletPanel(QWidget):
         combo = QComboBox()
         combo.addItems(types)
         add = QPushButton("Add")
-        edit = QPushButton("Edit config...")
-        rename = QPushButton("Rename...")
+        edit = QPushButton("Edit...")
         remove = QPushButton("Remove")
         add.clicked.connect(lambda: on_add(combo.currentText()))
         edit.clicked.connect(lambda: on_edit(listw))
-        rename.clicked.connect(lambda: on_rename(listw))
         remove.clicked.connect(lambda: on_remove(listw))
         row = QHBoxLayout()
         row.addWidget(combo, 1)
         row.addWidget(add)
         row.addWidget(edit)
-        row.addWidget(rename)
         row.addWidget(remove)
         layout.addLayout(row)
         return box
-
-    def _rename_accel(self, listw: QListWidget) -> None:
-        self._rename_sub(listw, "accelerators")
-
-    def _rename_ic(self, listw: QListWidget) -> None:
-        self._rename_sub(listw, "interconnects")
-
-    def _rename_sub(self, listw: QListWidget, kind: str) -> None:
-        old = self._selected_name(listw)
-        if old is None:
-            return
-        new, ok = QInputDialog.getText(self, "Rename", "New name:", text=old)
-        new = new.strip()
-        if not ok or not new or new == old:
-            return
-        chiplet = setup_doc.chiplet_by_name(self.doc, self.name) or {}
-        existing = {e.get("name") for e in chiplet.get(kind, []) or []}
-        if new in existing:
-            QMessageBox.warning(self, "Rename", f"'{new}' already exists on this chiplet.")
-            return
-        self.commit()
-        if kind == "accelerators":
-            setup_doc.rename_accelerator(self.doc, self.name, old, new)
-        else:
-            setup_doc.rename_interconnect(self.doc, self.name, old, new)
-        self.editor._refresh()
-        self.editor._show_chiplet_panel(self.name)
 
     @staticmethod
     def _selected_name(listw: QListWidget) -> Optional[str]:
@@ -415,16 +406,30 @@ class ChipletPanel(QWidget):
         entry = next((e for e in chiplet.get(key, []) or [] if e.get("name") == name), None)
         if entry is None:
             return
+        existing = {e.get("name") for e in chiplet.get(key, []) or []} - {name}
         dialog = SubConfigDialog(
-            self.editor.project, kind, entry.get("type", ""),
-            entry.get("config", {}), f"{name} [{entry.get('type')}] config", self,
+            self.editor.project, kind, entry.get("type", ""), name,
+            entry.get("config", {}), existing, f"Edit {name}", self,
         )
-        if dialog.exec():
-            cfg = dialog.result_config()
-            if cfg:
-                entry["config"] = cfg
+        if not dialog.exec():
+            return
+        cfg = dialog.result_config()
+        if cfg:
+            entry["config"] = cfg
+        else:
+            entry.pop("config", None)
+
+        new_name = dialog.result_name()
+        if new_name and new_name != name:
+            # Persist the panel's own edits before the rename rebuilds the panel.
+            self.commit()
+            if kind == "accelerators":
+                setup_doc.rename_accelerator(self.doc, self.name, name, new_name)
             else:
-                entry.pop("config", None)
+                setup_doc.rename_interconnect(self.doc, self.name, name, new_name)
+            self.editor._refresh()
+            self.editor._show_chiplet_panel(self.name)
+        else:
             self.editor._refresh()
 
     def commit(self) -> None:
@@ -464,7 +469,7 @@ class ConnectionPanel(QWidget):
         params = type_params(editor.project.configs_dir, "interconnects", ic_type)
         self._config = ConfigForm(params)
         self._config.set_config(conn.get("config", {}))
-        config_box = QGroupBox("Config (blank = default)")
+        config_box = QGroupBox("Configuration")
         cbl = QVBoxLayout(config_box)
         cbl.addWidget(self._config)
 
