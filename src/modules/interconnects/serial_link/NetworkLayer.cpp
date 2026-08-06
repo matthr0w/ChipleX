@@ -271,10 +271,10 @@ void SLNetworkLayer::committer_thread() {
 			}
 
 			if (is_w_valid_last(axi_in_trans.w_req_phase) && is_w_ready(axi_in_trans.w_rsp_phase)) {
-				committer_state_d.write((ar_gnt && is_ar_ready(axi_in_trans.r_req_phase)) ? Committer::ArPend
+				committer_state_d.write((ar_gnt && is_ar_ready(axi_in_trans.r_rsp_phase)) ? Committer::ArPend
 				                                                                          : Committer::Idle);
 			} else {
-				committer_state_d.write((ar_gnt && is_ar_ready(axi_in_trans.r_req_phase)) ? Committer::ArAwPend
+				committer_state_d.write((ar_gnt && is_ar_ready(axi_in_trans.r_rsp_phase)) ? Committer::ArAwPend
 				                                                                          : Committer::AwPend);
 			}
 			break;
@@ -301,11 +301,11 @@ void SLNetworkLayer::committer_thread() {
 				}
 			}
 
-			if (is_r_valid_last(axi_in_trans.r_req_phase) && is_r_ready(axi_in_trans.r_rsp_phase)) {
-				committer_state_d.write((aw_gnt && is_aw_ready(axi_in_trans.w_req_phase)) ? Committer::AwPend
+			if (r_response_done) {
+				committer_state_d.write((aw_gnt && is_aw_ready(axi_in_trans.w_rsp_phase)) ? Committer::AwPend
 				                                                                          : Committer::Idle);
 			} else {
-				committer_state_d.write((aw_gnt && is_aw_ready(axi_in_trans.w_req_phase)) ? Committer::ArAwPend
+				committer_state_d.write((aw_gnt && is_aw_ready(axi_in_trans.w_rsp_phase)) ? Committer::ArAwPend
 				                                                                          : Committer::ArPend);
 			}
 			break;
@@ -328,7 +328,9 @@ void SLNetworkLayer::committer_thread() {
 				grants[idx]();
 			}
 
-			bool aw_pend_idle = is_r_valid_last(axi_in_trans.r_req_phase) && is_r_ready(axi_in_trans.r_rsp_phase);
+			// Clearing the pending-read bit leaves AwPend or Idle, clearing the
+			// pending-write bit leaves ArPend or Idle.
+			bool aw_pend_idle = r_response_done;
 			bool ar_pend_idle = is_w_valid_last(axi_in_trans.w_req_phase) && is_w_ready(axi_in_trans.w_rsp_phase);
 
 			if (aw_pend_idle & ar_pend_idle) {
@@ -523,6 +525,10 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload, ARM::A
 		axi_in_trans.r_beat_count = 0;
 		axi_in_trans.r_req_phase  = phase;
 		axi_in_trans.r_rsp_sent   = false;
+		// Arm the completion flag for this read. Cleared here rather than on the
+		// committer's transition out of ArPend, which is combinational and may
+		// re-evaluate within a cycle.
+		r_response_done = false;
 		pending_read_responses.push_back(&payload);
 		payload.ref();
 		break;
@@ -599,7 +605,9 @@ void SLNetworkLayer::clear_axi_state() {
 		r_state = CLEAR;
 		r_beat_count++;
 		if (r_beat_count == r_queue.front()->get_beat_count()) {
-			r_beat_count = 0;
+			r_beat_count    = 0;
+			r_response_done = true;
+			update_event.notify(SC_ZERO_TIME);
 		}
 		r_queue.pop_front();
 	}

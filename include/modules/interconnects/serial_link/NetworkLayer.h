@@ -79,6 +79,11 @@ SC_MODULE(SLNetworkLayer) {
     unsigned w_beat_count = 0;
     unsigned r_beat_count = 0;
 
+    // Set once the last beat of a read response has been accepted by the local
+    // bus. A read cannot be tracked on the request channel the way a write is:
+    // its data returns over the link, not through axi_in.
+    bool r_response_done = false;
+
     void clk_posedge();
 
     void committer_thread();
