@@ -144,31 +144,35 @@ def resolve_chiplet(setup: Setup, chiplet_name: str):
             log_warn(f"Unknown parameter: {section}. Ignoring.")
     return base, (entry.get("gem5") or {})
 
-def find_executors(setup: Setup, region: str):
-    """Return the (chiplet, module) pairs whose code calls wait_cycles("<region>").
+def load_executors(workload: Workload):
+    """Return the (chiplet, module) executors declared for a workload.
 
-    Resolved positionally: each wait_cycles call is attributed to the module
-    header ({"chiplet", "module"}) with the greatest position preceding it. This
-    is robust to the nested braces of CPUCode/AccelCode lambda bodies. The same
-    region may run on several cores, so all distinct executors are returned.
+    Each workload declares the modules that run its wait_cycles region in a
+    sidecar YAML next to its source (workloads/<region>.yaml) with an
+    `executors:` list of "chiplet.module" strings. The declaration is
+    authoritative; the estimator does not infer executors from the program
+    source. A missing or malformed declaration is a hard error.
     """
-    code = setup.program_file.read_text(encoding="utf-8")
-    header_re = re.compile(r'\{\s*\{\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\}\s*,\s*\{')
-    headers = [(m.start(), m.group(1), m.group(2)) for m in header_re.finditer(code)]
-    wait_re = re.compile(r'\.wait_cycles\("' + re.escape(region) + r'"\)')
+    sidecar = workload.source_path.with_suffix(".yaml")
+    if not sidecar.is_file():
+        log_error(f"{workload.source_path}: missing executor declaration '{sidecar.name}'. "
+                  f"Create it next to the workload with an 'executors:' list of "
+                  f"'chiplet.module' entries naming the modules that run this region.")
+    entries = (load_yaml(sidecar) or {}).get("executors")
+    if not isinstance(entries, list) or not entries:
+        log_error(f"{sidecar}: 'executors:' must be a non-empty list of 'chiplet.module' entries.")
 
     executors = []
     seen = set()
-    for match in wait_re.finditer(code):
-        owner = None
-        for start, chiplet, module in headers:
-            if start < match.start():
-                owner = (chiplet, module)
-            else:
-                break
-        if owner and owner not in seen:
-            seen.add(owner)
-            executors.append(owner)
+    for entry in entries:
+        chiplet, sep, module = str(entry).partition(".")
+        chiplet, module = chiplet.strip(), module.strip()
+        if not sep or not chiplet or not module:
+            log_error(f"{sidecar}: invalid executor '{entry}'; expected 'chiplet.module'.")
+        pair = (chiplet, module)
+        if pair not in seen:
+            seen.add(pair)
+            executors.append(pair)
     return executors
 
 def execution_hash(source_hash: str, model: dict, execution: Execution, accel_params: dict) -> str:
@@ -198,12 +202,7 @@ def resolve_workload(setup: Setup, workload: Workload):
     Each execution resolves its CPU model, gem5 params, core-clock period,
     backing-memory latency, and invalidation hash from its owning chiplet.
     """
-    executors = find_executors(setup, workload.id)
-    if not executors:
-        log_warn(f"No wait_cycles('{workload.id}') found in program.cpp; skipping estimation.")
-        return
-
-    for chiplet, module in executors:
+    for chiplet, module in load_executors(workload):
         config, gem5_block = resolve_chiplet(setup, chiplet)
 
         model_name = gem5_block.get("cpu_model", DEFAULT_MODEL)

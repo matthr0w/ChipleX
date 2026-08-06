@@ -48,7 +48,6 @@ class CycleEstimator:
             setup = Setup(
                 id=setup_dir.stem,
                 path=setup_dir,
-                program_file=setup_dir / SETUP_PROGRAM_FILE,
                 system_file=setup_dir / SETUP_SYSTEM_FILE,
                 workloads_db=setup_dir / SETUP_WORKLOADS_DB
             )

@@ -1,0 +1,5 @@
+executors:
+  - chiplet0.core0
+  - chiplet1.core0
+  - chiplet2.core0
+  - chiplet3.core0

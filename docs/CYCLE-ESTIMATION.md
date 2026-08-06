@@ -54,17 +54,31 @@ is an acceptable trade-off and is common-mode across design points.
    //@END_CYCLE_MEASURE
    ```
 
-3. Run `make run ARGS="--setup=<name>"` (the estimator runs automatically before
+3. Declare which modules run the workload in a sidecar next to the source,
+   `setups/<name>/workloads/<workload>.yaml`:
+
+   ```yaml
+   executors:
+     - chiplet0.core0  # chiplet.module entries; list every module that runs it
+   ```
+
+   The estimator resolves each executor's CPU model, gem5 parameters, core
+   clock, and memory latency from that chiplet, and produces one cycle count per
+   executor. The declaration is authoritative: the estimator does not infer
+   executors from `program.cpp`. A missing or empty declaration is an error.
+4. Run `make run ARGS="--setup=<name>"` (the estimator runs automatically before
    the simulation), or run it directly with `tools/cycle_estimation/main.py`. It
    compiles the workload with the owning chiplet's CPU-model compiler, runs it
    under gem5 to obtain per-region cycle counts, and records them in
-   `workloads.yaml` keyed by the region name and the chiplet and core that run
-   it (so the same kernel on different cores can differ).
-4. Reference that name from `program.cpp`: `wait_cycles("<workload>")`.
+   `workloads.yaml` keyed by the region name and each declared executor (so the
+   same kernel on different cores can differ).
+5. Reference that name from `program.cpp`: `wait_cycles("<workload>")`, from the
+   same modules you declared as executors.
 
-In the GUI you only author the workload and reference it (steps 1, 2, and 4);
-each run then builds the setup, estimates cycles, and simulates automatically,
-so there is no separate estimation command to invoke.
+In the GUI you only author the workload, its executor declaration, and the
+`wait_cycles` reference (steps 1, 2, 3, and 5); each run then builds the setup,
+estimates cycles, and simulates automatically, so there is no separate
+estimation command to invoke.
 
 The estimator re-measures a workload when its source or any resolved gem5 input
 changes (the CPU model, compiler, parameters, core clock, or memory latency),
@@ -89,8 +103,9 @@ by the resources declared in the accelerator's config
 (`configs/accelerators/<type>.yaml`): `num_alu`, `num_branch`, `num_fpalu`,
 `num_fpdivsqrt`, `num_idiv`, `num_imul`, `num_mem`. Alternatively, set an
 explicit `speedup_factor` in that config to override the analysis. The
-accelerator is identified by matching the `wait_cycles("<workload>")` call in its
-`AccelCode`.
+accelerator instance is taken from the workload's declared executors: each
+`chiplet.module` that names an accelerator has its speedup applied from that
+accelerator's config.
 
 ## CPU model and gem5 parameters
 

@@ -40,8 +40,6 @@ ACCELERATOR_CONFIGS = CONFIGS_ROOT / "accelerators"
 CHIPLET_CONFIGS = CONFIGS_ROOT / "chiplets"
 ## Setups
 SETUPS_ROOT = Path(os.environ.get("CE_SETUPS_DIR", "setups"))
-SETUP_SRC_SUBDIR = Path("src")
-SETUP_PROGRAM_FILE = SETUP_SRC_SUBDIR / "program.cpp"
 SETUP_WORKLOADS_SUBDIR = Path("workloads")
 SETUP_WORKLOADS_DB = "workloads.yaml"
 SETUP_SYSTEM_FILE = "system.yaml"

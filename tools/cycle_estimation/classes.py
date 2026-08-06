@@ -36,7 +36,6 @@ class Workload:
 class Setup:
     id: str
     path: Path
-    program_file: Path
     system_file: Path
     workloads_db: Path
     workloads: Dict[str, Workload] = field(default_factory=dict)
