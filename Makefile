@@ -74,7 +74,7 @@ run: build
 		$(CE_VENV)/bin/pip install -r $(CE_REQ) > /dev/null; \
 		$(LOG_INFO) "Creating virtual environment done."; \
 	fi
-	@$(CE_VENV)/bin/python $(CE_MAIN)
+	@$(CE_VENV)/bin/python $(CE_MAIN) || [ $$? -eq 2 ]
 	@SYSTEMC_DISABLE_COPYRIGHT_MESSAGE=1 $(SIM_BINARY) $(ARGS)
 	@$(LOG_INFO) "Simulation finished."
 
@@ -121,35 +121,57 @@ systemc:
 define BUNDLE_RECIPE
 set -euo pipefail
 : "$${SYSTEMC_PATH:?Set SYSTEMC_PATH to a SystemC install (include/ and lib/libsystemc.so)}"
-rm -rf "$(CURDIR)/$(STAGE_DIR)"
-mkdir -p "$(CURDIR)/$(STAGE_DIR)"
-cp -r "$(CURDIR)/setups" "$(CURDIR)/$(STAGE_DIR)/setups"
+
+ROOT="$(CURDIR)"
+STAGE="$$ROOT/$(STAGE_DIR)"
+BUILD="$$ROOT/$(BUILD_DIR_RELEASE)"
+VENV="$$ROOT/$(RELEASE_VENV)"
+
+# Start from an empty staging tree.
+rm -rf "$$STAGE"
+mkdir -p "$$STAGE"
+
+# Stage the tracked sources needed to compile setup plugins offline, then
+# build the relocatable simulator. SETUPS_DIR points at the staged setups so
+# their plugins are compiled in place and ship pre-built.
+cp -r "$$ROOT/setups" "$$STAGE/setups"
+cp -r "$$ROOT/include" "$$STAGE/include"
+cp -r "$$ROOT/configs" "$$STAGE/configs"
+cp "$$ROOT/CMakeLists.txt" "$$STAGE/CMakeLists.txt"
 if [ -n "$${YAML_CPP_DIR:-}" ]; then YCPP="-DYAML_CPP_DIR=$$YAML_CPP_DIR"; else YCPP="-DYAML_CPP_DIR="; fi
-cmake -S "$(CURDIR)" -B "$(CURDIR)/$(BUILD_DIR_RELEASE)" -DCMAKE_BUILD_TYPE=Release -DRELOCATABLE=ON -DSETUPS_DIR="$(CURDIR)/$(STAGE_DIR)/setups" "$$YCPP"
-cmake --build "$(CURDIR)/$(BUILD_DIR_RELEASE)" -j"$$(nproc)"
-cp "$(CURDIR)/$(BUILD_DIR_RELEASE)/sim" "$(CURDIR)/$(STAGE_DIR)/sim"
-chmod +x "$(CURDIR)/$(STAGE_DIR)/sim"
-mkdir -p "$(CURDIR)/$(STAGE_DIR)/systemc"
-cp -r "$$SYSTEMC_PATH/include" "$(CURDIR)/$(STAGE_DIR)/systemc/include"
-for d in lib lib64; do if [ -d "$$SYSTEMC_PATH/$$d" ]; then cp -rP "$$SYSTEMC_PATH/$$d" "$(CURDIR)/$(STAGE_DIR)/systemc/$$d"; fi; done
-while IFS= read -r link; do tgt="$$(readlink -f "$$link")"; rm -f "$$link"; cp "$$tgt" "$$link"; done < <(find "$(CURDIR)/$(STAGE_DIR)/systemc" -type l)
-cp -r "$(CURDIR)/include" "$(CURDIR)/$(STAGE_DIR)/include"
-cp "$(CURDIR)/CMakeLists.txt" "$(CURDIR)/$(STAGE_DIR)/CMakeLists.txt"
-cp -r "$(CURDIR)/configs" "$(CURDIR)/$(STAGE_DIR)/configs"
-mkdir -p "$(CURDIR)/$(STAGE_DIR)/deps/yaml-cpp/lib" "$(CURDIR)/$(STAGE_DIR)/deps/yaml-cpp/include"
-if [ -n "$${YAML_CPP_DIR:-}" ]; then YI="$$YAML_CPP_DIR/include/yaml-cpp"; YL="$$YAML_CPP_DIR/lib/libyaml-cpp.a"; else YI="$(CURDIR)/$(BUILD_DIR_RELEASE)/_deps/yaml-cpp-src/include/yaml-cpp"; YL="$(CURDIR)/$(BUILD_DIR_RELEASE)/_deps/yaml-cpp-build/libyaml-cpp.a"; fi
+cmake -S "$$ROOT" -B "$$BUILD" -DCMAKE_BUILD_TYPE=Release -DRELOCATABLE=ON -DSETUPS_DIR="$$STAGE/setups" "$$YCPP"
+cmake --build "$$BUILD" -j"$$(nproc)"
+install -m 0755 "$$BUILD/sim" "$$STAGE/sim"
+
+# Stage the SystemC install, dereferencing the versioned .so symlinks so the
+# bundle carries real files rather than dangling links.
+mkdir -p "$$STAGE/systemc"
+cp -r "$$SYSTEMC_PATH/include" "$$STAGE/systemc/include"
+for d in lib lib64; do if [ -d "$$SYSTEMC_PATH/$$d" ]; then cp -rP "$$SYSTEMC_PATH/$$d" "$$STAGE/systemc/$$d"; fi; done
+while IFS= read -r link; do tgt="$$(readlink -f "$$link")"; rm -f "$$link"; cp "$$tgt" "$$link"; done < <(find "$$STAGE/systemc" -type l)
+
+# Stage vendored yaml-cpp (an override tree, else the CMake fetch output).
+mkdir -p "$$STAGE/deps/yaml-cpp/lib" "$$STAGE/deps/yaml-cpp/include"
+if [ -n "$${YAML_CPP_DIR:-}" ]; then YI="$$YAML_CPP_DIR/include/yaml-cpp"; YL="$$YAML_CPP_DIR/lib/libyaml-cpp.a"; else YI="$$BUILD/_deps/yaml-cpp-src/include/yaml-cpp"; YL="$$BUILD/_deps/yaml-cpp-build/libyaml-cpp.a"; fi
 if [ ! -d "$$YI" ] || [ ! -f "$$YL" ]; then echo "yaml-cpp artifacts not found: $$YI, $$YL" >&2; exit 1; fi
-cp -r "$$YI" "$(CURDIR)/$(STAGE_DIR)/deps/yaml-cpp/include/"
-cp "$$YL" "$(CURDIR)/$(STAGE_DIR)/deps/yaml-cpp/lib/"
-mkdir -p "$(CURDIR)/$(STAGE_DIR)/tools/cycle_estimation"
-cp -r "$(CURDIR)/tools/cycle_estimation/gem5" "$(CURDIR)/$(STAGE_DIR)/tools/cycle_estimation/gem5"
-if [ ! -d "$(RELEASE_VENV)" ]; then python3 -m venv "$(RELEASE_VENV)"; fi
-"$(RELEASE_VENV)/bin/pip" install -q --upgrade pip
-"$(RELEASE_VENV)/bin/pip" install -q -r "$(GUI_REQ)" pyinstaller
-CE_TOOL_DIR="$(CURDIR)/tools/cycle_estimation" "$(RELEASE_VENV)/bin/pyinstaller" --clean --noconfirm --distpath "$(CURDIR)/$(BUILD_DIR_RELEASE)/ce-dist" --workpath "$(CURDIR)/$(BUILD_DIR_RELEASE)/ce-pyinstaller" "$(CURDIR)/$(CE_SPEC)"
-cp "$(CURDIR)/$(BUILD_DIR_RELEASE)/ce-dist/cycle-estimation" "$(CURDIR)/$(STAGE_DIR)/tools/cycle-estimation"
-chmod +x "$(CURDIR)/$(STAGE_DIR)/tools/cycle-estimation"
-REPO_ROOT="$(CURDIR)" RELEASE_STAGE="$(CURDIR)/$(STAGE_DIR)" "$(RELEASE_VENV)/bin/pyinstaller" --clean --noconfirm --distpath "$(CURDIR)/$(DIST_DIR)" --workpath "$(CURDIR)/$(BUILD_DIR_RELEASE)/pyinstaller" "$(CURDIR)/$(GUI_SPEC)"
+cp -r "$$YI" "$$STAGE/deps/yaml-cpp/include/"
+cp "$$YL" "$$STAGE/deps/yaml-cpp/lib/"
+
+# Provision the Python toolchain shared by both PyInstaller builds.
+if [ ! -d "$$VENV" ]; then python3 -m venv "$$VENV"; fi
+"$$VENV/bin/pip" install -q --upgrade pip
+"$$VENV/bin/pip" install -q -r "$$ROOT/$(GUI_REQ)" pyinstaller
+
+# Freeze the cycle estimator to its own executable and stage the CPU-model
+# data the setup editor reads. Both must exist before the GUI build below,
+# which embeds the staging tree.
+mkdir -p "$$STAGE/tools/cycle_estimation"
+cp -r "$$ROOT/tools/cycle_estimation/gem5" "$$STAGE/tools/cycle_estimation/gem5"
+CE_TOOL_DIR="$$ROOT/tools/cycle_estimation" "$$VENV/bin/pyinstaller" --clean --noconfirm --distpath "$$BUILD/ce-dist" --workpath "$$BUILD/ce-pyinstaller" "$$ROOT/$(CE_SPEC)"
+install -m 0755 "$$BUILD/ce-dist/cycle-estimation" "$$STAGE/tools/cycle-estimation"
+
+# Freeze the GUI, embedding the staging tree as its framework/ payload.
+REPO_ROOT="$$ROOT" RELEASE_STAGE="$$STAGE" "$$VENV/bin/pyinstaller" --clean --noconfirm --distpath "$$ROOT/$(DIST_DIR)" --workpath "$$BUILD/pyinstaller" "$$ROOT/$(GUI_SPEC)"
 endef
 export BUNDLE_RECIPE
 

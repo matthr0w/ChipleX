@@ -2,6 +2,8 @@ import os
 import sys
 from pathlib import Path
 
+EXIT_SKIPPED = 2
+
 # RISC-V Compiler
 RISCV_COMPILER = "riscv64-unknown-elf-g++"
 RISCV_COMPILER_FLAGS = ["-O2"]

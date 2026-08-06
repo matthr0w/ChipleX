@@ -15,15 +15,35 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 from .project import Project, is_frozen
 
 
+class EstimationStatus(Enum):
+    """Outcome of running the estimator, keyed by its process exit code.
+
+    SKIPPED mirrors EXIT_SKIPPED in tools/cycle_estimation/constants.py.
+    """
+
+    SUCCESS = 0
+    FAILED = 1
+    SKIPPED = 2
+
+    @classmethod
+    def from_exit_code(cls, code: int) -> "EstimationStatus":
+        """Map a process exit code to a status; unknown codes are failures."""
+        try:
+            return cls(code)
+        except ValueError:
+            return cls.FAILED
+
+
 @dataclass
 class CycleResult:
-    status: str  # "ran" | "skipped" | "failed"
+    status: EstimationStatus
     log: str
 
 
@@ -42,14 +62,14 @@ def run_cycle_estimation(
     if is_frozen():
         exe = project.root / "tools" / "cycle-estimation"
         if not exe.is_file():
-            return CycleResult("skipped", f"Cycle estimation tool not found: {exe}")
+            return CycleResult(EstimationStatus.SKIPPED, f"Cycle estimation tool not found: {exe}")
         command = [str(exe)]
         cwd = str(exe.parent)
     else:
         tool_dir = project.root / "tools" / "cycle_estimation"
         main_py = tool_dir / "main.py"
         if not main_py.is_file():
-            return CycleResult("skipped", f"Cycle estimation tool not found: {main_py}")
+            return CycleResult(EstimationStatus.SKIPPED, f"Cycle estimation tool not found: {main_py}")
         command = [sys.executable, str(main_py)]
         cwd = str(tool_dir)
 
@@ -67,13 +87,7 @@ def run_cycle_estimation(
             capture_output=True, text=True, timeout=timeout_s,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
-        return CycleResult("failed", str(exc))
+        return CycleResult(EstimationStatus.FAILED, str(exc))
 
     log = (proc.stdout or "") + (proc.stderr or "")
-    if proc.returncode != 0:
-        return CycleResult("failed", log)
-    # The estimator exits 0 when it skips for a missing tool and reports this in
-    # its output; detect that marker to distinguish a skip from a real run.
-    if "Skipping cycle estimation" in log:
-        return CycleResult("skipped", log)
-    return CycleResult("ran", log)
+    return CycleResult(EstimationStatus.from_exit_code(proc.returncode), log)

@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox,
                                QProgressBar, QPushButton, QSpinBox, QTabWidget,
                                QVBoxLayout, QWidget)
 
+from ..cycle_estimation import EstimationStatus
 from ..project import Project
 from ..runner import RunResult
 from .results_tab import ResultsTab
@@ -155,7 +156,7 @@ class MainWindow(QMainWindow):
         self._done += 1
         self._progress.setValue(self._done)
         if result.ok:
-            status = "WARNING" if result.estimation_status != "ran" else "PASS"
+            status = "WARNING" if result.estimation_status != EstimationStatus.SUCCESS else "PASS"
         elif result.cancelled:
             status = "CANCELLED"
         else:
@@ -172,7 +173,7 @@ class MainWindow(QMainWindow):
         # a WARNING (estimation skipped) or FAIL keeps the Runs tab in view so
         # the status column draws attention to it.
         all_pass = bool(results) and all(
-            r.ok and r.estimation_status == "ran" for r in results
+            r.ok and r.estimation_status == EstimationStatus.SUCCESS for r in results
         )
         if all_pass:
             self._tabs.setCurrentWidget(self._results_tab)

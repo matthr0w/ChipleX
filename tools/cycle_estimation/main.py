@@ -3,10 +3,10 @@ import re
 import shutil
 import subprocess
 import sys
-from ce_logging import log_error, log_info, log_warn
 from pathlib import Path
 from typing import Dict, List
 
+from ce_logging import log_error, log_info, log_warn
 from classes import *
 from constants import *
 from utils import *
@@ -212,7 +212,7 @@ class CycleEstimator:
                 f"Workload compiler '{compiler}' for model '{execution.model}' "
                 f"not found on PATH. Skipping cycle estimation."
             )
-            sys.exit(0)
+            sys.exit(EXIT_SKIPPED)
 
         gem5_home = resolve_gem5_home()
         if not gem5_home or not gem5_home.exists():
@@ -394,10 +394,10 @@ def main():
     # workload (from its model), and llvm-mca only when a speedup region exists.
     if shutil.which(GEM5_BINARY) is None and not Path(GEM5_BINARY).exists():
         log_warn(f"gem5 binary '{GEM5_BINARY}' not found (set GEM5_BIN). Skipping cycle estimation.")
-        sys.exit(0)
+        sys.exit(EXIT_SKIPPED)
     if not resolve_gem5_home() or not resolve_gem5_home().exists():
         log_warn("gem5 source tree not found (set GEM5_HOME). Skipping cycle estimation.")
-        sys.exit(0)
+        sys.exit(EXIT_SKIPPED)
 
     cycle_estimator = CycleEstimator()
     cycle_estimator.run()

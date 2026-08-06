@@ -21,7 +21,7 @@ from threading import Event, Thread
 from typing import Callable, Dict, List, Optional, TextIO
 
 from . import stats
-from .cycle_estimation import run_cycle_estimation
+from .cycle_estimation import EstimationStatus, run_cycle_estimation
 from .project import Project
 from .runspec import RunSpec
 from .setup_builder import build_setup_if_needed
@@ -44,7 +44,7 @@ class RunResult:
     stats_path: Optional[Path] = None
     error: Optional[str] = None
     cancelled: bool = False
-    estimation_status: str = "ran"  # "ran" | "skipped" | "failed"
+    estimation_status: EstimationStatus = EstimationStatus.SUCCESS
 
 
 class Runner:
@@ -151,7 +151,7 @@ class Runner:
             )
             result.estimation_status = estimation.status
             self._emit_raw(spec, on_output, log_file, estimation.log)
-            if estimation.status == "ran":
+            if estimation.status == EstimationStatus.SUCCESS:
                 self._write_back_estimate(spec, sandbox)
 
             self._emit(spec, on_output, log_file, "Simulation")
