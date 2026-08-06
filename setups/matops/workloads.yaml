@@ -1,13 +1,17 @@
 workloads:
   add:
-    cycles_count: 2225
-    source_hash: eb00beb5626161c7b15b19a1cf05933d2eefa64b
+    chiplet0.core0:
+      cycles_count: 658
+      input_hash: f43a919de311482954e7c24af53db44fe086db20
   multiply:
-    cycles_count: 2225
-    source_hash: 4cef6d749c69cca8d1ac82fd0912c0ce2edd1f6c
+    chiplet1.core0:
+      cycles_count: 657
+      input_hash: 9050426314697fc125fe29233c06a91ce8bcf137
   subtract:
-    cycles_count: 2225
-    source_hash: 64d128c1318db70ea07e4847d9566f41e64230dd
+    chiplet3.core0:
+      cycles_count: 658
+      input_hash: ba74ba71e763ed7ecf94ad3c178fe59079b55cdf
   transpose:
-    cycles_count: 5498
-    source_hash: cdfc377ee8b51e83b8a9d81509ba1919773fd4e6
+    chiplet2.core0:
+      cycles_count: 1717
+      input_hash: 264af02aa643612893b13f5b28661ba8d11a5575

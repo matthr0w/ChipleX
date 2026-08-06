@@ -1,4 +1,14 @@
 workloads:
   matmul:
-    cycles_count: 759
-    source_hash: 5c79006d6affc055d7791cfbe8541d8134288150
+    chiplet0.core0:
+      cycles_count: 46
+      input_hash: e5898d55a79a506e3daf691640fa2947cf6ade19
+    chiplet1.core0:
+      cycles_count: 46
+      input_hash: e5898d55a79a506e3daf691640fa2947cf6ade19
+    chiplet2.core0:
+      cycles_count: 46
+      input_hash: e5898d55a79a506e3daf691640fa2947cf6ade19
+    chiplet3.core0:
+      cycles_count: 46
+      input_hash: e5898d55a79a506e3daf691640fa2947cf6ade19
