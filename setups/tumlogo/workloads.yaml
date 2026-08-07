@@ -2,8 +2,8 @@ workloads:
   crop:
     chiplet0.core0:
       cycles_count: 415644
-      input_hash: 7f11ba6661dd40b74a0cde388b4cb2e4964a5f0e
+      input_hash: 6207ef80ac1d9e252e2ae4e24cf2cac9eb7ede19
   invert:
     chiplet1.core0:
       cycles_count: 540950
-      input_hash: 76499ed152b69966cbf6ef5cead0969c298f5acc
+      input_hash: e7b4b6beb2ec6aaeb440b239ab05c4fa9e506d01
