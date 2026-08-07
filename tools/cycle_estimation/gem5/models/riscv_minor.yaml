@@ -13,4 +13,10 @@ params:
   l1d-size: 32kB
   l1i-assoc: 2
   l1d-assoc: 2
+  l1i-latency: 2
+  l1d-latency: 2
+  l1i-mshrs: 4
+  l1d-mshrs: 4
   cacheline: 64
+  dcache-write-allocate: 1
+  bus-latency: -1
