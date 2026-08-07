@@ -1,7 +1,8 @@
 cores:
   num: 1
   clk_cycle: 1 # ns, GEM5
-  irq_delay: 2 # ns
+  irq_hw_delay: 2 # ns
+  irq_sw_delay: 100 # cycles
 memory:
   size: 512 # KB
   clk_cycle: 3 # ns, GEM5

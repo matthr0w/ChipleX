@@ -13,7 +13,8 @@ Core::Core(sc_module_name name, const std::string &chiplet_name, unsigned chiple
       axi_width(chiplet_config.node["axi"]["width"].as<unsigned>()),
       cycles(cycles),
       clk_cycle(chiplet_config.node["cores"]["clk_cycle"].as<unsigned>(), SC_NS),
-      irq_delay(chiplet_config.node["cores"]["irq_delay"].as<unsigned>(), SC_NS),
+      irq_hw_delay(chiplet_config.node["cores"]["irq_hw_delay"].as<unsigned>(), SC_NS),
+      irq_sw_delay(chiplet_config.node["cores"]["irq_sw_delay"].as<unsigned>()),
       isocket("isocket", *this, &Core::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4, axi_width) {
 	irq_sockets = new simple_target_socket_tagged<Core>[num_irqs];
 	for (unsigned i = 0; i < num_irqs; ++i) {
@@ -57,6 +58,8 @@ void Core::interrupt_thread() {
 			irq_queue.pop_front();
 
 			auto *irq = reinterpret_cast<IRQ *>(transaction->get_data_ptr());
+
+			wait_cycles(irq_sw_delay);
 
 			if (interrupt_fn) {
 				interrupt_fn(*this, *irq);

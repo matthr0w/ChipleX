@@ -81,7 +81,7 @@
       "utilization_interconnect<->memory": { "percentage": 0.723412, "active_time_us": 0.325, "idle_time_us": 44.601 }
     },
     "chiplet2.core0": {
-      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 44.926 }
+      "utilization": { "percentage": 0.222588, "active_time_us": 0.1, "idle_time_us": 44.826 }
     },
     "chiplet2.dma_engine": {
       "utilization": { "percentage": 0.734541, "active_time_us": 0.33, "idle_time_us": 44.596 }
