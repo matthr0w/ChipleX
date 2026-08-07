@@ -50,7 +50,7 @@ def build_setup_if_needed(project: Project, name: str, timeout_s: int = 900) -> 
     hash_file = project.build_dir / f"{name}.buildhash"
     current = _source_hash(project, name)
     if lib.is_file() and hash_file.is_file() and hash_file.read_text().strip() == current:
-        return BuildResult(True, f"Setup '{name}' is up to date. Skipping compilation.")
+        return BuildResult(True, f"Setup '{name}' is up-to-date. Skipping compilation.")
 
     result = build_setup(project, name, timeout_s)
     if result.ok:
