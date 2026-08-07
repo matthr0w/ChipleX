@@ -70,8 +70,7 @@ enum Tag_e : uint8_t {
 	TagAW   = 1,
 	TagW    = 2,
 	TagAR   = 3,
-	TagR    = 4,
-	TagB    = 5
+	TagR    = 4
 };
 
 inline const char *to_string(Tag_e tag) {
@@ -86,8 +85,6 @@ inline const char *to_string(Tag_e tag) {
 		return "AR";
 	case TagR:
 		return "R";
-	case TagB:
-		return "B";
 	default:
 		return "?";
 	}
@@ -102,6 +99,10 @@ struct Payload_t {
 	int      credit = 0;
 	uint32_t id     = 0;
 	uint64_t user   = 0;
+
+	// Write response, carried alongside whatever hdr holds
+	bool     b_valid = false;
+	uint32_t b_id    = 0;
 
 	// Flow control
 	int link_id = 0;
@@ -158,10 +159,14 @@ inline std::string describe(const Payload_t &payload) {
 
 	// Responses overwrite their destination with the requester's chiplet, so
 	// both USER chiplet fields are equal and only the destination is meaningful.
-	if (payload.hdr == TagB || payload.hdr == TagR) {
+	if (payload.hdr == TagR || payload.b_valid) {
 		out << " ->C" << unsigned(user.dst_chiplet);
 	} else {
 		out << " C" << unsigned(user.src_chiplet) << "->C" << unsigned(user.dst_chiplet);
+	}
+
+	if (payload.b_valid) {
+		out << " +B ID:" << payload.b_id;
 	}
 
 	out << " link:" << payload.link_id << " credit:" << payload.credit;
@@ -179,6 +184,8 @@ struct PayloadWire_t {
 	int      credit;
 	uint32_t id;
 	uint64_t user;
+	bool     b_valid;
+	uint32_t b_id;
 
 	// Flow control
 	int link_id;

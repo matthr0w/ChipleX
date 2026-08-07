@@ -135,6 +135,8 @@ void SLDataLinkLayer::pack_payload(tlm_generic_payload &transaction, Payload_t &
 	wire.credit  = payload.credit;
 	wire.id      = payload.id;
 	wire.user    = payload.user;
+	wire.b_valid = payload.b_valid;
+	wire.b_id    = payload.b_id;
 	wire.link_id = payload.link_id;
 	wire.len     = payload.len;
 	wire.burst   = payload.burst;
@@ -161,6 +163,8 @@ Payload_t *SLDataLinkLayer::unpack_payload(tlm_generic_payload &transaction) {
 	payload->credit      = wire.credit;
 	payload->id          = wire.id;
 	payload->user        = wire.user;
+	payload->b_valid     = wire.b_valid;
+	payload->b_id        = wire.b_id;
 	payload->link_id     = wire.link_id;
 	payload->len         = wire.len;
 	payload->burst       = wire.burst;

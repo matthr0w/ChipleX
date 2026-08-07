@@ -169,24 +169,18 @@ void SLNetworkLayer::clk_posedge() {
 					}
 					break;
 
-				case TagB:
-					if (b_state == CLEAR) {
-						stream_fifo_in->read();
-						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
-						b_queue.push_back(pending_write_responses.front());
-						pending_write_responses.pop_front();
-
-						// Flow control
-						increment_credits(payload->link_id, payload->credit);
-					}
-					break;
-
 				default:
 					break;
 				}
 
 				// Freed once consumed (no longer at the FIFO front); forwarded payloads move to the out FIFO.
 				if (stream_fifo_in->peek() != payload) {
+					// The response rode along, so it is taken with the packet
+					// rather than gated on the B channel being free.
+					if (payload->b_valid) {
+						b_queue.push_back(pending_write_responses.front());
+						pending_write_responses.pop_front();
+					}
 					delete payload;
 				}
 			}
@@ -236,8 +230,6 @@ void SLNetworkLayer::committer_thread() {
 			if (!ar_gnt.read() && !aw_gnt.read() &&
 			    (is_r_valid(axi_out_trans.r_req_phase) || is_r_valid_last(axi_out_trans.r_req_phase))) {
 				r_gnt.write(true);
-			} else if (!ar_gnt.read() && !aw_gnt.read() && is_b_valid(axi_out_trans.w_req_phase)) {
-				b_gnt.write(true);
 			}
 
 			if (aw_gnt.read() && is_aw_ready(axi_in_trans.w_rsp_phase)) {
@@ -260,10 +252,6 @@ void SLNetworkLayer::committer_thread() {
 				if (is_r_valid(axi_out_trans.r_req_phase) || is_r_valid_last(axi_out_trans.r_req_phase)) {
 					grants.push_back([&]() { r_gnt.write(true); });
 				}
-				if (is_b_valid(axi_out_trans.w_req_phase)) {
-					grants.push_back([&]() { b_gnt.write(true); });
-				}
-
 				if (!grants.empty()) {
 					size_t idx = entropy % grants.size(); // Entropy prevents starvation
 					grants[idx]();
@@ -291,10 +279,6 @@ void SLNetworkLayer::committer_thread() {
 				if (is_w_valid(axi_in_trans.w_req_phase) || is_w_valid_last(axi_in_trans.w_req_phase)) {
 					grants.push_back([&]() { w_gnt.write(true); });
 				}
-				if (is_b_valid(axi_out_trans.w_req_phase)) {
-					grants.push_back([&]() { b_gnt.write(true); });
-				}
-
 				if (!grants.empty()) {
 					size_t idx = entropy % grants.size(); // Entropy prevents starvation
 					grants[idx]();
@@ -319,10 +303,6 @@ void SLNetworkLayer::committer_thread() {
 			if (is_r_valid(axi_out_trans.r_req_phase) || is_r_valid_last(axi_out_trans.r_req_phase)) {
 				grants.push_back([&]() { r_gnt.write(true); });
 			}
-			if (is_b_valid(axi_out_trans.w_req_phase)) {
-				grants.push_back([&]() { b_gnt.write(true); });
-			}
-
 			if (!grants.empty()) {
 				size_t idx = entropy % grants.size(); // Entropy prevents starvation
 				grants[idx]();
@@ -346,6 +326,10 @@ void SLNetworkLayer::committer_thread() {
 		default:
 			break;
 		}
+
+		// Always serve write responses: they ride alongside whatever else the
+		// packet carries, so they never compete for a grant.
+		b_gnt.write(is_b_valid(axi_out_trans.w_req_phase));
 	}
 }
 
@@ -370,7 +354,8 @@ void SLNetworkLayer::sender_thread() {
 		if (!payload_out) {
 			payload_out = new Payload_t(axi_width);
 		}
-		payload_out->hdr = TagIdle;
+		payload_out->hdr     = TagIdle;
+		payload_out->b_valid = false;
 
 		if (aw_gnt.read()) {
 			payload_out->hdr         = TagAW;
@@ -409,15 +394,21 @@ void SLNetworkLayer::sender_thread() {
 			UserSignals user  = UserSignals::decode(axi_out_trans.r_payload->user);
 			user.dst_chiplet  = user.src_chiplet;
 			payload_out->user = user.encode();
-		} else if (b_gnt.read()) {
-			payload_out->hdr   = TagB;
-			payload_out->id    = axi_out_trans.w_payload->id;
-			payload_out->len   = axi_out_trans.w_payload->get_beat_count() - 1;
-			payload_out->burst = axi_out_trans.w_payload->get_burst();
-			// Source becomes destination
-			UserSignals user  = UserSignals::decode(axi_out_trans.w_payload->user);
-			user.dst_chiplet  = user.src_chiplet;
-			payload_out->user = user.encode();
+		}
+
+		// A write response rides along, but only on a packet already heading for
+		// its requester. An idle packet adopts that destination.
+		if (b_gnt.read()) {
+			UserSignals b_user = UserSignals::decode(axi_out_trans.w_payload->user);
+			b_user.dst_chiplet = b_user.src_chiplet;
+
+			if (payload_out->hdr == TagIdle) {
+				payload_out->user = b_user.encode();
+			}
+			if (UserSignals::decode(payload_out->user).dst_chiplet == b_user.dst_chiplet) {
+				payload_out->b_valid = true;
+				payload_out->b_id    = axi_out_trans.w_payload->id;
+			}
 		}
 
 		// An interconnect with no links (e.g. an unconnected serial link) has no
@@ -432,7 +423,7 @@ void SLNetworkLayer::sender_thread() {
 		}
 
 		// Credit only packets
-		if (payload_out->hdr == TagIdle) {
+		if (payload_out->hdr == TagIdle && !payload_out->b_valid) {
 			UserSignals user;
 			user.src_chiplet = chiplet_id;
 			// Find the link with max credits_to_send
@@ -461,7 +452,7 @@ void SLNetworkLayer::sender_thread() {
 
 		payload_out->credit = credits_to_send[link_id];
 
-		bool is_valid = ((payload_out->hdr != TagIdle) || credit_to_send_force[link_id]) &&
+		bool is_valid = ((payload_out->hdr != TagIdle) || payload_out->b_valid || credit_to_send_force[link_id]) &&
 		                !(credits_out[link_id] == 0 || (credits_out[link_id] == 1 && credits_to_send[link_id] == 0));
 
 		axis_reg_valid_in.write(is_valid);
@@ -474,7 +465,7 @@ void SLNetworkLayer::sender_thread() {
 			if (w_gnt.read()) {
 				axi_in_trans.w_rsp_phase = ARM::AXI::W_READY;
 			}
-			if (b_gnt.read()) {
+			if (payload_out->b_valid) {
 				axi_out_trans.w_rsp_phase = ARM::AXI::B_READY;
 			}
 			if (ar_gnt.read()) {
