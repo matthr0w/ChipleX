@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <systemc>
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
@@ -16,6 +17,8 @@
 using namespace sc_core;
 using namespace tlm;
 using namespace tlm_utils;
+
+struct Memory;
 
 SC_MODULE(Core) {
   private:
@@ -54,6 +57,8 @@ SC_MODULE(Core) {
 	std::function<void(Core &)>              main_fn;
 	std::function<void(Core &, const IRQ &)> interrupt_fn;
 
+	Memory *local_memory = nullptr;
+
 	// -------------------------------------------------------
 	// Program API
 	// -------------------------------------------------------
@@ -63,6 +68,11 @@ SC_MODULE(Core) {
 
 	void wait_cycles(const std::string &name);
 	void wait_cycles(unsigned count);
+
+	// Direct local memory access with no bus traffic and no time cost, for data
+	// already accounted for in a wait_cycles estimate.
+	uint32_t local_write(const void *data, unsigned length, std::optional<uint32_t> address = std::nullopt);
+	void     local_read(void *data, unsigned length, uint32_t address);
 
 	// -------------------------------------------------------
 	// AXI API

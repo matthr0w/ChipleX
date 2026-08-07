@@ -147,6 +147,33 @@ handle->wait();  // suspends this process until the transfer finishes
 `wait()` returns immediately if the transfer already completed. For reads, the
 buffer passed in the request is filled once the handle completes.
 
+## Local memory access
+
+A core can read and write its own chiplet's memory directly, without generating
+bus traffic and without advancing simulated time:
+
+```cpp
+uint32_t local_write(const void *data, unsigned length, std::optional<uint32_t> address = std::nullopt);
+void     local_read(void *data, unsigned length, uint32_t address);
+```
+
+Use this for data whose access cost is already accounted for elsewhere - most
+often a compute kernel's accesses to its local working buffers, which the
+kernel's `wait_cycles` estimate already includes (see the memory-latency
+boundary in [CYCLE-ESTIMATION.md](CYCLE-ESTIMATION.md)). Staging that data with
+the AXI API instead would double-count the local access.
+
+```cpp
+uint32_t addr = core.local_write(input, length);  // dynamic address, returned
+core.wait_cycles("kernel");                       // kernel works on the buffer
+core.local_read(output, length, addr);            // retrieve results
+```
+
+Addressing and lifetime mirror the AXI path: `local_write` without an address
+allocates a free range and returns it, or writes to the address you pass;
+`local_read` frees the range it consumes. Both calls are synchronous and
+complete immediately - there is no handle to wait on.
+
 ## DMA API
 
 A core can move data directly between two modules without staging it in the

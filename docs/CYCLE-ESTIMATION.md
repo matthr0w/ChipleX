@@ -35,9 +35,13 @@ double-counted:
 
 So a workload's own loads and stores are gem5's job and must not be duplicated
 with API calls: `program.cpp` moves the data with API calls, then calls
-`wait_cycles` for the compute. Contention from simultaneous compute on multiple
-cores is not modeled (only contention on the explicit DMA/AXI traffic is); this
-is an acceptable trade-off and is common-mode across design points.
+`wait_cycles` for the compute. When it needs to stage a kernel's local buffers
+whose access cost is already in the `wait_cycles` estimate, it can use the free
+local memory access (`local_read`/`local_write`, see
+[PROGRAM-CODE.md](PROGRAM-CODE.md)) instead of a costed AXI transfer. Contention
+from simultaneous compute on multiple cores is not modeled (only contention on
+the explicit AXI/DMA traffic is); this is an acceptable trade-off and is
+common-mode across design points.
 
 ## The cycle-estimation workflow
 

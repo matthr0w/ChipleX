@@ -93,6 +93,7 @@ struct ComputeChiplet : ChipletBase {
 			// Bind the core's clock and manager socket directly to the bus.
 			cores[i]->clk.bind(chiplet_clocks.get("cores"));
 			cores[i]->isocket.bind(*bus.managers[chiplet_desc.get_mgr_port(core_name)]);
+			cores[i]->local_memory = &memory;
 
 			// Assign program code
 			auto it = chiplet_config.module_code.find(core_name);

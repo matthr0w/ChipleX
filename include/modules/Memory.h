@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <optional>
 #include <systemc>
 #include <tlm>
 #include <unordered_map>
@@ -38,6 +39,11 @@ SC_MODULE(Memory) {
 
 	Memory(sc_module_name name, ChipletConfig chiplet_config);
 	~Memory();
+
+	// Direct local access with no bus traffic and no time cost; addressing and
+	// range lifetime match the AXI path.
+	uint32_t local_write(const unsigned char *data, unsigned length, std::optional<uint32_t> address = std::nullopt);
+	void     local_read(unsigned char *data, unsigned length, uint32_t address);
 
   private:
 	// -------------------------------------------------------

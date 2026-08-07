@@ -2,6 +2,7 @@
 
 #include "modules/chiplets/ChipletRegistry.h"
 #include "modules/DMAEngine.h"
+#include "modules/Memory.h"
 
 Core::Core(sc_module_name name, const std::string &chiplet_name, unsigned chiplet_id, const std::string &core_name,
            unsigned core_id, ChipletConfig chiplet_config, const CyclesDB &cycles, unsigned num_irqs)
@@ -79,6 +80,16 @@ void Core::wait_cycles(unsigned count) {
 	stats.set_active(this->name());
 	wait(count * clk_cycle);
 	stats.set_idle(this->name());
+}
+
+uint32_t Core::local_write(const void *data, unsigned length, std::optional<uint32_t> address) {
+	LOG_ASSERT(local_memory != nullptr, chiplet_name << "." << core_name << " has no local memory");
+	return local_memory->local_write(static_cast<const unsigned char *>(data), length, address);
+}
+
+void Core::local_read(void *data, unsigned length, uint32_t address) {
+	LOG_ASSERT(local_memory != nullptr, chiplet_name << "." << core_name << " has no local memory");
+	local_memory->local_read(static_cast<unsigned char *>(data), length, address);
 }
 
 void Core::clk_posedge() {

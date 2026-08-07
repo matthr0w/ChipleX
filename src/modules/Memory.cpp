@@ -1,5 +1,7 @@
 #include "modules/Memory.h"
 
+#include <cstring>
+
 #include "logging.h"
 
 #include "common/AxiTrace.h"
@@ -37,6 +39,38 @@ void Memory::end_of_simulation() {
 	}
 	stats.set_value(this->name(), "size_bytes", size * 1024);
 	stats.set_value(this->name(), "used_bytes", used_bytes);
+}
+
+uint32_t Memory::local_write(const unsigned char *data, unsigned length, std::optional<uint32_t> address) {
+	// A fixed address is registered as-is; without one, allocate a free on-chip
+	// range (allocate_dynamic_address registers it).
+	uint32_t target = address ? *address : allocate_dynamic_address(true, length);
+	if (address) {
+		allocated_ranges[target] = length;
+	}
+
+	LOG_ASSERT(target + length <= mem.size(), "Local write @0x" << std::hex << target << std::dec << " of " << length
+	                                                            << " byte(s) exceeds the memory of " << this->name());
+
+	std::memcpy(&mem[target], data, length);
+	for (unsigned i = 0; i < length; i++) {
+		mem_bitmap[(target + i) / 8] |= (1 << ((target + i) % 8));
+	}
+
+	SC_LOG_DEBUG(this, "Local write: @0x" << std::hex << target << std::dec << " " << length << " byte(s)");
+	return target;
+}
+
+void Memory::local_read(unsigned char *data, unsigned length, uint32_t address) {
+	LOG_ASSERT(address + length <= mem.size(), "Local read @0x" << std::hex << address << std::dec << " of " << length
+	                                                            << " byte(s) exceeds the memory of " << this->name());
+
+	std::memcpy(data, &mem[address], length);
+
+	// Reading consumes the buffer, matching the AXI read path.
+	deallocate_dynamic_address(address, length);
+
+	SC_LOG_DEBUG(this, "Local read: @0x" << std::hex << address << std::dec << " " << length << " byte(s)");
 }
 
 void Memory::clk_posedge() {
