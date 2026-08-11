@@ -55,11 +55,28 @@ void SLNetworkLayer::clk_posedge() {
 
 		clear_axi_state();
 
+		// Release the subordinate of an answer that is on the link.
+		while (!b_ack_queue.empty()) {
+			ARM::AXI::Payload *answered = b_ack_queue.front();
+			b_ack_queue.pop_front();
+			send_irq(*answered);
+			ARM::AXI::Phase phase = ARM::AXI::B_READY;
+			axi_out.nb_transport_fw(*answered, phase);
+		}
+
 		if (axis_reg_valid_in.read() && axis_reg_ready_in.read()) {
 			// Respond on AXI slave port
 			send_axi_response(axi_in_trans, false);
 			// Respond on AXI master port
 			send_axi_response(axi_out_trans, true);
+
+			if (payload_out->b_valid) {
+				// The answer is on its way, so its write releases the port.
+				answered_write_src = UserSignals::decode(payload_out->user).dst_chiplet;
+				inbound_write_done = true;
+				b_ack_queue.push_back(b_out_queue.front());
+				b_out_queue.pop_front();
+			}
 
 			// Write payload to FIFO
 			stream_fifo_out->write(payload_out);
@@ -75,6 +92,8 @@ void SLNetworkLayer::clk_posedge() {
 
 			payload_out = nullptr;
 		}
+
+		advance_inbound();
 
 		// Unpacker
 		Payload_t *payload = stream_fifo_in->peek();
@@ -107,51 +126,78 @@ void SLNetworkLayer::clk_posedge() {
 					increment_credits(payload->link_id, payload->credit);
 				} break;
 
-				case TagAW:
-					if (aw_state == CLEAR) {
+				case TagAW: {
+					const uint8_t src = UserSignals::decode(payload->user).src_chiplet;
+
+					// A source that has to wait is buffered on its own, so it
+					// does not block the active source's beats behind it.
+					const bool takes_port = (active_write_src < 0);
+					if (!takes_port || aw_state == CLEAR) {
 						stream_fifo_in->read();
 						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
-						payload_in =
+						auto *trans =
 						    ARM::AXI::Payload::new_payload(ARM::AXI::COMMAND_WRITE, payload->axi_ch.addr,
 						                                   get_axi_size(axi_width), payload->len, payload->burst);
-						payload_in->id   = payload->id;
-						payload_in->user = payload->user;
-						aw_queue.push_back(payload_in);
-						axi_out_trans.w_payload = payload_in;
+						trans->id           = payload->id;
+						trans->user         = payload->user;
+						inbound_writes[src] = {trans, 0};
+
+						if (takes_port) {
+							activate_inbound_write(src);
+						} else {
+							inbound_write_order.push_back(src);
+						}
 
 						// Flow control
 						increment_credits(payload->link_id, payload->credit);
 					}
-					break;
+				} break;
 
-				case TagW:
-					if (w_state == CLEAR) {
+				case TagW: {
+					const uint8_t src = UserSignals::decode(payload->user).src_chiplet;
+					auto          it  = inbound_writes.find(src);
+					if (it == inbound_writes.end()) {
+						SC_LOG_ERROR(this, "Write data of chiplet " << unsigned(src) << " without a write address");
+						break;
+					}
+
+					const bool has_port = (active_write_src == static_cast<int>(src));
+					if (!has_port || w_state == CLEAR) {
 						stream_fifo_in->read();
 						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
-						payload_in->write_in_beat(payload->axi_ch.data.data());
-						w_queue.push_back(payload_in);
+						it->second.payload->write_in_beat(payload->axi_ch.data.data());
+						if (has_port) {
+							w_queue.push_back(it->second.payload);
+						} else {
+							it->second.beats_buffered++;
+						}
 
 						// Flow control
 						increment_credits(payload->link_id, payload->credit);
 					}
-					break;
+				} break;
 
-				case TagAR:
-					if (ar_state == CLEAR) {
+				case TagAR: {
+					// One packet, so it only waits for the port.
+					const bool takes_port = !read_active;
+					if (!takes_port || ar_state == CLEAR) {
 						stream_fifo_in->read();
 						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
-						payload_in =
+						auto *trans =
 						    ARM::AXI::Payload::new_payload(ARM::AXI::COMMAND_READ, payload->axi_ch.addr,
 						                                   get_axi_size(axi_width), payload->len, payload->burst);
-						payload_in->id   = payload->id;
-						payload_in->user = payload->user;
-						ar_queue.push_back(payload_in);
-						axi_out_trans.r_payload = payload_in;
+						trans->id   = payload->id;
+						trans->user = payload->user;
+						inbound_reads.push_back(trans);
+
+						if (takes_port) {
+							activate_inbound_read();
+						}
 
 						// Flow control
 						increment_credits(payload->link_id, payload->credit);
 					}
-					break;
+				} break;
 
 				case TagR:
 					if (r_state == CLEAR) {
@@ -329,7 +375,7 @@ void SLNetworkLayer::committer_thread() {
 
 		// Always serve write responses: they ride alongside whatever else the
 		// packet carries, so they never compete for a grant.
-		b_gnt.write(is_b_valid(axi_out_trans.w_req_phase));
+		b_gnt.write(!b_out_queue.empty());
 	}
 }
 
@@ -398,8 +444,8 @@ void SLNetworkLayer::sender_thread() {
 
 		// A write response rides along, but only on a packet already heading for
 		// its requester. An idle packet adopts that destination.
-		if (b_gnt.read()) {
-			UserSignals b_user = UserSignals::decode(axi_out_trans.w_payload->user);
+		if (b_gnt.read() && !b_out_queue.empty()) {
+			UserSignals b_user = UserSignals::decode(b_out_queue.front()->user);
 			b_user.dst_chiplet = b_user.src_chiplet;
 
 			if (payload_out->hdr == TagIdle) {
@@ -407,7 +453,7 @@ void SLNetworkLayer::sender_thread() {
 			}
 			if (UserSignals::decode(payload_out->user).dst_chiplet == b_user.dst_chiplet) {
 				payload_out->b_valid = true;
-				payload_out->b_id    = axi_out_trans.w_payload->id;
+				payload_out->b_id    = b_out_queue.front()->id;
 			}
 		}
 
@@ -464,9 +510,6 @@ void SLNetworkLayer::sender_thread() {
 			}
 			if (w_gnt.read()) {
 				axi_in_trans.w_rsp_phase = ARM::AXI::W_READY;
-			}
-			if (payload_out->b_valid) {
-				axi_out_trans.w_rsp_phase = ARM::AXI::B_READY;
 			}
 			if (ar_gnt.read()) {
 				axi_in_trans.r_rsp_phase = ARM::AXI::AR_READY;
@@ -554,8 +597,8 @@ tlm_sync_enum SLNetworkLayer::nb_transport_bw(ARM::AXI::Payload &payload, ARM::A
 		axi_out_trans.w_req_phase = phase;
 		break;
 	case ARM::AXI::B_VALID:
-		axi_out_trans.w_rsp_sent  = false;
-		axi_out_trans.w_req_phase = phase;
+		axi_out_trans.w_rsp_sent = false;
+		b_out_queue.push_back(&payload);
 		break;
 	default:
 		SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: " << get_axi_phase_string(phase));
@@ -688,16 +731,13 @@ void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
 			payload = trans.w_payload;
 			trans.w_beat_count =
 			    (trans.w_beat_count + 1 == trans.w_payload->get_beat_count()) ? 0 : trans.w_beat_count + 1;
-		} else if (is_master && is_b_ready(phase)) {
-			payload = trans.w_payload;
-			// We also send the IRQ here
-			send_irq(*payload);
 		} else if (is_ar_ready(phase)) {
 			payload = trans.r_payload;
 		} else if (is_master && is_r_ready(phase)) {
 			payload = trans.r_payload;
 			trans.r_beat_count =
 			    (trans.r_beat_count + 1 == trans.r_payload->get_beat_count()) ? 0 : trans.r_beat_count + 1;
+			inbound_read_done = (trans.r_beat_count == 0);
 		}
 
 		if (!payload) {
@@ -718,6 +758,59 @@ void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
 	send(trans.w_rsp_sent, trans.w_rsp_phase, trans.w_req_phase);
 	// Advance read side
 	send(trans.r_rsp_sent, trans.r_rsp_phase, trans.r_req_phase);
+}
+
+void SLNetworkLayer::activate_inbound_write(uint8_t src_chiplet) {
+	auto it = inbound_writes.find(src_chiplet);
+	if (it == inbound_writes.end()) {
+		return;
+	}
+
+	active_write_src        = src_chiplet;
+	axi_out_trans.w_payload = it->second.payload;
+	aw_queue.push_back(it->second.payload);
+
+	// Beats buffered while the port was busy are handed over now.
+	for (unsigned beat = 0; beat < it->second.beats_buffered; ++beat) {
+		w_queue.push_back(it->second.payload);
+	}
+	it->second.beats_buffered = 0;
+}
+
+void SLNetworkLayer::activate_inbound_read() {
+	if (inbound_reads.empty()) {
+		return;
+	}
+
+	read_active             = true;
+	axi_out_trans.r_payload = inbound_reads.front();
+	ar_queue.push_back(inbound_reads.front());
+}
+
+void SLNetworkLayer::advance_inbound() {
+	if (inbound_write_done) {
+		inbound_write_done = false;
+		inbound_writes.erase(answered_write_src);
+
+		if (active_write_src == static_cast<int>(answered_write_src)) {
+			active_write_src = -1;
+		}
+
+		if (active_write_src < 0 && !inbound_write_order.empty()) {
+			const uint8_t next = inbound_write_order.front();
+			inbound_write_order.pop_front();
+			activate_inbound_write(next);
+		}
+	}
+
+	if (inbound_read_done) {
+		inbound_read_done = false;
+		read_active       = false;
+		if (!inbound_reads.empty()) {
+			inbound_reads.pop_front();
+		}
+		activate_inbound_read();
+	}
 }
 
 void SLNetworkLayer::send_irq(ARM::AXI::Payload &payload) {

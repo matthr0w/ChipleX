@@ -1,5 +1,7 @@
 #pragma once
 
+#include <deque>
+#include <map>
 #include <systemc>
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
@@ -15,124 +17,153 @@ using namespace tlm_utils;
 
 SC_MODULE(SLNetworkLayer) {
   private:
-    // -------------------------------------------------------
-    // Config
-    // -------------------------------------------------------
-    // InterconnectBase
-    const unsigned chiplet_id;
-    const unsigned interconnect_id;
-    const unsigned num_links;
-    const unsigned num_cores;
-    const unsigned axi_width;
-    // YAML
-    const unsigned num_credits;
-    const unsigned force_send_thresh;
+	// -------------------------------------------------------
+	// Config
+	// -------------------------------------------------------
+	// InterconnectBase
+	const unsigned chiplet_id;
+	const unsigned interconnect_id;
+	const unsigned num_links;
+	const unsigned num_cores;
+	const unsigned axi_width;
+	// YAML
+	const unsigned num_credits;
+	const unsigned force_send_thresh;
 
   public:
-    // -------------------------------------------------------
-    // Signals
-    // -------------------------------------------------------
-    sc_in<bool> clk;
+	// -------------------------------------------------------
+	// Signals
+	// -------------------------------------------------------
+	sc_in<bool> clk;
 
-    // -------------------------------------------------------
-    // Ports
-    // -------------------------------------------------------
-    sc_port<FifoIf> stream_fifo_in;
-    sc_port<FifoIf> stream_fifo_out;
+	// -------------------------------------------------------
+	// Ports
+	// -------------------------------------------------------
+	sc_port<FifoIf> stream_fifo_in;
+	sc_port<FifoIf> stream_fifo_out;
 
-    // -------------------------------------------------------
-    // Sockets
-    // -------------------------------------------------------
-    // AXI slave port
-    ARM::AXI::SimpleTargetSocket<SLNetworkLayer> axi_in;
-    // AXI master port
-    ARM::AXI::SimpleInitiatorSocket<SLNetworkLayer> axi_out;
-    // IRQ sockets
-    simple_initiator_socket_tagged<SLNetworkLayer> *irq_sockets;
+	// -------------------------------------------------------
+	// Sockets
+	// -------------------------------------------------------
+	// AXI slave port
+	ARM::AXI::SimpleTargetSocket<SLNetworkLayer> axi_in;
+	// AXI master port
+	ARM::AXI::SimpleInitiatorSocket<SLNetworkLayer> axi_out;
+	// IRQ sockets
+	simple_initiator_socket_tagged<SLNetworkLayer> *irq_sockets;
 
-    SLNetworkLayer(sc_module_name name, unsigned chiplet_id, unsigned interconnect_id,
-                   InterconnectConfig interconnect_config, unsigned num_links, unsigned num_cores, unsigned axi_width);
-    ~SLNetworkLayer();
+	SLNetworkLayer(sc_module_name name, unsigned chiplet_id, unsigned interconnect_id,
+	               InterconnectConfig interconnect_config, unsigned num_links, unsigned num_cores, unsigned axi_width);
+	~SLNetworkLayer();
 
   private:
-    // -------------------------------------------------------
-    // Internal Declarations
-    // -------------------------------------------------------
-    enum ChannelState {
-        CLEAR,
-        REQ,
-        ACK
-    };
+	// -------------------------------------------------------
+	// Internal Declarations
+	// -------------------------------------------------------
+	enum ChannelState {
+		CLEAR,
+		REQ,
+		ACK
+	};
 
-    ChannelState aw_state = CLEAR;
-    ChannelState w_state  = CLEAR;
-    ChannelState b_state  = CLEAR;
-    ChannelState ar_state = CLEAR;
-    ChannelState r_state  = CLEAR;
+	ChannelState aw_state = CLEAR;
+	ChannelState w_state  = CLEAR;
+	ChannelState b_state  = CLEAR;
+	ChannelState ar_state = CLEAR;
+	ChannelState r_state  = CLEAR;
 
-    std::deque<ARM::AXI::Payload *> aw_queue;
-    std::deque<ARM::AXI::Payload *> w_queue;
-    std::deque<ARM::AXI::Payload *> b_queue;
-    std::deque<ARM::AXI::Payload *> ar_queue;
-    std::deque<ARM::AXI::Payload *> r_queue;
+	std::deque<ARM::AXI::Payload *> aw_queue;
+	std::deque<ARM::AXI::Payload *> w_queue;
+	std::deque<ARM::AXI::Payload *> b_queue;
+	std::deque<ARM::AXI::Payload *> ar_queue;
+	std::deque<ARM::AXI::Payload *> r_queue;
 
-    unsigned w_beat_count = 0;
-    unsigned r_beat_count = 0;
+	unsigned w_beat_count = 0;
+	unsigned r_beat_count = 0;
 
-    // Set once the last beat of a read response has been accepted by the local
-    // bus. A read cannot be tracked on the request channel the way a write is:
-    // its data returns over the link, not through axi_in.
-    bool r_response_done = false;
+	// Set once the last beat of a read response has been accepted by the local
+	// bus. A read cannot be tracked on the request channel the way a write is:
+	// its data returns over the link, not through axi_in.
+	bool r_response_done = false;
 
-    void clk_posedge();
+	void clk_posedge();
 
-    void committer_thread();
-    void sender_thread();
+	void committer_thread();
+	void sender_thread();
 
-    // -------------------------------------------------------
-    // Internal Signals
-    // -------------------------------------------------------
-    sc_signal<AxiTrans_t> axi_in_sig;
-    AxiTrans_t            axi_in_trans;
-    sc_signal<AxiTrans_t> axi_out_sig;
-    AxiTrans_t            axi_out_trans;
+	// -------------------------------------------------------
+	// Internal Signals
+	// -------------------------------------------------------
+	sc_signal<AxiTrans_t> axi_in_sig;
+	AxiTrans_t            axi_in_trans;
+	sc_signal<AxiTrans_t> axi_out_sig;
+	AxiTrans_t            axi_out_trans;
 
-    Payload_t         *payload_out = nullptr;
-    ARM::AXI::Payload *payload_in  = nullptr;
+	Payload_t *payload_out = nullptr;
 
-    std::deque<ARM::AXI::Payload *> pending_read_responses;
-    std::deque<ARM::AXI::Payload *> pending_write_responses;
+	// Inbound transactions are reassembled per originating chiplet: a stack
+	// with several links receives the packets of several sources interleaved.
+	struct InboundWrite {
+		ARM::AXI::Payload *payload = nullptr;
+		// Beats that arrived while another source held the local AXI port.
+		unsigned beats_buffered = 0;
+	};
 
-    sc_signal<Committer::State> committer_state_q, committer_state_d;
-    sc_signal<bool>             aw_gnt, w_gnt, b_gnt, ar_gnt, r_gnt;
-    sc_signal<bool>             axis_reg_valid_in, axis_reg_ready_in;
+	std::map<uint8_t, InboundWrite> inbound_writes;
+	std::deque<uint8_t>             inbound_write_order;
+	int                             active_write_src   = -1;
+	bool                            inbound_write_done = false;
+	uint8_t                         answered_write_src = 0;
 
-    std::vector<unsigned> credits_out;
-    std::vector<unsigned> credits_to_send;
-    std::vector<bool>     credit_to_send_force;
+	std::deque<ARM::AXI::Payload *> inbound_reads;
+	bool                            read_active       = false;
+	bool                            inbound_read_done = false;
 
-    unsigned entropy = 0;
+	// Answers of the local subordinate, queued rather than held in
+	// w_req_phase, which the next transaction of the port would overwrite.
+	std::deque<ARM::AXI::Payload *> b_out_queue;
+	// Answers already on the link, acknowledged in the next cycle.
+	std::deque<ARM::AXI::Payload *> b_ack_queue;
 
-    // -------------------------------------------------------
-    // Events
-    // -------------------------------------------------------
-    sc_event update_event;
+	std::deque<ARM::AXI::Payload *> pending_read_responses;
+	std::deque<ARM::AXI::Payload *> pending_write_responses;
 
-    // -------------------------------------------------------
-    // Transport Functions
-    // -------------------------------------------------------
-    tlm_sync_enum nb_transport_fw(ARM::AXI::Payload & payload, ARM::AXI::Phase & phase);
-    tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload, ARM::AXI::Phase & phase);
+	sc_signal<Committer::State> committer_state_q, committer_state_d;
+	sc_signal<bool>             aw_gnt, w_gnt, b_gnt, ar_gnt, r_gnt;
+	sc_signal<bool>             axis_reg_valid_in, axis_reg_ready_in;
 
-    // -------------------------------------------------------
-    // Helper Functions
-    // -------------------------------------------------------
-    void clear_axi_state();
-    void send_axi_beats();
-    void send_axi_response(AxiTrans_t & trans, bool is_master);
+	std::vector<unsigned> credits_out;
+	std::vector<unsigned> credits_to_send;
+	std::vector<bool>     credit_to_send_force;
 
-    void send_irq(ARM::AXI::Payload & payload);
+	unsigned entropy = 0;
 
-    void increment_credits(int link_id, unsigned credit);
-    void decrement_credits(int link_id);
+	// -------------------------------------------------------
+	// Events
+	// -------------------------------------------------------
+	sc_event update_event;
+
+	// -------------------------------------------------------
+	// Transport Functions
+	// -------------------------------------------------------
+	tlm_sync_enum nb_transport_fw(ARM::AXI::Payload & payload, ARM::AXI::Phase & phase);
+	tlm_sync_enum nb_transport_bw(ARM::AXI::Payload & payload, ARM::AXI::Phase & phase);
+
+	// -------------------------------------------------------
+	// Helper Functions
+	// -------------------------------------------------------
+	void clear_axi_state();
+	void send_axi_beats();
+	void send_axi_response(AxiTrans_t & trans, bool is_master);
+
+	// Give the local AXI port to an inbound transaction, and to the next one
+	// waiting once it is answered.
+	void activate_inbound_write(uint8_t src_chiplet);
+	void activate_inbound_read();
+	void advance_inbound();
+
+	void send_irq(ARM::AXI::Payload & payload);
+
+	void increment_credits(int link_id, unsigned credit);
+	void decrement_credits(int link_id);
 };
