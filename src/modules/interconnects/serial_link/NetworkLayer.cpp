@@ -56,9 +56,9 @@ void SLNetworkLayer::clk_posedge() {
 		clear_axi_state();
 
 		// Release the subordinate of an answer that is on the link.
-		while (!b_ack_queue.empty()) {
-			ARM::AXI::Payload *answered = b_ack_queue.front();
-			b_ack_queue.pop_front();
+		while (!inbound_b_ack.empty()) {
+			ARM::AXI::Payload *answered = inbound_b_ack.front();
+			inbound_b_ack.pop_front();
 			send_irq(*answered);
 			ARM::AXI::Phase phase = ARM::AXI::B_READY;
 			axi_out.nb_transport_fw(*answered, phase);
@@ -72,10 +72,10 @@ void SLNetworkLayer::clk_posedge() {
 
 			if (payload_out->b_valid) {
 				// The answer is on its way, so its write releases the port.
-				answered_write_src = UserSignals::decode(payload_out->user).dst_chiplet;
+				inbound_write_answered = UserSignals::decode(payload_out->user).dst_chiplet;
 				inbound_write_done = true;
-				b_ack_queue.push_back(b_out_queue.front());
-				b_out_queue.pop_front();
+				inbound_b_ack.push_back(inbound_b_out.front());
+				inbound_b_out.pop_front();
 			}
 
 			// Write payload to FIFO
@@ -131,7 +131,7 @@ void SLNetworkLayer::clk_posedge() {
 
 					// A source that has to wait is buffered on its own, so it
 					// does not block the active source's beats behind it.
-					const bool takes_port = (active_write_src < 0);
+					const bool takes_port = (inbound_write_src < 0);
 					if (!takes_port || aw_state == CLEAR) {
 						stream_fifo_in->read();
 						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
@@ -145,7 +145,7 @@ void SLNetworkLayer::clk_posedge() {
 						if (takes_port) {
 							activate_inbound_write(src);
 						} else {
-							inbound_write_order.push_back(src);
+							inbound_write_wait.push_back(src);
 						}
 
 						// Flow control
@@ -161,7 +161,7 @@ void SLNetworkLayer::clk_posedge() {
 						break;
 					}
 
-					const bool has_port = (active_write_src == static_cast<int>(src));
+					const bool has_port = (inbound_write_src == static_cast<int>(src));
 					if (!has_port || w_state == CLEAR) {
 						stream_fifo_in->read();
 						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
@@ -179,7 +179,7 @@ void SLNetworkLayer::clk_posedge() {
 
 				case TagAR: {
 					// One packet, so it only waits for the port.
-					const bool takes_port = !read_active;
+					const bool takes_port = !inbound_read_active;
 					if (!takes_port || ar_state == CLEAR) {
 						stream_fifo_in->read();
 						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
@@ -188,7 +188,7 @@ void SLNetworkLayer::clk_posedge() {
 						                                   get_axi_size(axi_width), payload->len, payload->burst);
 						trans->id   = payload->id;
 						trans->user = payload->user;
-						inbound_reads.push_back(trans);
+						inbound_read_wait.push_back(trans);
 
 						if (takes_port) {
 							activate_inbound_read();
@@ -233,6 +233,9 @@ void SLNetworkLayer::clk_posedge() {
 		}
 
 		send_axi_beats();
+
+		// Hand the request registers to the next waiting local manager.
+		advance_outbound();
 
 		// Flow control
 		for (size_t i = 0; i < credit_to_send_force.size(); ++i) {
@@ -375,7 +378,7 @@ void SLNetworkLayer::committer_thread() {
 
 		// Always serve write responses: they ride alongside whatever else the
 		// packet carries, so they never compete for a grant.
-		b_gnt.write(!b_out_queue.empty());
+		b_gnt.write(!inbound_b_out.empty());
 	}
 }
 
@@ -444,8 +447,8 @@ void SLNetworkLayer::sender_thread() {
 
 		// A write response rides along, but only on a packet already heading for
 		// its requester. An idle packet adopts that destination.
-		if (b_gnt.read() && !b_out_queue.empty()) {
-			UserSignals b_user = UserSignals::decode(b_out_queue.front()->user);
+		if (b_gnt.read() && !inbound_b_out.empty()) {
+			UserSignals b_user = UserSignals::decode(inbound_b_out.front()->user);
 			b_user.dst_chiplet = b_user.src_chiplet;
 
 			if (payload_out->hdr == TagIdle) {
@@ -453,7 +456,7 @@ void SLNetworkLayer::sender_thread() {
 			}
 			if (UserSignals::decode(payload_out->user).dst_chiplet == b_user.dst_chiplet) {
 				payload_out->b_valid = true;
-				payload_out->b_id    = b_out_queue.front()->id;
+				payload_out->b_id    = inbound_b_out.front()->id;
 			}
 		}
 
@@ -533,18 +536,18 @@ void SLNetworkLayer::sender_thread() {
 tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload, ARM::AXI::Phase &phase) {
 	switch (phase) {
 	case ARM::AXI::AW_VALID:
-		if (committer_state_d.read() == Committer::AwPend || committer_state_d.read() == Committer::ArAwPend) {
+		if (outbound_write_busy()) {
+			outbound_write_wait.push_back(&payload);
 			return TLM_ACCEPTED;
 		}
-		axi_in_trans.w_payload    = &payload;
-		axi_in_trans.w_beat_count = 0;
-		axi_in_trans.w_req_phase  = phase;
-		axi_in_trans.w_rsp_sent   = false;
-		pending_write_responses.push_back(&payload);
-		payload.ref();
+		activate_outbound_write(payload);
 		break;
 	case ARM::AXI::W_VALID:
 	case ARM::AXI::W_VALID_LAST:
+		if (axi_in_trans.w_payload != &payload) {
+			outbound_deferred_beats[&payload] = phase;
+			return TLM_ACCEPTED;
+		}
 		axi_in_trans.w_req_phase = phase;
 		axi_in_trans.w_rsp_sent  = false;
 		break;
@@ -552,19 +555,11 @@ tlm_sync_enum SLNetworkLayer::nb_transport_fw(ARM::AXI::Payload &payload, ARM::A
 		b_state = b_state == REQ ? ACK : CLEAR;
 		return TLM_ACCEPTED;
 	case ARM::AXI::AR_VALID:
-		if (committer_state_d.read() == Committer::ArPend || committer_state_d.read() == Committer::ArAwPend) {
+		if (outbound_read_busy()) {
+			outbound_read_wait.push_back(&payload);
 			return TLM_ACCEPTED;
 		}
-		axi_in_trans.r_payload    = &payload;
-		axi_in_trans.r_beat_count = 0;
-		axi_in_trans.r_req_phase  = phase;
-		axi_in_trans.r_rsp_sent   = false;
-		// Arm the completion flag for this read. Cleared here rather than on the
-		// committer's transition out of ArPend, which is combinational and may
-		// re-evaluate within a cycle.
-		r_response_done = false;
-		pending_read_responses.push_back(&payload);
-		payload.ref();
+		activate_outbound_read(payload);
 		break;
 	case ARM::AXI::R_READY:
 		r_state = r_state == REQ ? ACK : CLEAR;
@@ -598,7 +593,7 @@ tlm_sync_enum SLNetworkLayer::nb_transport_bw(ARM::AXI::Payload &payload, ARM::A
 		break;
 	case ARM::AXI::B_VALID:
 		axi_out_trans.w_rsp_sent = false;
-		b_out_queue.push_back(&payload);
+		inbound_b_out.push_back(&payload);
 		break;
 	default:
 		SC_LOG_ERROR(this, "AXI TLM Protocol: Unexpected phase: " << get_axi_phase_string(phase));
@@ -610,6 +605,66 @@ tlm_sync_enum SLNetworkLayer::nb_transport_bw(ARM::AXI::Payload &payload, ARM::A
 // -------------------------------------------------------
 // Helper Functions
 // -------------------------------------------------------
+bool SLNetworkLayer::outbound_write_busy() {
+	const Committer::State state = committer_state_d.read();
+	return state == Committer::AwPend || state == Committer::ArAwPend || is_aw_valid(axi_in_trans.w_req_phase);
+}
+
+bool SLNetworkLayer::outbound_read_busy() {
+	const Committer::State state = committer_state_d.read();
+	return state == Committer::ArPend || state == Committer::ArAwPend || is_ar_valid(axi_in_trans.r_req_phase);
+}
+
+bool SLNetworkLayer::outbound_write_idle() {
+	return !is_aw_valid(axi_in_trans.w_req_phase) && !is_w_valid(axi_in_trans.w_req_phase) &&
+	       !is_w_valid_last(axi_in_trans.w_req_phase);
+}
+
+void SLNetworkLayer::activate_outbound_write(ARM::AXI::Payload &payload) {
+	axi_in_trans.w_payload    = &payload;
+	axi_in_trans.w_beat_count = 0;
+	axi_in_trans.w_req_phase  = ARM::AXI::AW_VALID;
+	axi_in_trans.w_rsp_sent   = false;
+	pending_write_responses.push_back(&payload);
+	payload.ref();
+}
+
+void SLNetworkLayer::activate_outbound_read(ARM::AXI::Payload &payload) {
+	axi_in_trans.r_payload    = &payload;
+	axi_in_trans.r_beat_count = 0;
+	axi_in_trans.r_req_phase  = ARM::AXI::AR_VALID;
+	axi_in_trans.r_rsp_sent   = false;
+	// Arm the completion flag for this read. Cleared here rather than on the
+	// committer's transition out of ArPend, which is combinational and may
+	// re-evaluate within a cycle.
+	r_response_done = false;
+	pending_read_responses.push_back(&payload);
+	payload.ref();
+}
+
+void SLNetworkLayer::advance_outbound() {
+	if (!outbound_write_wait.empty() && !outbound_write_busy()) {
+		activate_outbound_write(*outbound_write_wait.front());
+		outbound_write_wait.pop_front();
+	}
+
+	if (!outbound_read_wait.empty() && !outbound_read_busy()) {
+		activate_outbound_read(*outbound_read_wait.front());
+		outbound_read_wait.pop_front();
+	}
+
+	// Present a beat that arrived before its request was installed, once the
+	// write channel of that request is free.
+	if (axi_in_trans.w_payload && outbound_write_idle()) {
+		auto it = outbound_deferred_beats.find(axi_in_trans.w_payload);
+		if (it != outbound_deferred_beats.end()) {
+			axi_in_trans.w_req_phase = it->second;
+			axi_in_trans.w_rsp_sent  = false;
+			outbound_deferred_beats.erase(it);
+		}
+	}
+}
+
 void SLNetworkLayer::clear_axi_state() {
 	if (aw_state == ACK) {
 		aw_state = CLEAR;
@@ -766,7 +821,7 @@ void SLNetworkLayer::activate_inbound_write(uint8_t src_chiplet) {
 		return;
 	}
 
-	active_write_src        = src_chiplet;
+	inbound_write_src        = src_chiplet;
 	axi_out_trans.w_payload = it->second.payload;
 	aw_queue.push_back(it->second.payload);
 
@@ -778,36 +833,36 @@ void SLNetworkLayer::activate_inbound_write(uint8_t src_chiplet) {
 }
 
 void SLNetworkLayer::activate_inbound_read() {
-	if (inbound_reads.empty()) {
+	if (inbound_read_wait.empty()) {
 		return;
 	}
 
-	read_active             = true;
-	axi_out_trans.r_payload = inbound_reads.front();
-	ar_queue.push_back(inbound_reads.front());
+	inbound_read_active             = true;
+	axi_out_trans.r_payload = inbound_read_wait.front();
+	ar_queue.push_back(inbound_read_wait.front());
 }
 
 void SLNetworkLayer::advance_inbound() {
 	if (inbound_write_done) {
 		inbound_write_done = false;
-		inbound_writes.erase(answered_write_src);
+		inbound_writes.erase(inbound_write_answered);
 
-		if (active_write_src == static_cast<int>(answered_write_src)) {
-			active_write_src = -1;
+		if (inbound_write_src == static_cast<int>(inbound_write_answered)) {
+			inbound_write_src = -1;
 		}
 
-		if (active_write_src < 0 && !inbound_write_order.empty()) {
-			const uint8_t next = inbound_write_order.front();
-			inbound_write_order.pop_front();
+		if (inbound_write_src < 0 && !inbound_write_wait.empty()) {
+			const uint8_t next = inbound_write_wait.front();
+			inbound_write_wait.pop_front();
 			activate_inbound_write(next);
 		}
 	}
 
 	if (inbound_read_done) {
 		inbound_read_done = false;
-		read_active       = false;
-		if (!inbound_reads.empty()) {
-			inbound_reads.pop_front();
+		inbound_read_active       = false;
+		if (!inbound_read_wait.empty()) {
+			inbound_read_wait.pop_front();
 		}
 		activate_inbound_read();
 	}
