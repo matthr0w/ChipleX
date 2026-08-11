@@ -174,6 +174,18 @@ General Public License, version 2 or later, with an exception that permits the
 resulting bundled application to be distributed under terms of the user's
 choosing. See https://github.com/pyinstaller/pyinstaller/blob/develop/COPYING.txt
 
+# Acknowledgements
+
+## Serial-link interconnect model
+
+The serial-link interconnect (`include/modules/interconnects/serial_link/`,
+`src/modules/interconnects/serial_link/`) is an original SystemC implementation
+whose architecture is inspired by the open-source serial_link project from the
+PULP platform (https://github.com/pulp-platform/serial_link), distributed under
+the Solderpad Hardware License, version 0.51. No source from that project is
+copied into this repository; only the architecture and protocol concepts are
+reused. See the NOTICE.md in the serial-link directory for details.
+
 # External tools (used at runtime, not distributed with ChipleX)
 
 The cycle-estimation flow invokes the following tools if they are present on the
