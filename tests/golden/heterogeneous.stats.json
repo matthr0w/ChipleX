@@ -60,7 +60,7 @@
       "transmission_count_out_link1": 408,
       "transmission_duration_out_us_link0": 4.56028,
       "transmission_duration_out_us_link1": 13.058,
-      "utilization": { "percentage": 10.0674, "active_time_us": 47.044, "idle_time_us": 420.247 }
+      "utilization": { "percentage": 10.5955, "active_time_us": 49.804, "idle_time_us": 420.247 }
     },
     "chiplet1.spi": {
       "efficiency_pJ_bit_link0": 10,
@@ -129,7 +129,7 @@
       "transmission_count_out_link1": 120,
       "transmission_duration_out_us_link0": 30.9619,
       "transmission_duration_out_us_link1": 3.8406,
-      "utilization": { "percentage": 10.7865, "active_time_us": 50.4042, "idle_time_us": 416.887 }
+      "utilization": { "percentage": 11.3103, "active_time_us": 53.1642, "idle_time_us": 416.887 }
     },
     "chiplet2.spi": {
       "efficiency_pJ_bit_link0": 10,

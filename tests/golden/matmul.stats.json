@@ -218,7 +218,7 @@
       "tx_buffer_usage_link1": { "average_usage": 1.83932, "max_usage": 256 },
       "tx_buffer_usage_link2": { "average_usage": 1.67211, "max_usage": 256 },
       "tx_buffer_usage_link3": { "average_usage": 1.67211, "max_usage": 256 },
-      "utilization": { "percentage": 3.72941, "active_time_us": 0.05706, "idle_time_us": 1.47294 }
+      "utilization": { "percentage": 3.79229, "active_time_us": 0.05806, "idle_time_us": 1.47294 }
     },
     "fpga.memory": {
       "size_bytes": 524288,

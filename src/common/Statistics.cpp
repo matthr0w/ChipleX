@@ -56,9 +56,9 @@ void StatUtilization::set_active() {
 	if (!active) {
 		idle_time_events += (now - last_change);
 		active            = true;
+		last_change       = now;
 	}
 	active_count++;
-	last_change = now;
 }
 
 void StatUtilization::set_idle() {

@@ -28,7 +28,7 @@
       "transmission_count_out_link1": 24,
       "transmission_duration_out_us_link0": 0.32005,
       "transmission_duration_out_us_link1": 0.76812,
-      "utilization": { "percentage": 10.1062, "active_time_us": 1.63226, "idle_time_us": 14.5187 }
+      "utilization": { "percentage": 12.6219, "active_time_us": 2.09726, "idle_time_us": 14.5187 }
     },
     "chiplet0.memory": {
       "size_bytes": 524288,
@@ -62,7 +62,7 @@
       "transmission_count_out_link1": 7,
       "transmission_duration_out_us_link0": 1.18418,
       "transmission_duration_out_us_link1": 0.224035,
-      "utilization": { "percentage": 10.1062, "active_time_us": 1.63226, "idle_time_us": 14.5187 }
+      "utilization": { "percentage": 12.6219, "active_time_us": 2.09726, "idle_time_us": 14.5187 }
     },
     "chiplet1.memory": {
       "size_bytes": 524288,
@@ -96,7 +96,7 @@
       "transmission_count_out_link1": 10,
       "transmission_duration_out_us_link0": 1.18418,
       "transmission_duration_out_us_link1": 0.32005,
-      "utilization": { "percentage": 11.9749, "active_time_us": 1.9203, "idle_time_us": 14.1157 }
+      "utilization": { "percentage": 15.0475, "active_time_us": 2.5003, "idle_time_us": 14.1157 }
     },
     "fpga.memory": {
       "size_bytes": 524288,

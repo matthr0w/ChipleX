@@ -62,7 +62,7 @@
       "transmission_duration_out_us_link1": 21.1203,
       "transmission_size_bits_link0": 32,
       "transmission_size_bits_link1": 32,
-      "utilization": { "percentage": 96.4744, "active_time_us": 42.5607, "idle_time_us": 1.55533 }
+      "utilization": { "percentage": 96.538, "active_time_us": 43.3707, "idle_time_us": 1.55533 }
     },
     "chiplet1.memory": {
       "size_bytes": 524288,
