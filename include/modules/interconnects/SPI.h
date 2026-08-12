@@ -20,163 +20,173 @@ using namespace tlm_utils;
 
 SC_MODULE(SPI), public InterconnectBase, public DMAForwardInterface {
   private:
-    void end_of_simulation() override;
+	void end_of_simulation() override;
 
   public:
-    // -------------------------------------------------------
-    // Signals
-    // -------------------------------------------------------
-    sc_in<bool> clk;
+	// -------------------------------------------------------
+	// Signals
+	// -------------------------------------------------------
+	sc_in<bool> clk;
 
-    // -------------------------------------------------------
-    // Sockets
-    // -------------------------------------------------------
-    ARM::AXI::SimpleTargetSocket<SPI>    axi_in;
-    ARM::AXI::SimpleInitiatorSocket<SPI> axi_out;
+	// -------------------------------------------------------
+	// Sockets
+	// -------------------------------------------------------
+	ARM::AXI::SimpleTargetSocket<SPI>    axi_in;
+	ARM::AXI::SimpleInitiatorSocket<SPI> axi_out;
 
-    simple_target_socket_tagged<SPI>    *links_in;
-    simple_initiator_socket_tagged<SPI> *links_out;
+	simple_target_socket_tagged<SPI>    *links_in;
+	simple_initiator_socket_tagged<SPI> *links_out;
 
-    simple_initiator_socket_tagged<SPI> *irq_sockets;
+	simple_initiator_socket_tagged<SPI> *irq_sockets;
 
-    SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config, unsigned interconnect_id,
-        InterconnectConfig interconnect_config, DMAEngine *dma_engine);
-    ~SPI();
+	SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config, unsigned interconnect_id,
+	    InterconnectConfig interconnect_config, DMAEngine *dma_engine);
+	~SPI();
 
-    // InterconnectBase
-    void bind_clocks(Clocks & clocks) override;
-    // DMAEngine
-    tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload & payload, ARM::AXI::Phase & phase) override;
+	// InterconnectBase
+	void bind_clocks(Clocks & clocks) override;
+	// DMAEngine
+	tlm_sync_enum nb_transport_bw_axi(ARM::AXI::Payload & payload, ARM::AXI::Phase & phase) override;
 
   private:
-    // -------------------------------------------------------
-    // Internal Declarations
-    // -------------------------------------------------------
-    StatManager &stats = StatManager::instance();
+	// -------------------------------------------------------
+	// Internal Declarations
+	// -------------------------------------------------------
+	StatManager &stats = StatManager::instance();
 
-    enum ChannelState {
-        CLEAR,
-        REQ,
-        ACK
-    };
+	enum ChannelState {
+		CLEAR,
+		REQ,
+		ACK
+	};
 
-    ChannelState aw_state = CLEAR;
-    ChannelState w_state  = CLEAR;
-    ChannelState b_state  = CLEAR;
-    ChannelState ar_state = CLEAR;
-    ChannelState r_state  = CLEAR;
+	ChannelState aw_state = CLEAR;
+	ChannelState w_state  = CLEAR;
+	ChannelState b_state  = CLEAR;
+	ChannelState ar_state = CLEAR;
+	ChannelState r_state  = CLEAR;
 
-    struct LinkRequest {
-        int                link_id;
-        ARM::AXI::Payload *payload;
-    };
+	struct LinkRequest {
+		int                link_id;
+		ARM::AXI::Payload *payload;
+	};
 
-    std::deque<ARM::AXI::Payload *> aw_queue_in;
-    std::deque<LinkRequest>         aw_queue_out;
-    std::deque<ARM::AXI::Payload *> w_queue_in;
-    std::deque<LinkRequest>         w_queue_out;
-    std::deque<ARM::AXI::Payload *> b_queue_in;
-    std::deque<LinkRequest>         b_queue_out;
-    std::deque<ARM::AXI::Payload *> ar_queue_in;
-    std::deque<LinkRequest>         ar_queue_out;
-    std::deque<ARM::AXI::Payload *> r_queue_in;
-    std::deque<LinkRequest>         r_queue_out;
+	std::deque<ARM::AXI::Payload *> aw_queue_in;
+	std::deque<LinkRequest>         aw_queue_out;
+	std::deque<ARM::AXI::Payload *> w_queue_in;
+	std::deque<LinkRequest>         w_queue_out;
+	std::deque<ARM::AXI::Payload *> b_queue_in;
+	std::deque<LinkRequest>         b_queue_out;
+	std::deque<ARM::AXI::Payload *> ar_queue_in;
+	std::deque<LinkRequest>         ar_queue_out;
+	std::deque<ARM::AXI::Payload *> r_queue_in;
+	std::deque<LinkRequest>         r_queue_out;
 
-    std::deque<LinkRequest> links_queue;
+	std::deque<LinkRequest> links_queue;
 
-    std::unordered_map<ARM::AXI::Payload *, unsigned> payload_beats;
-    std::unordered_map<ARM::AXI::Payload *, bool>     payloads_in;
-    LinkRequest                                       link_req_out = {-1, nullptr};
+	std::unordered_map<ARM::AXI::Payload *, unsigned> payload_beats;
+	std::unordered_map<ARM::AXI::Payload *, bool>     payloads_in;
+	LinkRequest                                       link_req_out = {-1, nullptr};
 
-    std::vector<bool> active_links;
-    bool              active_transfer = false;
+	struct LinkRole {
+		int  link = -1;
+		bool busy = false;
+	};
 
-    // DMA engine
-    DMAEngine *dma_engine = nullptr;
-    int        dma_vm_id  = -1;
+	LinkRole master;
+	LinkRole slave;
 
-    void clk_posedge();
+	// DMA engine
+	DMAEngine *dma_engine = nullptr;
+	int        dma_vm_id  = -1;
 
-    // -------------------------------------------------------
-    // Delay Model
-    // -------------------------------------------------------
-    struct DelayModel {
-      private:
-        const SPI &module;
+	void clk_posedge();
 
-      public:
-        DelayModel(const SPI &m) : module(m) {}
+	// -------------------------------------------------------
+	// Delay Model
+	// -------------------------------------------------------
+	struct DelayModel {
+	  private:
+		const SPI &module;
 
-        sc_time transfer_delay(int id, tlm_generic_payload &transaction) const {
-            ConnectionConfig connection = module.connections[id];
-            YAML::Node       config     = connection.node;
+	  public:
+		DelayModel(const SPI &m) : module(m) {}
 
-            sc_time delay                  = SC_ZERO_TIME;
-            sc_time beat_transfer_delay    = SC_ZERO_TIME;
-            sc_time wire_propagation_delay = SC_ZERO_TIME;
+		sc_time transfer_delay(int id, tlm_generic_payload &transaction) const {
+			ConnectionConfig connection = module.connections[id];
+			YAML::Node       config     = connection.node;
 
-            sc_time  clk_cycle(config["clk_cycle"].as<unsigned>(), SC_NS);
-            bool     ddr       = config["ddr"].as<bool>();
-            unsigned num_lanes = config["num_lanes"].as<unsigned>();
+			sc_time delay                  = SC_ZERO_TIME;
+			sc_time beat_transfer_delay    = SC_ZERO_TIME;
+			sc_time wire_propagation_delay = SC_ZERO_TIME;
 
-            unsigned bits_per_cycle = num_lanes * (ddr ? 2 : 1);
-            unsigned num_cycles     = (module.axi_width + bits_per_cycle - 1) / bits_per_cycle;
+			sc_time  clk_cycle(config["clk_cycle"].as<unsigned>(), SC_NS);
+			bool     ddr       = config["ddr"].as<bool>();
+			unsigned num_lanes = config["num_lanes"].as<unsigned>();
 
-            beat_transfer_delay = num_cycles * clk_cycle;
+			unsigned bits_per_cycle = num_lanes * (ddr ? 2 : 1);
+			unsigned num_cycles     = (module.axi_width + bits_per_cycle - 1) / bits_per_cycle;
 
-            // Wire propagation delay based on wire length
-            wire_propagation_delay = sc_time(connection.wire_length * wire_ps_per_mm, SC_PS);
+			beat_transfer_delay = num_cycles * clk_cycle;
 
-            delay = beat_transfer_delay + wire_propagation_delay;
+			// Wire propagation delay based on wire length
+			wire_propagation_delay = sc_time(connection.wire_length * wire_ps_per_mm, SC_PS);
 
-            // Bit error simulation
-            double scaled_ber          = std::clamp(bit_error_rate * connection.ber_scalar, 0.0, 1.0);
-            double prob_bad_transfer   = 1.0 - std::pow(1.0 - scaled_ber, module.axi_width);
-            bool   transfer_successful = (bit_error_dist(bit_error_gen) >= prob_bad_transfer);
+			delay = beat_transfer_delay + wire_propagation_delay;
 
-            if (!transfer_successful) {
-                SC_LOG_WARN(&module, "Transmission error detected: flit corrupted and "
-                                     "payload invalidated.");
-                // Drop flit by zeroing AXI beat bytes
-                // TODO: SPI needs a rewrite to allow correct data zeroing here
-            }
+			// Bit error simulation
+			double scaled_ber          = std::clamp(bit_error_rate * connection.ber_scalar, 0.0, 1.0);
+			double prob_bad_transfer   = 1.0 - std::pow(1.0 - scaled_ber, module.axi_width);
+			bool   transfer_successful = (bit_error_dist(bit_error_gen) >= prob_bad_transfer);
 
-            SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
-            return delay;
-        }
-    };
+			if (!transfer_successful) {
+				SC_LOG_WARN(&module, "Transmission error detected: flit corrupted and "
+				                     "payload invalidated.");
+				// Drop flit by zeroing AXI beat bytes
+				// TODO: SPI needs a rewrite to allow correct data zeroing here
+			}
 
-    DelayModel delays{*this};
+			SC_LOG_DELAY(&module, "Die to Die Transfer", delay);
+			return delay;
+		}
+	};
 
-    // -------------------------------------------------------
-    // Transport Functions
-    // -------------------------------------------------------
-    tlm_sync_enum nb_transport_fw_axi(ARM::AXI::Payload & payload, ARM::AXI::Phase & phase);
+	DelayModel delays{*this};
 
-    tlm_sync_enum nb_transport_fw_link(int id, tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay);
+	// -------------------------------------------------------
+	// Transport Functions
+	// -------------------------------------------------------
+	tlm_sync_enum nb_transport_fw_axi(ARM::AXI::Payload & payload, ARM::AXI::Phase & phase);
 
-    tlm_sync_enum nb_transport_bw_link(int id, tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay);
+	tlm_sync_enum nb_transport_fw_link(int id, tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay);
 
-    // -------------------------------------------------------
-    // Helper Functions
-    // -------------------------------------------------------
-    void clear_axi_states();
-    void send_axi_beats();
+	tlm_sync_enum nb_transport_bw_link(int id, tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay);
 
-    void send_irq(ARM::AXI::Payload & payload);
+	// -------------------------------------------------------
+	// Helper Functions
+	// -------------------------------------------------------
+	void clear_axi_states();
+	void send_axi_beats();
 
-    bool send_link_request(ARM::AXI::Payload & payload);
+	bool tx_available() const;
+	bool tx_allowed(int link_id) const;
+	bool rx_allowed(int link_id) const;
+	void set_rx_busy(int link_id, bool busy);
 
-    bool send_dma_request(ARM::AXI::Payload & payload, ARM::AXI4::Phase phase) {
-        return dma_engine->forward_from_virtual(dma_vm_id, payload, phase);
-    }
+	void send_irq(ARM::AXI::Payload & payload);
 
-    void register_payload_in(ARM::AXI::Payload & payload);
-    void unregister_payload_in(ARM::AXI::Payload & payload);
-    bool is_response(ARM::AXI::Payload & payload);
+	bool send_link_request(ARM::AXI::Payload & payload);
 
-    void register_beat_count(ARM::AXI::Payload & payload);
-    void unregister_beat_count(ARM::AXI::Payload & payload);
-    void increment_beat_count(ARM::AXI::Payload & payload);
-    int  get_beat_count(ARM::AXI::Payload & payload);
+	bool send_dma_request(ARM::AXI::Payload & payload, ARM::AXI4::Phase phase) {
+		return dma_engine->forward_from_virtual(dma_vm_id, payload, phase);
+	}
+
+	void register_payload_in(ARM::AXI::Payload & payload);
+	void unregister_payload_in(ARM::AXI::Payload & payload);
+	bool is_response(ARM::AXI::Payload & payload);
+
+	void register_beat_count(ARM::AXI::Payload & payload);
+	void unregister_beat_count(ARM::AXI::Payload & payload);
+	void increment_beat_count(ARM::AXI::Payload & payload);
+	int  get_beat_count(ARM::AXI::Payload & payload);
 };

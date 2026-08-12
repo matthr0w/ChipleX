@@ -36,8 +36,6 @@ SPI::SPI(sc_module_name name, unsigned chiplet_id, ChipletConfig chiplet_config,
 		irq_ports[i] = &irq_sockets[i];
 	}
 
-	active_links.resize(num_links, false);
-
 	stats.register_utilization(this->name());
 
 	SC_METHOD(clk_posedge);
@@ -119,17 +117,18 @@ void SPI::clk_posedge() {
 	}
 
 	// Forward the first beat destined for another chiplet
-	if (!active_transfer) {
+	if (tx_available()) {
 		for (size_t i = 0; i < links_queue.size(); ++i) {
 			const LinkRequest req = links_queue[i];
 
 			uint8_t destination_id = UserSignals::decode(req.payload->user).dst_chiplet;
 
 			if (destination_id != chiplet_id) {
-				active_transfer = send_link_request(*req.payload);
-				if (active_transfer) {
-					active_links[req.link_id] = false;
+				set_rx_busy(req.link_id, false);
+				if (send_link_request(*req.payload)) {
 					links_queue.erase(links_queue.begin() + i);
+				} else {
+					set_rx_busy(req.link_id, true);
 				}
 				break;
 			}
@@ -137,28 +136,26 @@ void SPI::clk_posedge() {
 	}
 	// Check AXI channels for forwarding beats
 	// Order: R, B, AW, AR, W
-	if (!active_transfer) {
+	if (tx_available()) {
 		if (!r_queue_in.empty()) {
 			ARM::AXI::Payload *payload = r_queue_in.front();
 			// Source becomes destination
 			UserSignals user = UserSignals::decode(payload->user);
 			user.dst_chiplet = user.src_chiplet;
 			payload->user    = user.encode();
-			active_transfer  = send_link_request(*payload);
-			if (active_transfer) {
+			if (send_link_request(*payload)) {
 				r_queue_in.pop_front();
 				ARM::AXI::Phase phase = ARM::AXI::R_READY;
 				axi_out.nb_transport_fw(*payload, phase);
 			}
 		}
-		if (!b_queue_in.empty() && !active_transfer) {
+		if (!b_queue_in.empty() && tx_available()) {
 			ARM::AXI::Payload *payload = b_queue_in.front();
 			// Source becomes destination
 			UserSignals user = UserSignals::decode(payload->user);
 			user.dst_chiplet = user.src_chiplet;
 			payload->user    = user.encode();
-			active_transfer  = send_link_request(*payload);
-			if (active_transfer) {
+			if (send_link_request(*payload)) {
 				b_queue_in.pop_front();
 				// We also send the IRQ here
 				send_irq(*payload);
@@ -166,30 +163,27 @@ void SPI::clk_posedge() {
 				axi_out.nb_transport_fw(*payload, phase);
 			}
 		}
-		if (!aw_queue_in.empty() && !active_transfer) {
+		if (!aw_queue_in.empty() && tx_available()) {
 			ARM::AXI::Payload *payload = aw_queue_in.front();
-			active_transfer            = send_link_request(*payload);
-			if (active_transfer) {
+			if (send_link_request(*payload)) {
 				aw_queue_in.pop_front();
 				register_payload_in(*payload);
 				ARM::AXI::Phase phase = ARM::AXI::AW_READY;
 				axi_in.nb_transport_bw(*payload, phase);
 			}
 		}
-		if (!ar_queue_in.empty() && !active_transfer) {
+		if (!ar_queue_in.empty() && tx_available()) {
 			ARM::AXI::Payload *payload = ar_queue_in.front();
-			active_transfer            = send_link_request(*payload);
-			if (active_transfer) {
+			if (send_link_request(*payload)) {
 				ar_queue_in.pop_front();
 				register_payload_in(*payload);
 				ARM::AXI::Phase phase = ARM::AXI::AR_READY;
 				axi_in.nb_transport_bw(*payload, phase);
 			}
 		}
-		if (!w_queue_in.empty() && !active_transfer) {
+		if (!w_queue_in.empty() && tx_available()) {
 			ARM::AXI::Payload *payload = w_queue_in.front();
-			active_transfer            = send_link_request(*payload);
-			if (active_transfer) {
+			if (send_link_request(*payload)) {
 				w_queue_in.pop_front();
 				ARM::AXI::Phase phase = ARM::AXI::W_READY;
 				axi_in.nb_transport_bw(*payload, phase);
@@ -255,12 +249,13 @@ tlm_sync_enum SPI::nb_transport_bw_axi(ARM::AXI::Payload &payload, ARM::AXI::Pha
 
 tlm_sync_enum SPI::nb_transport_fw_link(int id, tlm_generic_payload &transaction, tlm_phase &phase, sc_time &delay) {
 	switch (phase) {
-	case BEGIN_REQ:
-		if (active_links[id]) {
+	case BEGIN_REQ: {
+		if (!rx_allowed(id)) {
 			return TLM_ACCEPTED;
 		}
 
-		active_links[id] = true;
+		slave.link = id;
+		slave.busy = true;
 
 		delay += delays.transfer_delay(id, transaction);
 
@@ -280,6 +275,7 @@ tlm_sync_enum SPI::nb_transport_fw_link(int id, tlm_generic_payload &transaction
 		phase = END_REQ;
 		return TLM_UPDATED;
 	}
+	}
 
 	return TLM_ACCEPTED;
 }
@@ -288,7 +284,7 @@ tlm_sync_enum SPI::nb_transport_bw_link(int id, tlm_generic_payload &transaction
 	switch (phase) {
 	case BEGIN_RESP:
 		stats.set_idle(this->name());
-		active_transfer = false;
+		master.busy = false;
 		delete &transaction;
 
 		phase = END_RESP;
@@ -354,11 +350,11 @@ void SPI::send_axi_beats() {
 		ARM::AXI::Payload *payload  = link_req.payload;
 		ARM::AXI::Phase    phase    = ARM::AXI::AW_VALID;
 		register_beat_count(*payload);
-		active_links[link_req.link_id] = false;
-		bool use_dma                   = UserSignals::decode(payload->user).extension_mask == 0 && dma_vm_id != -1;
+		set_rx_busy(link_req.link_id, false);
+		bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 && dma_vm_id != -1;
 		if (use_dma && !send_dma_request(*payload, phase)) {
-			aw_state                       = CLEAR;
-			active_links[link_req.link_id] = true;
+			aw_state = CLEAR;
+			set_rx_busy(link_req.link_id, true);
 		} else if (!use_dma) {
 			tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
 			if (reply == TLM_UPDATED) {
@@ -375,11 +371,11 @@ void SPI::send_axi_beats() {
 		ARM::AXI::Payload *payload  = link_req.payload;
 		ARM::AXI::Phase    phase =
 		    (get_beat_count(*payload) + 1 == payload->get_beat_count()) ? ARM::AXI::W_VALID_LAST : ARM::AXI::W_VALID;
-		bool use_dma                   = UserSignals::decode(payload->user).extension_mask == 0 && dma_vm_id != -1;
-		active_links[link_req.link_id] = false;
+		bool use_dma = UserSignals::decode(payload->user).extension_mask == 0 && dma_vm_id != -1;
+		set_rx_busy(link_req.link_id, false);
 		if (use_dma && !send_dma_request(*payload, phase)) {
-			w_state                        = CLEAR;
-			active_links[link_req.link_id] = true;
+			w_state = CLEAR;
+			set_rx_busy(link_req.link_id, true);
 		} else if (!use_dma) {
 			tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
 			if (reply == TLM_UPDATED) {
@@ -391,12 +387,12 @@ void SPI::send_axi_beats() {
 
 	// B channel
 	if (b_state == CLEAR && !b_queue_out.empty()) {
-		b_state                        = REQ;
-		LinkRequest        link_req    = b_queue_out.front();
-		ARM::AXI::Payload *payload     = link_req.payload;
-		ARM::AXI::Phase    phase       = ARM::AXI::B_VALID;
-		active_links[link_req.link_id] = false;
-		tlm_sync_enum reply            = axi_in.nb_transport_bw(*payload, phase);
+		b_state                     = REQ;
+		LinkRequest        link_req = b_queue_out.front();
+		ARM::AXI::Payload *payload  = link_req.payload;
+		ARM::AXI::Phase    phase    = ARM::AXI::B_VALID;
+		set_rx_busy(link_req.link_id, false);
+		tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
 		if (reply == TLM_UPDATED) {
 			SC_LOG_ASSERT(this, phase == ARM::AXI::B_READY, "AXI TLM Protocol: Unexpected phase");
 			b_state = ACK;
@@ -405,15 +401,15 @@ void SPI::send_axi_beats() {
 
 	// AR channel
 	if (ar_state == CLEAR && !ar_queue_out.empty()) {
-		ar_state                       = REQ;
-		LinkRequest        link_req    = ar_queue_out.front();
-		ARM::AXI::Payload *payload     = link_req.payload;
-		ARM::AXI::Phase    phase       = ARM::AXI::AR_VALID;
-		bool               use_dma     = UserSignals::decode(payload->user).extension_mask == 0 && dma_vm_id != -1;
-		active_links[link_req.link_id] = false;
+		ar_state                    = REQ;
+		LinkRequest        link_req = ar_queue_out.front();
+		ARM::AXI::Payload *payload  = link_req.payload;
+		ARM::AXI::Phase    phase    = ARM::AXI::AR_VALID;
+		bool               use_dma  = UserSignals::decode(payload->user).extension_mask == 0 && dma_vm_id != -1;
+		set_rx_busy(link_req.link_id, false);
 		if (use_dma && !send_dma_request(*payload, phase)) {
-			ar_state                       = CLEAR;
-			active_links[link_req.link_id] = true;
+			ar_state = CLEAR;
+			set_rx_busy(link_req.link_id, true);
 		} else if (!use_dma) {
 			tlm_sync_enum reply = axi_out.nb_transport_fw(*payload, phase);
 			if (reply == TLM_UPDATED) {
@@ -431,8 +427,8 @@ void SPI::send_axi_beats() {
 		register_beat_count(*payload);
 		ARM::AXI::Phase phase =
 		    (get_beat_count(*payload) + 1 == payload->get_beat_count()) ? ARM::AXI::R_VALID_LAST : ARM::AXI::R_VALID;
-		active_links[link_req.link_id] = false;
-		tlm_sync_enum reply            = axi_in.nb_transport_bw(*payload, phase);
+		set_rx_busy(link_req.link_id, false);
+		tlm_sync_enum reply = axi_in.nb_transport_bw(*payload, phase);
 		if (reply == TLM_UPDATED) {
 			SC_LOG_ASSERT(this, phase == ARM::AXI::R_READY, "AXI TLM Protocol: Unexpected phase");
 			r_state = ACK;
@@ -472,6 +468,17 @@ void SPI::send_irq(ARM::AXI::Payload &payload) {
 }
 
 bool SPI::send_link_request(ARM::AXI::Payload &payload) {
+	uint8_t destination_id = UserSignals::decode(payload.user).dst_chiplet;
+	int     link_id        = Router::instance().get_link_id(chiplet_id, interconnect_id, destination_id);
+	if (link_id == -1) {
+		SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to " << int(destination_id));
+		return false;
+	}
+
+	if (!tx_allowed(link_id)) {
+		return false;
+	}
+
 	tlm_phase phase = BEGIN_REQ;
 	sc_time   delay = SC_ZERO_TIME;
 
@@ -479,22 +486,37 @@ bool SPI::send_link_request(ARM::AXI::Payload &payload) {
 
 	transaction->set_data_ptr(reinterpret_cast<unsigned char *>(&payload));
 
-	uint8_t destination_id = UserSignals::decode(payload.user).dst_chiplet;
-	int     link_id        = Router::instance().get_link_id(chiplet_id, interconnect_id, destination_id);
-	if (link_id == -1) {
-		SC_LOG_ERROR(this, "No valid routing path from " << chiplet_id << " to " << int(destination_id));
-	}
-
 	tlm_sync_enum reply = links_out[link_id]->nb_transport_fw(*transaction, phase, delay);
 
 	if (reply == TLM_UPDATED) {
+		master.link = link_id;
+		master.busy = true;
 		stats.set_active(this->name());
 		stats.increment_counter(this->name(), "transmission_count_out_link" + std::to_string(link_id));
 		stats.update_accum(this->name(), "transmission_duration_out_us_link" + std::to_string(link_id),
 		                   delay.to_seconds() * 1e6);
 		return true;
 	} else {
+		delete transaction;
 		return false;
+	}
+}
+
+bool SPI::tx_available() const {
+	return !master.busy;
+}
+
+bool SPI::tx_allowed(int link_id) const {
+	return !master.busy && !(slave.busy && slave.link == link_id);
+}
+
+bool SPI::rx_allowed(int link_id) const {
+	return !slave.busy && !(master.busy && master.link == link_id);
+}
+
+void SPI::set_rx_busy(int link_id, bool busy) {
+	if (slave.link == link_id) {
+		slave.busy = busy;
 	}
 }
 
