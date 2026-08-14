@@ -63,8 +63,11 @@ struct MemoryChiplet : ChipletBase {
 		memory.clk.bind(chiplet_clocks.get(MEMORY_MODULE_NAME));
 
 		// Interconnect
+		// The memory chiplet supports only a single interconnect. If several
+		// are configured, only the first is used (build_descriptor warns).
 		InterconnectManager manager(chiplet_id, chiplet_config);
-		for (const auto &[name, config] : chiplet_config.interconnects) {
+		if (!chiplet_config.interconnects.empty()) {
+			const auto &[name, config] = *chiplet_config.interconnects.begin();
 			const unsigned    id       = chiplet_config.interconnect_ids.find(name)->second;
 			const std::string ext_name = EXT_LAYER_MODULE_NAME + "_" + name;
 
@@ -85,9 +88,7 @@ struct MemoryChiplet : ChipletBase {
 			// Move into base class
 			ext_layers.emplace(ext_name, std::move(ext_layer));
 			interconnects.emplace(name, std::move(interconnect));
-		}
-
-		if (chiplet_config.interconnects.empty()) {
+		} else {
 			dummy_axi_port.bind(memory.tsocket);
 		}
 	}
