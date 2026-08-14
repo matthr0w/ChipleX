@@ -72,7 +72,6 @@ void SLNetworkLayer::clk_posedge() {
 
 			if (payload_out->b_valid) {
 				// The answer is on its way, so its write releases the port.
-				inbound_write_answered = UserSignals::decode(payload_out->user).dst_chiplet;
 				inbound_write_done = true;
 				inbound_b_ack.push_back(inbound_b_out.front());
 				inbound_b_out.pop_front();
@@ -129,23 +128,25 @@ void SLNetworkLayer::clk_posedge() {
 				case TagAW: {
 					const uint8_t src = UserSignals::decode(payload->user).src_chiplet;
 
-					// A source that has to wait is buffered on its own, so it
-					// does not block the active source's beats behind it.
-					const bool takes_port = (inbound_write_src < 0);
-					if (!takes_port || aw_state == CLEAR) {
+					// Take the address when it can become the active write now
+					// (AW channel free) or when it simply queues behind one.
+					const bool would_activate = !inbound_write_active && inbound_write_queue.empty();
+					if (!would_activate || aw_state == CLEAR) {
 						stream_fifo_in->read();
 						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
 						auto *trans =
 						    ARM::AXI::Payload::new_payload(ARM::AXI::COMMAND_WRITE, payload->axi_ch.addr,
 						                                   get_axi_size(axi_width), payload->len, payload->burst);
-						trans->id           = payload->id;
-						trans->user         = payload->user;
-						inbound_writes[src] = {trans, 0};
+						trans->id   = payload->id;
+						trans->user = payload->user;
 
-						if (takes_port) {
-							activate_inbound_write(src);
-						} else {
-							inbound_write_wait.push_back(src);
+						auto write     = std::make_shared<InboundWrite>();
+						write->payload = trans;
+						write->src     = src;
+						inbound_write_queue.push_back(write);
+
+						if (would_activate) {
+							activate_inbound_write();
 						}
 
 						// Flow control
@@ -154,22 +155,25 @@ void SLNetworkLayer::clk_posedge() {
 				} break;
 
 				case TagW: {
-					const uint8_t src = UserSignals::decode(payload->user).src_chiplet;
-					auto          it  = inbound_writes.find(src);
-					if (it == inbound_writes.end()) {
+					const uint8_t src   = UserSignals::decode(payload->user).src_chiplet;
+					auto          write = fill_target(src);
+					if (!write) {
 						SC_LOG_ERROR(this, "Write data of chiplet " << unsigned(src) << " without a write address");
 						break;
 					}
 
-					const bool has_port = (inbound_write_src == static_cast<int>(src));
+					// Only the active write (the queue front) streams its beats
+					// onto the port; the rest buffer theirs until activated.
+					const bool has_port = inbound_write_active && inbound_write_queue.front() == write;
 					if (!has_port || w_state == CLEAR) {
 						stream_fifo_in->read();
 						SC_LOG_DEBUG(this, "Packet consumed: " << describe(*payload));
-						it->second.payload->write_in_beat(payload->axi_ch.data.data());
+						write->payload->write_in_beat(payload->axi_ch.data.data());
+						write->beats_received++;
 						if (has_port) {
-							w_queue.push_back(it->second.payload);
+							w_queue.push_back(write->payload);
 						} else {
-							it->second.beats_buffered++;
+							write->beats_buffered++;
 						}
 
 						// Flow control
@@ -815,21 +819,32 @@ void SLNetworkLayer::send_axi_response(AxiTrans_t &trans, bool is_master) {
 	send(trans.r_rsp_sent, trans.r_rsp_phase, trans.r_req_phase);
 }
 
-void SLNetworkLayer::activate_inbound_write(uint8_t src_chiplet) {
-	auto it = inbound_writes.find(src_chiplet);
-	if (it == inbound_writes.end()) {
+std::shared_ptr<SLNetworkLayer::InboundWrite> SLNetworkLayer::fill_target(uint8_t src_chiplet) {
+	// AXI4 forbids write-data interleaving, so a source fills its writes in
+	// address order: the target is its oldest write still missing beats.
+	for (auto &write : inbound_write_queue) {
+		if (write->src == src_chiplet && write->beats_received < write->payload->get_beat_count()) {
+			return write;
+		}
+	}
+	return nullptr;
+}
+
+void SLNetworkLayer::activate_inbound_write() {
+	if (inbound_write_queue.empty()) {
 		return;
 	}
 
-	inbound_write_src        = src_chiplet;
-	axi_out_trans.w_payload = it->second.payload;
-	aw_queue.push_back(it->second.payload);
+	auto &write             = inbound_write_queue.front();
+	inbound_write_active    = true;
+	axi_out_trans.w_payload = write->payload;
+	aw_queue.push_back(write->payload);
 
-	// Beats buffered while the port was busy are handed over now.
-	for (unsigned beat = 0; beat < it->second.beats_buffered; ++beat) {
-		w_queue.push_back(it->second.payload);
+	// Beats buffered while the write was waiting are handed over now.
+	for (unsigned beat = 0; beat < write->beats_buffered; ++beat) {
+		w_queue.push_back(write->payload);
 	}
-	it->second.beats_buffered = 0;
+	write->beats_buffered = 0;
 }
 
 void SLNetworkLayer::activate_inbound_read() {
@@ -837,30 +852,28 @@ void SLNetworkLayer::activate_inbound_read() {
 		return;
 	}
 
-	inbound_read_active             = true;
+	inbound_read_active     = true;
 	axi_out_trans.r_payload = inbound_read_wait.front();
 	ar_queue.push_back(inbound_read_wait.front());
 }
 
 void SLNetworkLayer::advance_inbound() {
 	if (inbound_write_done) {
-		inbound_write_done = false;
-		inbound_writes.erase(inbound_write_answered);
-
-		if (inbound_write_src == static_cast<int>(inbound_write_answered)) {
-			inbound_write_src = -1;
-		}
-
-		if (inbound_write_src < 0 && !inbound_write_wait.empty()) {
-			const uint8_t next = inbound_write_wait.front();
-			inbound_write_wait.pop_front();
-			activate_inbound_write(next);
+		inbound_write_done   = false;
+		inbound_write_active = false;
+		if (!inbound_write_queue.empty()) {
+			inbound_write_queue.pop_front();
 		}
 	}
 
+	// Promote the next waiting write once the port and AW channel are free.
+	if (!inbound_write_active && !inbound_write_queue.empty() && aw_state == CLEAR) {
+		activate_inbound_write();
+	}
+
 	if (inbound_read_done) {
-		inbound_read_done = false;
-		inbound_read_active       = false;
+		inbound_read_done   = false;
+		inbound_read_active = false;
 		if (!inbound_read_wait.empty()) {
 			inbound_read_wait.pop_front();
 		}

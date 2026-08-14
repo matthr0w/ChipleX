@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <map>
+#include <memory>
 #include <systemc>
 #include <tlm>
 #include <tlm_utils/simple_initiator_socket.h>
@@ -103,17 +104,19 @@ SC_MODULE(SLNetworkLayer) {
 
 	// Inbound: remote requests from the links are served one at a time on the
 	// single local axi_out port. Writes are reassembled per source chiplet
-	// (sources interleave on the shared FIFO); the rest wait their turn.
+	// (sources interleave on the shared FIFO); the rest wait their turn. A
+	// source may have several writes outstanding, so they are held in arrival
+	// order and each beat is routed to the matching payload of its source.
 	struct InboundWrite {
 		ARM::AXI::Payload *payload        = nullptr;
-		unsigned           beats_buffered = 0; // arrived while another source held the port
+		unsigned           beats_buffered = 0; // arrived before this write became active
+		unsigned           beats_received = 0; // beats reassembled into the payload so far
+		uint8_t            src            = 0;
 	};
 
-	std::map<uint8_t, InboundWrite> inbound_writes;
-	std::deque<uint8_t>             inbound_write_wait;
-	int                             inbound_write_src      = -1; // source holding the port, or -1
-	uint8_t                         inbound_write_answered = 0;
-	bool                            inbound_write_done     = false;
+	std::deque<std::shared_ptr<InboundWrite>> inbound_write_queue; // front is driven, rest wait
+	bool                                      inbound_write_active = false;
+	bool                                      inbound_write_done   = false;
 
 	std::deque<ARM::AXI::Payload *> inbound_read_wait;
 	bool                            inbound_read_active = false;
@@ -173,9 +176,10 @@ SC_MODULE(SLNetworkLayer) {
 
 	// Inbound: give the local axi_out port to a remote request and promote the
 	// next waiting one once the active transaction is answered.
-	void activate_inbound_write(uint8_t src_chiplet);
-	void activate_inbound_read();
-	void advance_inbound();
+	std::shared_ptr<InboundWrite> fill_target(uint8_t src_chiplet);
+	void                          activate_inbound_write();
+	void                          activate_inbound_read();
+	void                          advance_inbound();
 
 	void send_irq(ARM::AXI::Payload & payload);
 
