@@ -18,6 +18,9 @@ SLNetworkLayer::SLNetworkLayer(sc_module_name name, unsigned chiplet_id, unsigne
       force_send_thresh(num_credits - 4),
       axi_in("axi_in", *this, &SLNetworkLayer::nb_transport_fw, ARM::TLM::PROTOCOL_AXI4, axi_width),
       axi_out("axi_out", *this, &SLNetworkLayer::nb_transport_bw, ARM::TLM::PROTOCOL_AXI4, axi_width) {
+	// Assertions
+	LOG_ASSERT(num_credits > 4, "Parameter Error: phy.num_credits (" << num_credits << ") must be > " << 4);
+
 	irq_sockets = new simple_initiator_socket_tagged<SLNetworkLayer>[num_cores];
 
 	// Initial values
