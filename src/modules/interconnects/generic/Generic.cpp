@@ -162,6 +162,10 @@ void GenericInterconnect::clk_posedge_protocol() {
 				tx_ptrs[tx_idx] += flit_size;
 				stats.update_usage(this->name(), "tx_buffer_usage_link" + std::to_string(tx_idx), tx_ptrs[tx_idx]);
 
+				SC_LOG_DEBUG(this, "Flit queued on link " << tx_idx << ": ch=" << flit.axi_ch.to_string()
+				                                          << " id=" << flit.id << " dst=" << int(destination_id)
+				                                          << " payload=" << flit_payload_bytes << "B");
+
 				// Consume from staging buffer
 				std::memmove(staging_buffer.data(), staging_buffer.data() + flit_payload_bytes,
 				             staging_buffer_ptr - flit_payload_bytes);
@@ -175,10 +179,12 @@ void GenericInterconnect::clk_posedge_protocol() {
 
 				if (reset_axi_channel && staging_buffer_ptr == 0) {
 					axi_transaction.payload  = nullptr;
-					axi_transaction.channel  = None;
+					axi_transaction.channel  = AxiChannel::Type::None;
 					axi_transaction.beat_idx = 0;
 					reset_axi_channel        = false;
 				}
+			} else {
+				SC_LOG_DEBUG(this, "Tx buffer full on link " << tx_idx << ", flit held back in the staging buffer");
 			}
 		}
 	}
@@ -201,7 +207,13 @@ void GenericInterconnect::clk_posedge_protocol() {
 		}
 
 		// Process local flit
+		const size_t rx_ptr_before = rx_ptrs[rx_idx];
 		process_flit(rx_idx, flit);
+		if (rx_ptrs[rx_idx] != rx_ptr_before) {
+			SC_LOG_DEBUG(this, "Flit consumed from link " << rx_idx << ": ch=" << flit.axi_ch.to_string()
+			                                              << " id=" << flit.id << " src=" << int(user.src_chiplet)
+			                                              << " core=" << int(user.core));
+		}
 	}
 }
 
@@ -227,6 +239,9 @@ void GenericInterconnect::clk_posedge_phy() {
 			stats.update_accum(this->name(), "transmission_duration_out_us_link" + std::to_string(tx_idx),
 			                   delay.to_seconds() * 1e6);
 			phy_active_tx[tx_idx] = true;
+
+			SC_LOG_DEBUG(this, "Flit sent on link " << tx_idx << ": transfer " << delay << " arrival "
+			                                        << (sc_time_stamp() + delay));
 		} else {
 			delete flit;
 		}
@@ -248,6 +263,9 @@ void GenericInterconnect::clk_posedge_phy() {
 		std::memcpy(&rx_buffers[rx_idx][tail], request.transaction->get_data_ptr(), flit_size);
 		rx_ptrs[rx_idx] += flit_size;
 		stats.update_usage(this->name(), "rx_buffer_usage_link" + std::to_string(rx_idx), rx_ptrs[rx_idx]);
+
+		SC_LOG_DEBUG(this, "Flit stored from link " << rx_idx << ": rx_buffer=" << rx_ptrs[rx_idx] << "/"
+		                                            << link_buffer_size << "B");
 
 		tlm_phase phase = BEGIN_RESP;
 		sc_time   delay = SC_ZERO_TIME;
@@ -313,6 +331,7 @@ tlm_sync_enum GenericInterconnect::nb_transport_fw_phy(int id, tlm_generic_paylo
 	switch (phase) {
 	case BEGIN_REQ:
 		if (rx_ptrs[id] + flit_size > rx_buffers[id].size()) {
+			SC_LOG_DEBUG(this, "Rx buffer full on link " << id << ", refusing flit");
 			return TLM_ACCEPTED; // Backpressure
 		}
 
@@ -409,12 +428,12 @@ void GenericInterconnect::handle_axi_channels() {
 	const AxiChannel active = axi_transaction.channel;
 
 	// AW channel (single address flit)
-	if (!aw_queue_in.empty() && active == None) {
+	if (!aw_queue_in.empty() && active.value == AxiChannel::Type::None) {
 		auto *payload = aw_queue_in.front();
 		aw_queue_in.pop_front();
 
 		// Set channel information
-		axi_transaction.channel = AW;
+		axi_transaction.channel = AxiChannel::Type::AW;
 		axi_transaction.payload = payload;
 
 		// Save payload for response
@@ -440,12 +459,12 @@ void GenericInterconnect::handle_axi_channels() {
 	}
 
 	// W channel (accumulates beats into a flit while the channel stays claimed)
-	if (!w_queue_in.empty() && (active == None || active == W)) {
+	if (!w_queue_in.empty() && (active.value == AxiChannel::Type::None || active.value == AxiChannel::Type::W)) {
 		auto *payload = w_queue_in.front();
 		w_queue_in.pop_front();
 
 		// Set channel information
-		axi_transaction.channel = W;
+		axi_transaction.channel = AxiChannel::Type::W;
 		axi_transaction.payload = payload;
 
 		// Write data to staging buffer
@@ -469,7 +488,7 @@ void GenericInterconnect::handle_axi_channels() {
 	}
 
 	// B channel (single response flit)
-	if (!b_queue_in.empty() && active == None) {
+	if (!b_queue_in.empty() && active.value == AxiChannel::Type::None) {
 		auto *payload = b_queue_in.front();
 		b_queue_in.pop_front();
 
@@ -477,7 +496,7 @@ void GenericInterconnect::handle_axi_channels() {
 		send_irq(*payload);
 
 		// Set channel information
-		axi_transaction.channel = B;
+		axi_transaction.channel = AxiChannel::Type::B;
 		axi_transaction.payload = payload;
 
 		// Source becomes destination
@@ -503,12 +522,12 @@ void GenericInterconnect::handle_axi_channels() {
 	}
 
 	// AR channel (single address flit)
-	if (!ar_queue_in.empty() && active == None) {
+	if (!ar_queue_in.empty() && active.value == AxiChannel::Type::None) {
 		auto *payload = ar_queue_in.front();
 		ar_queue_in.pop_front();
 
 		// Set channel information
-		axi_transaction.channel = AR;
+		axi_transaction.channel = AxiChannel::Type::AR;
 		axi_transaction.payload = payload;
 
 		// Save payload for response
@@ -534,12 +553,12 @@ void GenericInterconnect::handle_axi_channels() {
 	}
 
 	// R channel (accumulates beats into a flit while the channel stays claimed)
-	if (!r_queue_in.empty() && (active == None || active == R)) {
+	if (!r_queue_in.empty() && (active.value == AxiChannel::Type::None || active.value == AxiChannel::Type::R)) {
 		auto *payload = r_queue_in.front();
 		r_queue_in.pop_front();
 
 		// Set channel information
-		axi_transaction.channel = R;
+		axi_transaction.channel = AxiChannel::Type::R;
 		axi_transaction.payload = payload;
 
 		// Source becomes destination
@@ -710,12 +729,15 @@ void GenericInterconnect::forward_flit(unsigned rx_idx, uint8_t dest_id) {
 		std::memmove(rx_buffers[rx_idx].data(), rx_buffers[rx_idx].data() + flit_size, rx_ptrs[rx_idx] - flit_size);
 		rx_ptrs[rx_idx] -= flit_size;
 		stats.update_usage(this->name(), "rx_buffer_usage_link" + std::to_string(rx_idx), rx_ptrs[rx_idx]);
+
+		SC_LOG_DEBUG(this, "Flit forwarded from link " << rx_idx << " to link " << tx_idx << " towards chiplet "
+		                                               << int(dest_id));
 	}
 }
 
 void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
-	switch (flit.axi_ch) {
-	case AW: {
+	switch (flit.axi_ch.value) {
+	case AxiChannel::Type::AW: {
 		if (aw_state == CLEAR) {
 			uint32_t address;
 			std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
@@ -735,7 +757,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
 		}
 		break;
 	}
-	case W: {
+	case AxiChannel::Type::W: {
 		ARM::AXI::Payload *payload = nullptr;
 		UserSignals        user    = UserSignals::decode(flit.user);
 		auto               it      = manager_payloads.find({flit.id, user.core, user.src_chiplet});
@@ -761,7 +783,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
 		}
 		break;
 	}
-	case B: {
+	case AxiChannel::Type::B: {
 		ARM::AXI::Payload *payload = nullptr;
 		UserSignals        user    = UserSignals::decode(flit.user);
 		auto               it      = subordinate_payloads.find({flit.id, user.core, user.src_chiplet});
@@ -779,7 +801,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
 		}
 		break;
 	}
-	case AR: {
+	case AxiChannel::Type::AR: {
 		if (ar_state == CLEAR) {
 			uint32_t address;
 			std::memcpy(&address, flit.axi_data.data.data(), sizeof(uint32_t));
@@ -795,7 +817,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
 		}
 		break;
 	}
-	case R: {
+	case AxiChannel::Type::R: {
 		ARM::AXI::Payload *payload = nullptr;
 		UserSignals        user    = UserSignals::decode(flit.user);
 		auto               it      = subordinate_payloads.find({flit.id, user.core, user.src_chiplet});

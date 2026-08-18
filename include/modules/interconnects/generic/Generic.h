@@ -163,7 +163,8 @@ SC_MODULE(GenericInterconnect), public InterconnectBase, public DMAForwardInterf
 			}
 
 			// Bit error simulation
-			bool transfer_successful = false;
+			bool     transfer_successful = false;
+			unsigned retransmissions     = 0;
 			for (int attempt = 0; attempt < max_attempts; ++attempt) {
 				if (bit_error_dist(bit_error_gen) >= prob_bad_transfer) {
 					// No bit error
@@ -174,16 +175,20 @@ SC_MODULE(GenericInterconnect), public InterconnectBase, public DMAForwardInterf
 				switch (module.interconnect_type.value) {
 				case InterconnectType::Type::PCIe:
 					// FEC penalty
-					delay += sc_time(config["protocol"]["fec_delay"].as<unsigned>(), SC_NS);
+					delay += sc_time(config["protocol"]["fec_delay"].as<double>(), SC_NS);
 					// Assuming FEC handles it
 					transfer_successful = true;
 					break;
 				case InterconnectType::Type::UCIe:
+					++retransmissions;
 					// Retry penalty
 					delay += base_transfer_delay;
 				default:;
 				}
 			}
+
+			module.stats.increment_counter(module.name(), "retransmission_count_in_link" + std::to_string(id),
+			                               retransmissions);
 
 			if (!transfer_successful) {
 				SC_LOG_WARN(&module, "Transmission error detected: flit corrupted and "

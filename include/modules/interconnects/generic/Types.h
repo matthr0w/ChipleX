@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <tlm>
 
 #include "ARM/TLM/arm_axi4.h"
@@ -32,24 +33,49 @@ struct AxiData {
 	AxiData(size_t size_bytes) : data(size_bytes, 0) {}
 };
 
-enum AxiChannel : uint8_t {
-	None = 0,
-	AW   = 1,
-	W    = 2,
-	AR   = 3,
-	R    = 4,
-	B    = 5
+struct AxiChannel {
+	enum class Type : uint8_t {
+		None = 0,
+		AW   = 1,
+		W    = 2,
+		AR   = 3,
+		R    = 4,
+		B    = 5
+	};
+
+	Type value = Type::None;
+
+	AxiChannel() = default;
+
+	AxiChannel(Type type) : value(type) {}
+
+	std::string to_string() const {
+		switch (value) {
+		case Type::AW:
+			return "AW";
+		case Type::W:
+			return "W";
+		case Type::AR:
+			return "AR";
+		case Type::R:
+			return "R";
+		case Type::B:
+			return "B";
+		default:
+			return "None";
+		}
+	}
 };
 
 struct AxiTransaction {
 	ARM::AXI::Payload *payload  = nullptr;
-	AxiChannel         channel  = None;
+	AxiChannel         channel  = AxiChannel::Type::None;
 	size_t             beat_idx = 0;
 };
 
 struct Flit {
 	AxiData         axi_data;
-	AxiChannel      axi_ch = None;
+	AxiChannel      axi_ch = AxiChannel::Type::None;
 	uint8_t         len    = 0;
 	ARM::AXI::Burst burst  = 0;
 	uint32_t        id     = 0;
