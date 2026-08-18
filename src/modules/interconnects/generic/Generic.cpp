@@ -26,6 +26,10 @@ GenericInterconnect::GenericInterconnect(sc_module_name name, unsigned chiplet_i
 	                                              << link_buffer_size << ") must be >= flit_size (" << flit_size
 	                                              << ")");
 
+	// The protocol overhead carries the valid payload size of a flit.
+	LOG_ASSERT(overhead_size >= sizeof(uint16_t),
+	           "Parameter Error: overhead_size must be at least " << sizeof(uint16_t) << " bytes");
+
 	stats.register_utilization(this->name());
 	stats.register_usage(this->name(), "staging_buffer_usage");
 
@@ -125,9 +129,13 @@ void GenericInterconnect::clk_posedge_protocol() {
 			return static_cast<size_t>(val / axi_width_bytes) * axi_width_bytes;
 		};
 
+		const bool staging_buffer_full = staging_buffer_ptr + axi_width / 8 > staging_buffer_size;
+
 		if (staging_buffer_ptr >= flit_data_bytes) {
 			flit_payload_bytes = align_down(flit_data_bytes);
-		} else if (flush_staging_buffer) {
+		} else if (flush_staging_buffer || staging_buffer_full) {
+			// Release what is staged: either the AXI transfer ended or no further beat
+			// fits, in which case holding the flit back would stall the transfer.
 			flit_payload_bytes = align_down(staging_buffer_ptr);
 		}
 
@@ -421,7 +429,7 @@ void GenericInterconnect::clear_axi_states() {
 }
 
 void GenericInterconnect::handle_axi_channels() {
-	if (staging_buffer_ptr + axi_width > staging_buffer_size || flush_staging_buffer) {
+	if (staging_buffer_ptr + axi_width / 8 > staging_buffer_size || flush_staging_buffer) {
 		return;
 	}
 
@@ -670,6 +678,9 @@ Flit GenericInterconnect::read_flit_from_buffer(const uint8_t *src) {
 	size_t offset = overhead_size;
 	Flit   flit(flit_data_bytes);
 
+	// Valid payload size from the protocol overhead, see write_flit_to_buffer()
+	std::memcpy(&flit.payload_size, src, sizeof(flit.payload_size));
+
 	std::memcpy(&flit.axi_ch, src + offset, sizeof(flit.axi_ch));
 	offset += sizeof(flit.axi_ch);
 	std::memcpy(&flit.len, src + offset, sizeof(flit.len));
@@ -689,8 +700,11 @@ void GenericInterconnect::write_flit_to_buffer(uint8_t *dest, const Flit &flit, 
                                                size_t flit_padding_bytes) {
 	size_t offset = 0;
 
-	// Protocol overhead
+	// Protocol overhead. The framing carries the number of valid payload bytes so
+	// that the receiving endpoint can tell payload from padding on partial flits.
 	std::memset(dest + offset, 0xFF, overhead_size);
+	const uint16_t payload_size = static_cast<uint16_t>(flit_payload_bytes);
+	std::memcpy(dest + offset, &payload_size, sizeof(payload_size));
 	offset += overhead_size;
 
 	// Header
@@ -772,7 +786,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
 			w_queue_out.push_back(payload);
 			// Remove if transaction is done or no more data in this flit
 			if (w_beat_count + 1 == payload->get_beat_count() ||
-			    (flit_w_beat_count + 1) * axi_width / 8 > flit_data_bytes) {
+			    (flit_w_beat_count + 1) * axi_width / 8 > flit.payload_size) {
 				flit_w_beat_count = 0;
 				// Consume from Rx buffer
 				std::memmove(rx_buffers[rx_idx].data(), rx_buffers[rx_idx].data() + flit_size,
@@ -832,7 +846,7 @@ void GenericInterconnect::process_flit(unsigned rx_idx, Flit &flit) {
 			r_queue_out.push_back(payload);
 			// Remove if transaction is done or no more data in this flit
 			if (r_beat_count + 1 == payload->get_beat_count() ||
-			    (flit_r_beat_count + 1) * axi_width / 8 > flit_data_bytes) {
+			    (flit_r_beat_count + 1) * axi_width / 8 > flit.payload_size) {
 				flit_r_beat_count = 0;
 				// Consume from Rx buffer
 				std::memmove(rx_buffers[rx_idx].data(), rx_buffers[rx_idx].data() + flit_size,

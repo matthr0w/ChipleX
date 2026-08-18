@@ -81,6 +81,11 @@ struct Flit {
 	uint32_t        id     = 0;
 	uint64_t        user   = 0;
 
+	// Number of payload bytes that carry data rather than padding. It travels in
+	// the protocol overhead, not in the header, so it does not consume payload
+	// capacity. Only valid on flits read back from a buffer.
+	uint16_t payload_size = 0;
+
 	static constexpr size_t header_size() {
 		return sizeof(AxiChannel) + sizeof(uint8_t) + sizeof(ARM::AXI::Burst) + sizeof(uint32_t) + sizeof(uint64_t);
 	}
