@@ -180,8 +180,8 @@ def execution_hash(source_hash: str, model: dict, execution: Execution, accel_pa
 
     Covers the workload source plus everything that can change the result: CPU
     model, compiler and flags, resolved gem5 params, core clock, memory latency,
-    and the executor's accelerator params (its speedup differs by accelerator
-    type/config). The executor identity itself is the DB key, not part of the
+    bus width, and the executor's accelerator params (its speedup differs by
+    accelerator type/config). The executor identity itself is the DB key, not part of the
     hash, so two identically-configured executors share a result. Any change
     re-triggers estimation.
     """
@@ -193,6 +193,7 @@ def execution_hash(source_hash: str, model: dict, execution: Execution, accel_pa
     hash.update(str(sorted(execution.params.items())).encode())
     hash.update(execution.clock.encode())
     hash.update(execution.mem_latency.encode())
+    hash.update(str(execution.bus_width).encode())
     hash.update(str(sorted((accel_params or {}).items())).encode())
     return hash.hexdigest()
 
@@ -217,9 +218,13 @@ def resolve_workload(setup: Setup, workload: Workload):
 
         cores = config.get("cores") or {}
         memory = config.get("memory") or {}
+        axi = config.get("axi") or {}
         clk_cycle = cores.get("clk_cycle", DEFAULT_CLK_CYCLE_NS)
         access_latency = memory.get("access_latency", DEFAULT_ACCESS_LATENCY_CYCLES)
         mem_clk_cycle = memory.get("clk_cycle", DEFAULT_MEM_CLK_CYCLE_NS)
+        # gem5's crossbar width is in bytes; the SystemC AXI width is in bits.
+        axi_width_bits = axi.get("width", DEFAULT_AXI_WIDTH_BITS)
+        bus_width = max(1, axi_width_bits // 8)
 
         execution = Execution(
             chiplet=chiplet,
@@ -228,6 +233,7 @@ def resolve_workload(setup: Setup, workload: Workload):
             params=params,
             clock=f"{clk_cycle}ns",
             mem_latency=f"{access_latency * mem_clk_cycle}ns",
+            bus_width=bus_width,
         )
         # The accelerator's speedup config is part of what determines this
         # executor's result, so it enters the hash. Resolve it quietly: a core

@@ -33,11 +33,12 @@ def parse_args():
                              "of a write-through L1. The cache stays write-back "
                              "either way; gem5's classic Cache has no "
                              "write-through mode")
+    parser.add_argument("--bus-width", type=int, default=-1,
+                        help="membus (crossbar) data width in bytes. Negative "
+                             "keeps the gem5 SystemXBar default")
     parser.add_argument("--bus-latency", type=int, default=-1,
                         help="membus frontend, forward and response latency in "
-                             "cycles. Negative keeps the gem5 defaults, which "
-                             "model a crossbar that a core with tightly coupled "
-                             "memory does not have")
+                             "cycles. Negative keeps the gem5 defaults.")
     parser.add_argument("--mem-mode", default="timing",
                         help="memory mode: 'timing' for pipelined CPUs, "
                              "'atomic' for an AtomicSimpleCPU")
@@ -66,6 +67,8 @@ def main():
     system.cpu = cpu_cls()
 
     system.membus = SystemXBar()
+    if args.bus_width >= 0:
+        system.membus.width = args.bus_width
     if args.bus_latency >= 0:
         system.membus.frontend_latency = args.bus_latency
         system.membus.forward_latency = args.bus_latency

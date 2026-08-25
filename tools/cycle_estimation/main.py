@@ -253,13 +253,15 @@ class CycleEstimator:
     def compute_estimation(self, setup: Setup, workload: Workload, execution: Execution):
         model = load_model(execution.model)
 
-        # Run gem5 to get per-region cycle counts. --clock (core period) and
-        # --mem-latency come from the executor's resolved SystemC chiplet config.
+        # Run gem5 to get per-region cycle counts. --clock (core period),
+        # --mem-latency and --bus-width (the crossbar width, from the AXI width)
+        # come from the executor's resolved SystemC chiplet config.
         outdir = BUILD_DIR / "m5out"
         command = ([GEM5_BINARY, "--outdir", str(outdir), str(model_config(model)),
                     "--cmd", str(workload.binary_path)]
                    + model_cli(model, execution.params)
-                   + ["--clock", execution.clock, "--mem-latency", execution.mem_latency])
+                   + ["--clock", execution.clock, "--mem-latency", execution.mem_latency,
+                      "--bus-width", str(execution.bus_width)])
         proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         output = (proc.stdout or "") + "\n" + (proc.stderr or "")
         debug_output = BUILD_DIR / "debug_gem5.txt"

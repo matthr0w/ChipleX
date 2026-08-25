@@ -11,6 +11,7 @@ class Execution:
     params: Dict = field(default_factory=dict)
     clock: str = "1ns"
     mem_latency: str = "3ns"
+    bus_width: int = 4
     input_hash: str = ""
     estimation_result: int = 0
 
