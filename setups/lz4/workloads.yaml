@@ -1,9 +1,9 @@
 workloads:
   compress:
     chiplet0.core0:
-      cycles_count: 11135
-      input_hash: b7bd3b07eaf414b251ca1c6836a587ad3a6f4481
+      cycles_count: 12212
+      input_hash: e7c94f33aca910d1032c2c8f98224dfa2c5eb4df
   decompress:
     chiplet1.core0:
-      cycles_count: 669
-      input_hash: f2b352119cbd6fe8cf0755938025ca2113842200
+      cycles_count: 764
+      input_hash: c220503411c6c69446bb03a2833dcc2649745a26

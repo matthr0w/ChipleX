@@ -1,14 +1,14 @@
 workloads:
   matalu:
     chiplet1.dfp:
-      cycles_count: 73
-      input_hash: 92ab7acc30c0f76ec9ad9b382908fa03053ec166
+      cycles_count: 79
+      input_hash: 4a1241c131d891af17da8715c6a8174fa1aaf464
     chiplet1.gen:
-      cycles_count: 295
-      input_hash: a6c834d39336800b217003911a6ce7981d8535cd
+      cycles_count: 319
+      input_hash: b1830c3d6472dbb35f6505b1c22f786c19e1d414
     chiplet2.dfp:
-      cycles_count: 73
-      input_hash: 92ab7acc30c0f76ec9ad9b382908fa03053ec166
+      cycles_count: 79
+      input_hash: 4a1241c131d891af17da8715c6a8174fa1aaf464
     chiplet2.gen:
-      cycles_count: 295
-      input_hash: a6c834d39336800b217003911a6ce7981d8535cd
+      cycles_count: 319
+      input_hash: b1830c3d6472dbb35f6505b1c22f786c19e1d414
