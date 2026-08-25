@@ -17,7 +17,7 @@ enum class LogLevel {
 	ERROR,
 	SILENT
 };
-inline LogLevel log_level = LogLevel::WARN;
+inline LogLevel log_level = LogLevel::INFO;
 
 // ---------------------------
 // Simulation Parameters

@@ -1,9 +1,10 @@
 #pragma once
 
 #include <iomanip>
-#include <iostream>
+#include <sstream>
 
 #include "globals.h"
+#include "logging.h"
 #include "modules/extensions/ExtensionBase.h"
 #include "modules/extensions/ExtensionIDs.h"
 
@@ -115,14 +116,11 @@ class CryptoExtension : public ExtensionBase {
 	}
 
 	void dump_data(const char *tag, const std::vector<uint8_t> &data) const {
-		if (log_level > LogLevel::DEBUG) {
-			return;
-		}
-		std::cout << tag << ": ";
+		std::ostringstream _hex;
 		for (auto b : data) {
-			std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(b) << " ";
+			_hex << std::hex << std::setw(2) << std::setfill('0') << static_cast<unsigned>(b) << " ";
 		}
-		std::cout << std::dec << "\n";
+		LOG_DEBUG(tag << ": " << _hex.str());
 	}
 
 	// FIFOs
