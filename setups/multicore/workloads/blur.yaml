@@ -1,0 +1,5 @@
+executors:
+  - compute.core0
+  - compute.core1
+  - compute.core2
+  - compute.core3

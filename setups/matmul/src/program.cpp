@@ -1,235 +1,139 @@
 #include "program.h"
 
+#include <iostream>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "matmul.h"
 #include "modules/Core.h"
 
-const int MATRIX_SIZE  = 4;
-const int ELEMENT_SIZE = sizeof(int);
-const int ROW_SIZE     = MATRIX_SIZE * ELEMENT_SIZE;
+namespace {
 
-const int matrixA[MATRIX_SIZE][MATRIX_SIZE] = {
-    {1,  2,  3,  4 },
-    {5,  6,  7,  8 },
-    {9,  10, 11, 12},
-    {13, 14, 15, 16}
-};
+std::string worker_name(int chiplet) {
+	return "chiplet" + std::to_string(chiplet);
+}
 
-const int matrixB[MATRIX_SIZE][MATRIX_SIZE] = {
-    {17, 18, 19, 20},
-    {21, 22, 23, 24},
-    {25, 26, 27, 28},
-    {29, 30, 31, 32}
-};
+void print_result(const int *result) {
+	std::cout << "Temporary Matrix Result" << std::endl;
+	for (int row = 0; row < MATRIX_SIZE; row++) {
+		std::stringstream ss;
+		for (int col = 0; col < MATRIX_SIZE; col++) {
+			ss << result[row * MATRIX_SIZE + col] << " ";
+		}
+		std::cout << ss.str() << std::endl;
+	}
+	std::cout << std::endl;
+}
+
+unsigned count_mismatches(const int *result) {
+	unsigned fails = 0;
+	for (int row = 0; row < MATRIX_SIZE; row++) {
+		for (int col = 0; col < MATRIX_SIZE; col++) {
+			int sum = 0;
+			for (int k = 0; k < MATRIX_SIZE; k++) {
+				sum += element_a(row, k) * element_b(k, col);
+			}
+			if (result[row * MATRIX_SIZE + col] != sum) {
+				fails++;
+			}
+		}
+	}
+	return fails;
+}
+
+// -------------------------------------------------------
+// Manager
+// -------------------------------------------------------
+void manager_main(Core &core) {
+	// One chunk per worker. Static, so every buffer outlives the transfer that
+	// reads it: the writes below are issued back to back and only the last is
+	// waited on.
+	static std::vector<int> chunks(NUM_CHIPLETS * (CHUNK_BYTES / ELEMENT_SIZE));
+
+	LOG_ASSERT(static_cast<unsigned>(MAX_TRANSFER_BYTES) == core.MAX_INCR_BURST_SIZE,
+	           "AXI_WIDTH_BITS in matmul.h gives a " << MAX_TRANSFER_BYTES << "-byte transfer limit, but the bus "
+	                                                 << "allows " << core.MAX_INCR_BURST_SIZE
+	                                                 << ". Set it to axi.width from system.yaml.");
+
+	std::shared_ptr<RequestHandle> handle = nullptr;
+	for (int chiplet = 0; chiplet < NUM_CHIPLETS; chiplet++) {
+		int *chunk = chunks.data() + chiplet * (CHUNK_BYTES / ELEMENT_SIZE);
+		fill_chunk(chunk, chiplet);
+
+		auto req = AxiRequest(chiplet, reinterpret_cast<unsigned char *>(chunk), CHUNK_BYTES)
+		               .to_via(worker_name(chiplet), "memory", "interconnect");
+		handle   = core.write(req);
+	}
+
+	handle->wait();
+}
+
+void manager_irq(Core &core, const IRQ &irq) {
+	static std::vector<int> result(MATRIX_SIZE * MATRIX_SIZE);
+	static int              blocks = 0;
+
+	// The worker tagged its write with its own index and placed its rows at the
+	// offset they have in C, so the block needs no header to be filed.
+	const int chiplet = static_cast<int>(irq.request_id);
+	int      *rows    = result.data() + chiplet * ROWS_PER_CHIPLET * MATRIX_SIZE;
+
+	auto req =
+	    AxiRequest(irq.request_id, reinterpret_cast<unsigned char *>(rows), BLOCK_BYTES).set_addr(irq.target_address);
+	core.read(req)->wait();
+
+	print_result(result.data());
+
+	if (++blocks < NUM_CHIPLETS) {
+		return;
+	}
+
+	const unsigned checks = MATRIX_SIZE * MATRIX_SIZE;
+	std::cout << "Result: " << (checks - count_mismatches(result.data())) << " / " << checks << " checks passed"
+	          << std::endl;
+
+	sc_stop();
+}
+
+// -------------------------------------------------------
+// Worker
+// -------------------------------------------------------
+void worker_irq(Core &core, const IRQ &irq, int chiplet) {
+	std::vector<int> chunk(CHUNK_BYTES / ELEMENT_SIZE);
+	std::vector<int> rows(BLOCK_BYTES / ELEMENT_SIZE);
+
+	auto req =
+	    AxiRequest(chiplet, reinterpret_cast<unsigned char *>(chunk.data()), CHUNK_BYTES).set_addr(irq.target_address);
+	core.read(req)->wait();
+
+	multiply_block(chunk.data(), rows.data());
+	core.wait_cycles("matmul");
+
+	// The rows go to their offset in C, tagged with this worker's index.
+	auto back = AxiRequest(chiplet, reinterpret_cast<unsigned char *>(rows.data()), BLOCK_BYTES)
+	                .to_via("io", "memory", "interconnect")
+	                .set_addr(chiplet * BLOCK_BYTES);
+	core.write(back)->wait();
+}
+
+ModuleCodeMap build_program_code() {
+	ModuleCodeMap code;
+
+	code[{"io", "core0"}] = CPUCode{.main = manager_main, .irq = manager_irq};
+
+	for (int chiplet = 0; chiplet < NUM_CHIPLETS; chiplet++) {
+		code[{worker_name(chiplet), "core0"}] =
+		    CPUCode{.main = [](Core &core) {},
+		            .irq  = [chiplet](Core &core, const IRQ &irq) { worker_irq(core, irq, chiplet); }};
+	}
+
+	return code;
+}
+
+} // namespace
 
 ModuleCodeMap *get_program_code() {
-	static ModuleCodeMap code = {
-	    {{"fpga", "core0"},
-	     {CPUCode{.main =
-	                  [](Core &core) {
-		                  const int data_size_per_chiplet = ROW_SIZE + MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE;
-		                  auto     *data                  = new unsigned char[data_size_per_chiplet * 4];
-
-		                  std::shared_ptr<RequestHandle> handle = nullptr;
-		                  for (int chiplet = 0; chiplet < 4; ++chiplet) {
-			                  unsigned char *chunk = data + chiplet * data_size_per_chiplet;
-
-			                  // Fill the buffer for this chiplet
-			                  std::memcpy(chunk, &matrixA[chiplet][0], ROW_SIZE);
-			                  std::memcpy(chunk + ROW_SIZE, &matrixB[0][0], MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE);
-
-			                  auto reqw = AxiRequest(chiplet, chunk, data_size_per_chiplet)
-			                                  .to_via("chiplet" + std::to_string(chiplet), "memory", "interconnect");
-
-			                  handle = core.write(reqw);
-		                  }
-
-		                  handle->wait();
-
-		                  delete[] data;
-	                  },
-	              .irq =
-	                  [](Core &core, const IRQ &irq) {
-		                  static unsigned interrupt_count = 0;
-
-		                  // Save result in static variable
-		                  static int resultC[MATRIX_SIZE][MATRIX_SIZE];
-
-		                  uint32_t     address   = irq.target_address;
-		                  unsigned int data_size = irq.data_length;
-
-		                  int chiplet_id = (address - 0x40000) / 0x1000;
-
-		                  auto *data = new unsigned char[data_size];
-
-		                  auto reqr   = AxiRequest(chiplet_id, data, data_size).set_addr(address);
-		                  auto handle = core.read(reqr);
-		                  handle->wait();
-
-		                  int *row_result = reinterpret_cast<int *>(data);
-
-		                  memcpy(&resultC[chiplet_id][0], row_result, ROW_SIZE);
-
-		                  delete[] data;
-
-		                  std::cout << "Temporary Matrix Result" << std::endl;
-		                  for (int i = 0; i < MATRIX_SIZE; i++) {
-			                  std::stringstream ss;
-			                  for (int j = 0; j < MATRIX_SIZE; j++) {
-				                  ss << resultC[i][j] << " ";
-			                  }
-			                  std::cout << ss.str() << std::endl;
-		                  }
-		                  std::cout << std::endl;
-
-		                  interrupt_count++;
-
-		                  if (interrupt_count == 4) {
-			                  sc_stop();
-		                  }
-	                  }}}},
-
-	    {{"chiplet0", "core0"},
-	     {CPUCode{.main = [](Core &core) {},
-	              .irq =
-	                  [](Core &core, const IRQ &irq) {
-		                  uint32_t address   = irq.target_address;
-		                  int      data_size = irq.data_length;
-
-		                  auto *data   = new unsigned char[data_size];
-		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address);
-		                  auto  handle = core.read(reqr);
-		                  handle->wait();
-
-		                  int *A                  = reinterpret_cast<int *>(data);
-		                  int *B                  = reinterpret_cast<int *>(data + ROW_SIZE);
-		                  int  C_row[MATRIX_SIZE] = {0};
-
-		                  for (int j = 0; j < MATRIX_SIZE; j++) {
-			                  for (int k = 0; k < MATRIX_SIZE; k++) {
-				                  C_row[j] += A[k] * B[k * MATRIX_SIZE + j];
-			                  }
-		                  }
-
-		                  auto *result = new unsigned char[ROW_SIZE];
-		                  memcpy(result, C_row, ROW_SIZE);
-
-		                  core.wait_cycles("matmul");
-
-		                  auto reqw =
-		                      AxiRequest(0, result, ROW_SIZE).to_via("fpga", "memory", "interconnect").set_addr(0x0);
-		                  handle = core.write(reqw);
-		                  handle->wait();
-
-		                  delete[] data;
-		                  delete[] result;
-	                  }}}},
-
-	    {{"chiplet1", "core0"},
-	     {CPUCode{.main = [](Core &core) {},
-	              .irq =
-	                  [](Core &core, const IRQ &irq) {
-		                  uint32_t address   = irq.target_address;
-		                  int      data_size = irq.data_length;
-
-		                  auto *data   = new unsigned char[data_size];
-		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address);
-		                  auto  handle = core.read(reqr);
-		                  handle->wait();
-
-		                  int *A                  = reinterpret_cast<int *>(data);
-		                  int *B                  = reinterpret_cast<int *>(data + ROW_SIZE);
-		                  int  C_row[MATRIX_SIZE] = {0};
-
-		                  for (int j = 0; j < MATRIX_SIZE; j++) {
-			                  for (int k = 0; k < MATRIX_SIZE; k++) {
-				                  C_row[j] += A[k] * B[k * MATRIX_SIZE + j];
-			                  }
-		                  }
-
-		                  auto *result = new unsigned char[ROW_SIZE];
-		                  memcpy(result, C_row, ROW_SIZE);
-
-		                  core.wait_cycles("matmul");
-
-		                  auto reqw =
-		                      AxiRequest(0, result, ROW_SIZE).to_via("fpga", "memory", "interconnect").set_addr(0x1000);
-		                  handle = core.write(reqw);
-		                  handle->wait();
-
-		                  delete[] data;
-		                  delete[] result;
-	                  }}}},
-
-	    {{"chiplet2", "core0"},
-	     {CPUCode{.main = [](Core &core) {},
-	              .irq =
-	                  [](Core &core, const IRQ &irq) {
-		                  uint32_t address   = irq.target_address;
-		                  int      data_size = irq.data_length;
-
-		                  auto *data   = new unsigned char[data_size];
-		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address);
-		                  auto  handle = core.read(reqr);
-		                  handle->wait();
-
-		                  int *A                  = reinterpret_cast<int *>(data);
-		                  int *B                  = reinterpret_cast<int *>(data + ROW_SIZE);
-		                  int  C_row[MATRIX_SIZE] = {0};
-
-		                  for (int j = 0; j < MATRIX_SIZE; j++) {
-			                  for (int k = 0; k < MATRIX_SIZE; k++) {
-				                  C_row[j] += A[k] * B[k * MATRIX_SIZE + j];
-			                  }
-		                  }
-
-		                  auto *result = new unsigned char[ROW_SIZE];
-		                  memcpy(result, C_row, ROW_SIZE);
-
-		                  core.wait_cycles("matmul");
-
-		                  auto reqw =
-		                      AxiRequest(0, result, ROW_SIZE).to_via("fpga", "memory", "interconnect").set_addr(0x2000);
-		                  handle = core.write(reqw);
-		                  handle->wait();
-
-		                  delete[] data;
-		                  delete[] result;
-	                  }}}},
-
-	    {{"chiplet3", "core0"},
-	     {CPUCode{.main = [](Core &core) {},
-	              .irq =
-	                  [](Core &core, const IRQ &irq) {
-		                  uint32_t address   = irq.target_address;
-		                  int      data_size = irq.data_length;
-
-		                  auto *data   = new unsigned char[data_size];
-		                  auto  reqr   = AxiRequest(0, data, data_size).set_addr(address);
-		                  auto  handle = core.read(reqr);
-		                  handle->wait();
-
-		                  int *A                  = reinterpret_cast<int *>(data);
-		                  int *B                  = reinterpret_cast<int *>(data + ROW_SIZE);
-		                  int  C_row[MATRIX_SIZE] = {0};
-
-		                  for (int j = 0; j < MATRIX_SIZE; j++) {
-			                  for (int k = 0; k < MATRIX_SIZE; k++) {
-				                  C_row[j] += A[k] * B[k * MATRIX_SIZE + j];
-			                  }
-		                  }
-
-		                  auto *result = new unsigned char[ROW_SIZE];
-		                  memcpy(result, C_row, ROW_SIZE);
-
-		                  core.wait_cycles("matmul");
-
-		                  auto reqw =
-		                      AxiRequest(0, result, ROW_SIZE).to_via("fpga", "memory", "interconnect").set_addr(0x3000);
-		                  handle = core.write(reqw);
-		                  handle->wait();
-
-		                  delete[] data;
-		                  delete[] result;
-	                  }}}}
-    };
+	static ModuleCodeMap code = build_program_code();
 	return &code;
 }

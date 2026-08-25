@@ -14,7 +14,7 @@ struct ImageHeader {
 
 ModuleCodeMap *get_program_code() {
 	static ModuleCodeMap code = {
-	    {{"fpga", "core0"},
+	    {{"io", "core0"},
 	     {CPUCode{.main =
 	                  [](Core &core) {
 		                  int            width = 0, height = 0, channels = 0;
@@ -186,72 +186,72 @@ ModuleCodeMap *get_program_code() {
 	                  }}}},
 
 	    {{"chiplet1", "core0"},
-	     {CPUCode{.main = [](Core &core) {},
-	              .irq =
-	                  [](Core &core, const IRQ &irq) {
-		                  static unsigned interrupt_count = 0;
-		                  static uint32_t base_addr       = 0;
-		                  static size_t   total_len       = 0;
+	     {CPUCode{
+	         .main = [](Core &core) {},
+	         .irq =
+	             [](Core &core, const IRQ &irq) {
+		             static unsigned interrupt_count = 0;
+		             static uint32_t base_addr       = 0;
+		             static size_t   total_len       = 0;
 
-		                  if (interrupt_count == 0) {
-			                  base_addr = irq.target_address;
-		                  }
+		             if (interrupt_count == 0) {
+			             base_addr = irq.target_address;
+		             }
 
-		                  total_len += irq.data_length;
-		                  ++interrupt_count;
+		             total_len += irq.data_length;
+		             ++interrupt_count;
 
-		                  if (interrupt_count != 118) {
-			                  return;
-		                  }
+		             if (interrupt_count != 118) {
+			             return;
+		             }
 
-		                  auto                          *read_buf = new unsigned char[total_len];
-		                  size_t                         max_size = core.MAX_INCR_BURST_SIZE;
-		                  size_t                         offset   = 0;
-		                  int                            req_id   = 0;
-		                  std::shared_ptr<RequestHandle> handle   = nullptr;
+		             auto                          *read_buf = new unsigned char[total_len];
+		             size_t                         max_size = core.MAX_INCR_BURST_SIZE;
+		             size_t                         offset   = 0;
+		             int                            req_id   = 0;
+		             std::shared_ptr<RequestHandle> handle   = nullptr;
 
-		                  while (offset < total_len) {
-			                  size_t chunk_size = std::min(total_len - offset, max_size);
+		             while (offset < total_len) {
+			             size_t chunk_size = std::min(total_len - offset, max_size);
 
-			                  auto reqr =
-			                      AxiRequest(req_id, read_buf + offset, chunk_size).set_addr(base_addr + offset);
+			             auto reqr = AxiRequest(req_id, read_buf + offset, chunk_size).set_addr(base_addr + offset);
 
-			                  handle  = core.read(reqr);
-			                  offset += chunk_size;
-			                  ++req_id;
-		                  }
+			             handle  = core.read(reqr);
+			             offset += chunk_size;
+			             ++req_id;
+		             }
 
-		                  handle->wait();
+		             handle->wait();
 
-		                  const size_t header_size = sizeof(ImageHeader);
-		                  auto        *header      = reinterpret_cast<ImageHeader *>(read_buf);
+		             const size_t header_size = sizeof(ImageHeader);
+		             auto        *header      = reinterpret_cast<ImageHeader *>(read_buf);
 
-		                  auto *write_buf = new unsigned char[total_len];
-		                  std::memcpy(write_buf, read_buf, header_size);
+		             auto *write_buf = new unsigned char[total_len];
+		             std::memcpy(write_buf, read_buf, header_size);
 
-		                  for (size_t i = header_size; i < total_len; ++i) {
-			                  write_buf[i] = 255 - read_buf[i];
-		                  }
+		             for (size_t i = header_size; i < total_len; ++i) {
+			             write_buf[i] = 255 - read_buf[i];
+		             }
 
-		                  core.wait_cycles("invert");
+		             core.wait_cycles("invert");
 
-		                  offset = 0;
-		                  while (offset < total_len) {
-			                  size_t chunk_size = std::min(total_len - offset, max_size);
+		             offset = 0;
+		             while (offset < total_len) {
+			             size_t chunk_size = std::min(total_len - offset, max_size);
 
-			                  auto reqw = AxiRequest(req_id, write_buf + offset, chunk_size)
-			                                  .to_via("fpga", "memory", "interconnect");
+			             auto reqw =
+			                 AxiRequest(req_id, write_buf + offset, chunk_size).to_via("io", "memory", "interconnect");
 
-			                  handle  = core.write(reqw);
-			                  offset += chunk_size;
-			                  ++req_id;
-		                  }
+			             handle  = core.write(reqw);
+			             offset += chunk_size;
+			             ++req_id;
+		             }
 
-		                  handle->wait();
+		             handle->wait();
 
-		                  delete[] read_buf;
-		                  delete[] write_buf;
-	                  }}}}
+		             delete[] read_buf;
+		             delete[] write_buf;
+	             }}}     }
     };
 	return &code;
 }

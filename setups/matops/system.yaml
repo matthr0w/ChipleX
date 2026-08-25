@@ -1,5 +1,5 @@
 chiplets:
-  - name: fpga
+  - name: io
     type: compute
     interconnects:
       - name: interconnect
@@ -30,8 +30,8 @@ chiplets:
         type: pcie
 
 connections:
-  - endpoints: [fpga.interconnect, chiplet0.interconnect]
+  - endpoints: [io.interconnect, chiplet0.interconnect]
   - endpoints: [chiplet0.interconnect, chiplet1.interconnect]
   - endpoints: [chiplet1.interconnect, chiplet2.interconnect]
   - endpoints: [chiplet2.interconnect, chiplet3.interconnect]
-  - endpoints: [chiplet3.interconnect, fpga.interconnect]
+  - endpoints: [chiplet3.interconnect, io.interconnect]

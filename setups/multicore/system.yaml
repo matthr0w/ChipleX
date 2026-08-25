@@ -1,0 +1,23 @@
+chiplets:
+  - name: compute
+    type: compute
+    interconnects:
+    - name: slink
+      type: serial-link
+    config:
+      cores:
+        num: 4
+
+  - name: memchip
+    type: memory
+    interconnects:
+    - name: slink
+      type: serial-link
+    config:
+      memory:
+        # The input and the result frame both sit in the off-chip window, which is
+        # half of this: 2 x 192 KB for a 256x256 RGB image.
+        size: 1024
+
+connections:
+  - endpoints: [compute.slink, memchip.slink]

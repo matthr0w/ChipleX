@@ -1,0 +1,93 @@
+chiplets:
+  - name: manager
+    type: compute
+    interconnects:
+    - name: slink
+      type: serial-link
+      config:
+        protocol:
+          clk_cycle: 2
+        phy:
+          ddr: true
+          num_channels: 1
+    - name: spi
+      type: spi
+      config:
+        clk_cycle: 2
+        num_lanes: 4
+    config:
+      cores:
+        clk_cycle: 2
+      memory:
+        size: 64
+        clk_cycle: 2
+      dma_engine:
+        clk_cycle: 2
+      axi:
+        width: 64
+        clk_cycle: 2
+
+  - name: memchip0
+    type: memory
+    interconnects:
+    - name: spi
+      type: spi
+      config:
+        clk_cycle: 2
+        num_lanes: 4
+    config:
+      memory:
+        size: 64
+        clk_cycle: 2
+      axi:
+        width: 64
+        clk_cycle: 2
+
+  - name: worker
+    type: compute
+    interconnects:
+    - name: slink
+      type: serial-link
+      config:
+        protocol:
+          clk_cycle: 2
+        phy:
+          ddr: true
+          num_channels: 1
+    - name: spi
+      type: spi
+      config:
+        clk_cycle: 2
+        num_lanes: 4
+    config:
+      cores:
+        clk_cycle: 2
+      memory:
+        size: 64
+        clk_cycle: 2
+      dma_engine:
+        clk_cycle: 2
+      axi:
+        width: 64
+        clk_cycle: 2
+        
+  - name: memchip1
+    type: memory
+    interconnects:
+    - name: spi
+      type: spi
+      config:
+        clk_cycle: 2
+        num_lanes: 4
+    config:
+      memory:
+        size: 64
+        clk_cycle: 2
+      axi:
+        width: 64
+        clk_cycle: 2
+      
+connections:
+  - endpoints: [manager.slink, worker.slink]
+  - endpoints: [worker.spi, memchip1.spi]
+  - endpoints: [manager.spi, memchip0.spi]

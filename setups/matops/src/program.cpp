@@ -13,17 +13,16 @@ void inline print_matrix(const int *matrix, int rows, int cols, const std::strin
 	}
 
 	for (int i = 0; i < rows; ++i) {
-		std::cout << "[ ";
 		for (int j = 0; j < cols; ++j) {
 			std::cout << matrix[i * cols + j] << " ";
 		}
-		std::cout << "]" << std::endl;
+		std::cout << std::endl;
 	}
 }
 
 ModuleCodeMap *get_program_code() {
 	static ModuleCodeMap code = {
-	    {{"fpga", "core0"},
+	    {{"io", "core0"},
 	     {CPUCode{.main =
 	                  [](Core &core) {
 		                  const unsigned MATRIX_ROWS = 10;
@@ -59,7 +58,7 @@ ModuleCodeMap *get_program_code() {
 		                  auto addr = irq.target_address;
 		                  auto len  = irq.data_length;
 
-		                  // Read from FPGA RAM
+		                  // Read from IO RAM
 		                  auto *data   = new unsigned char[len];
 		                  auto  reqr   = AxiRequest(0, data, len).set_addr(addr);
 		                  auto  handle = core.read(reqr);
@@ -248,11 +247,11 @@ ModuleCodeMap *get_program_code() {
 
 		                  print_matrix(matrix, rows, cols, "Subtract");
 
-		                  // Write to FPGA RAM
+		                  // Write to IO RAM
 		                  auto *write_buf = new unsigned char[len];
 		                  memcpy(write_buf, read_buf, len);
 
-		                  auto reqw = AxiRequest(0, write_buf, len).to_via("fpga", "memory", "interconnect");
+		                  auto reqw = AxiRequest(0, write_buf, len).to_via("io", "memory", "interconnect");
 		                  handle    = core.write(reqw);
 		                  handle->wait();
 

@@ -1,0 +1,114 @@
+{
+  "simulation_time_us": 961.662,
+  "modules": {
+    "manager.bus": {
+      "utilization_core0<->dma_engine": { "percentage": 0.47917, "active_time_us": 4.608, "idle_time_us": 957.054 },
+      "utilization_core0<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_core0<->slink": { "percentage": 2.42913, "active_time_us": 23.36, "idle_time_us": 938.302 },
+      "utilization_core0<->spi": { "percentage": 2.42913, "active_time_us": 23.36, "idle_time_us": 938.302 },
+      "utilization_dma_engine<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_dma_engine<->memory": { "percentage": 2.06309, "active_time_us": 19.84, "idle_time_us": 941.822 },
+      "utilization_dma_engine<->slink": { "percentage": 1.03155, "active_time_us": 9.92, "idle_time_us": 951.742 },
+      "utilization_dma_engine<->spi": { "percentage": 1.03155, "active_time_us": 9.92, "idle_time_us": 951.742 },
+      "utilization_slink<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_slink<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_slink<->slink": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_slink<->spi": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_spi<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_spi<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_spi<->slink": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_spi<->spi": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 }
+    },
+    "manager.core0": {
+      "transaction_count": 4864,
+      "transaction_latency_us": { "min": 0.014, "max": 0.222 },
+      "transaction_total_latency_us": 668.726,
+      "utilization": { "percentage": 3.99309, "active_time_us": 38.4, "idle_time_us": 923.262 }
+    },
+    "manager.dma_engine": {
+      "utilization": { "percentage": 1.05151, "active_time_us": 10.112, "idle_time_us": 951.55 }
+    },
+    "manager.memory": {
+      "size_bytes": 65536,
+      "used_bytes": 1024,
+      "utilization": { "percentage": 13.0988, "active_time_us": 125.966, "idle_time_us": 835.696 }
+    },
+    "manager.slink.data_link_layer": {
+      "transmission_count_in_link0": 3840,
+      "transmission_count_out_link0": 5056,
+      "transmission_duration_out_us_link0": 323.609,
+      "utilization": { "percentage": 55.7043, "active_time_us": 535.687, "idle_time_us": 425.975 }
+    },
+    "manager.spi": {
+      "efficiency_pJ_bit_link0": 10,
+      "transmission_count_in_link0": 3552,
+      "transmission_count_out_link0": 4768,
+      "transmission_duration_out_us_link0": 152.6,
+      "transmission_size_bits_link0": 64,
+      "utilization": { "percentage": 27.6897, "active_time_us": 266.282, "idle_time_us": 695.38 }
+    },
+    "memchip0.memory": {
+      "size_bytes": 65536,
+      "used_bytes": 512,
+      "utilization": { "percentage": 14.0652, "active_time_us": 135.26, "idle_time_us": 826.402 }
+    },
+    "memchip0.spi": {
+      "efficiency_pJ_bit_link0": 10,
+      "transmission_count_in_link0": 4768,
+      "transmission_count_out_link0": 3552,
+      "transmission_duration_out_us_link0": 113.682,
+      "transmission_size_bits_link0": 64,
+      "utilization": { "percentage": 27.6897, "active_time_us": 266.282, "idle_time_us": 695.38 }
+    },
+    "memchip1.memory": {
+      "size_bytes": 65536,
+      "used_bytes": 0,
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 }
+    },
+    "memchip1.spi": {
+      "efficiency_pJ_bit_link0": 10,
+      "transmission_size_bits_link0": 64,
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 }
+    },
+    "worker.bus": {
+      "utilization_core0<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_core0<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_core0<->slink": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_core0<->spi": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_dma_engine<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_dma_engine<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_dma_engine<->slink": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_dma_engine<->spi": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_slink<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_slink<->memory": { "percentage": 3.46068, "active_time_us": 33.28, "idle_time_us": 928.382 },
+      "utilization_slink<->slink": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_slink<->spi": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_spi<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_spi<->memory": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_spi<->slink": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 },
+      "utilization_spi<->spi": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 }
+    },
+    "worker.core0": {
+      "utilization": { "percentage": 25.2896, "active_time_us": 243.2, "idle_time_us": 718.462 }
+    },
+    "worker.dma_engine": {
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 }
+    },
+    "worker.memory": {
+      "size_bytes": 65536,
+      "used_bytes": 512,
+      "utilization": { "percentage": 26.1404, "active_time_us": 251.382, "idle_time_us": 710.28 }
+    },
+    "worker.slink.data_link_layer": {
+      "transmission_count_in_link0": 5056,
+      "transmission_count_out_link0": 3840,
+      "transmission_duration_out_us_link0": 245.779,
+      "utilization": { "percentage": 55.7043, "active_time_us": 535.687, "idle_time_us": 425.975 }
+    },
+    "worker.spi": {
+      "efficiency_pJ_bit_link0": 10,
+      "transmission_size_bits_link0": 64,
+      "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 961.662 }
+    }
+  }
+}

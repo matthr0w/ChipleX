@@ -11,7 +11,7 @@ struct DataHeader {
 
 ModuleCodeMap *get_program_code() {
 	static ModuleCodeMap code = {
-	    {{"fpga", "core0"},
+	    {{"io", "core0"},
 	     {CPUCode{.main =
 	                  [](Core &core) {
 		                  std::string str = "Hello, World! This is a test string for the LZ4 "
@@ -37,7 +37,7 @@ ModuleCodeMap *get_program_code() {
 		                  auto addr = irq.target_address;
 		                  auto len  = irq.data_length;
 
-		                  // Read from FPGA RAM
+		                  // Read from IO RAM
 		                  auto *read_buf = new unsigned char[len];
 		                  auto  reqr     = AxiRequest(0, read_buf, len).set_addr(addr);
 		                  auto  handle   = core.read(reqr);
@@ -141,9 +141,9 @@ ModuleCodeMap *get_program_code() {
 
 		             core.wait_cycles("decompress");
 
-		             // Write back to FPGA RAM
+		             // Write back to IO RAM
 		             auto reqw =
-		                 AxiRequest(0, decompressed_data, decompressed_size).to_via("fpga", "memory", "interconnect");
+		                 AxiRequest(0, decompressed_data, decompressed_size).to_via("io", "memory", "interconnect");
 
 		             handle = core.write(reqw);
 		             handle->wait();

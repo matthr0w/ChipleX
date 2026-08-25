@@ -11,7 +11,7 @@ sc_event next_run;
 
 ModuleCodeMap *get_program_code() {
 	static ModuleCodeMap code = {
-	    {{"fpga", "core0"},
+	    {{"io", "core0"},
 	     {CPUCode{
 	         .main =
 	             [](Core &core) {
@@ -47,7 +47,7 @@ ModuleCodeMap *get_program_code() {
 		             auto handle = core.read(request);
 		             handle->wait();
 
-		             std::cout << "\nResult on FPGA:" << std::endl;
+		             std::cout << "\nResult on IO Chiplet:" << std::endl;
 		             for (size_t i = 0; i < num_bytes; ++i) {
 			             std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
 			             if ((i + 1) % 16 == 0) {
@@ -65,7 +65,7 @@ ModuleCodeMap *get_program_code() {
 		             if (run == TOTAL_RUNS) {
 			             sc_stop();
 		             }
-	             }}}	                  },
+	             }}}	                 },
 	    {{"chiplet1", "core0"},
 	     {CPUCode{
 	         .main = [](Core &core) {},
@@ -135,7 +135,7 @@ ModuleCodeMap *get_program_code() {
 		             default:
 			             break;
 		             }
-	             }}}	                  },
+	             }}}	                 },
 	    {{"chiplet1", "dfp"},
 	     {AccelCode{.main =
 	                    [](HWAccel &accel, uint8_t *data, size_t size) {
@@ -156,29 +156,30 @@ ModuleCodeMap *get_program_code() {
 		                    auto request = AxiRequest(4, reinterpret_cast<unsigned char *>(data), size);
 		                    auto handle  = accel.write(request);
 		                    handle->wait();
-	                    }}}               },
+	                    }}}              },
 	    {{"chiplet1", "gen"},
-	     {AccelCode{.main =
-	                    [](HWAccel &accel, uint8_t *data, size_t size) {
-		                    int accel_id = 1;
-		                    for (size_t i = accel_id; i < size; i += 4) {
-			                    int x = data[i];
-			                    // Heavy ALU chain
-			                    int a   = x * 3 + 1;
-			                    int b   = x * 7 - 5;
-			                    int c   = x ^ (x << 1);
-			                    int d   = x ^ (x >> 2);
-			                    data[i] = a + b + c + d;
-		                    }
+	     {AccelCode{
+	         .main =
+	             [](HWAccel &accel, uint8_t *data, size_t size) {
+		             int accel_id = 1;
+		             for (size_t i = accel_id; i < size; i += 4) {
+			             int x = data[i];
+			             // Heavy ALU chain
+			             int a   = x * 3 + 1;
+			             int b   = x * 7 - 5;
+			             int c   = x ^ (x << 1);
+			             int d   = x ^ (x >> 2);
+			             data[i] = a + b + c + d;
+		             }
 
-		                    accel.wait_cycles("matalu");
+		             accel.wait_cycles("matalu");
 
-		                    // Path 6: Generic Accelerator -> Chiplet 2 Generic Accelerator with DMA Engine
-		                    auto request = AxiRequest(6, reinterpret_cast<unsigned char *>(data), size)
-		                                       .to_via("chiplet2", "gen", "pulp");
-		                    auto handle  = accel.write(request);
-		                    handle->wait();
-	                    }}}               },
+		             // Path 6: Generic Accelerator -> Chiplet 2 Generic Accelerator with DMA Engine
+		             auto request =
+		                 AxiRequest(6, reinterpret_cast<unsigned char *>(data), size).to_via("chiplet2", "gen", "pulp");
+		             auto handle = accel.write(request);
+		             handle->wait();
+	             }}}	                 },
 	    {{"chiplet2", "core0"},
 	     {CPUCode{.main = [](Core &core) {},
 	              .irq =
@@ -231,10 +232,10 @@ ModuleCodeMap *get_program_code() {
 		                  } break;
 		                  case Operation::FetchFromMem: {
 			                  SC_LOG_INFO(&core, "FetchFromMem");
-			                  // Path 11: mem_chiplet2 -> FPGA
+			                  // Path 11: mem_chiplet2 -> io
 			                  auto dma = AxiDMARequest(11, TOTAL_SIZE)
 			                                 .from_via("mem_chiplet2", "memory", 0x0, "spi")
-			                                 .to_via("fpga", "memory", 0x0, "pulp");
+			                                 .to_via("io", "memory", 0x0, "pulp");
 			                  core.dma(dma);
 			                  total_buffer_size = TOTAL_SIZE;
 			                  offset            = 0;
@@ -242,7 +243,7 @@ ModuleCodeMap *get_program_code() {
 		                  default:
 			                  break;
 		                  }
-	                  }}}                 },
+	                  }}}                },
 	    {{"chiplet2", "dfp"},
 	     {AccelCode{.main =
 	                    [](HWAccel &accel, uint8_t *data, size_t size) {
@@ -263,8 +264,8 @@ ModuleCodeMap *get_program_code() {
 		                    auto request = AxiRequest(9, reinterpret_cast<unsigned char *>(data), size);
 		                    auto handle  = accel.write(request);
 		                    handle->wait();
-	                    }}}               },
-	    {{"chiplet2", "gen"},  {AccelCode{.main = [](HWAccel &accel, uint8_t *data, size_t size) {
+	                    }}}              },
+	    {{"chiplet2", "gen"},   {AccelCode{.main = [](HWAccel &accel, uint8_t *data, size_t size) {
 		     int accel_id = 2;
 		     for (size_t i = accel_id; i < size; i += 4) {
 			     int x = data[i];

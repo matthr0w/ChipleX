@@ -101,7 +101,7 @@
       "used_bytes": 120008,
       "utilization": { "percentage": 14.7411, "active_time_us": 601.872, "idle_time_us": 3481.08 }
     },
-    "fpga.bus": {
+    "io.bus": {
       "utilization_core0<->dma_engine": { "percentage": 0, "active_time_us": 0, "idle_time_us": 4082.96 },
       "utilization_core0<->interconnect": { "percentage": 12.1334, "active_time_us": 495.4, "idle_time_us": 3587.56 },
       "utilization_core0<->memory": { "percentage": 7.37689, "active_time_us": 301.195, "idle_time_us": 3781.76 },
@@ -112,16 +112,16 @@
       "utilization_interconnect<->interconnect": { "percentage": 0, "active_time_us": 0, "idle_time_us": 4082.96 },
       "utilization_interconnect<->memory": { "percentage": 7.40591, "active_time_us": 302.38, "idle_time_us": 3780.58 }
     },
-    "fpga.core0": {
+    "io.core0": {
       "transaction_count": 311,
       "transaction_latency_us": { "min": 0.08, "max": 5.12 },
       "transaction_total_latency_us": 1105.25,
       "utilization": { "percentage": 0.289006, "active_time_us": 11.8, "idle_time_us": 4071.16 }
     },
-    "fpga.dma_engine": {
+    "io.dma_engine": {
       "utilization": { "percentage": 0, "active_time_us": 0, "idle_time_us": 4082.96 }
     },
-    "fpga.interconnect": {
+    "io.interconnect": {
       "bandwidth_GB_s_link0": 128,
       "bandwidth_GB_s_link1": 128,
       "efficiency_pJ_bit_link0": 1,
@@ -146,7 +146,7 @@
       "tx_buffer_usage_link1": { "average_usage": 0.00311441, "max_usage": 68 },
       "utilization": { "percentage": 0.149035, "active_time_us": 6.08504, "idle_time_us": 4076.87 }
     },
-    "fpga.memory": {
+    "io.memory": {
       "size_bytes": 524288,
       "used_bytes": 120008,
       "utilization": { "percentage": 14.7409, "active_time_us": 601.864, "idle_time_us": 3481.09 }

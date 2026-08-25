@@ -1,5 +1,5 @@
 chiplets:
-  - name: fpga
+  - name: io
     type: compute
     interconnects:
       - name: pulp
@@ -44,12 +44,12 @@ chiplets:
         type: spi
 
 connections:
-  - endpoints: [fpga.pulp, chiplet1.pulp]
+  - endpoints: [io.pulp, chiplet1.pulp]
     config:
       phy:
         clk_cycle: 5
         num_channels: 1
-  - endpoints: [fpga.pulp, chiplet2.pulp]
+  - endpoints: [io.pulp, chiplet2.pulp]
     config:
       phy:
         clk_cycle: 5

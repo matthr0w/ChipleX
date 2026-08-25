@@ -1,48 +1,35 @@
-#include <cstring>
+const int NUM_CHIPLETS = 4;
+const int MATRIX_SIZE  = 8;
 
-const int MATRIX_SIZE  = 4;
-const int ELEMENT_SIZE = sizeof(int);
-const int ROW_SIZE     = MATRIX_SIZE * ELEMENT_SIZE;
-
-const int matrixA[MATRIX_SIZE][MATRIX_SIZE] = {
-    {1,  2,  3,  4 },
-    {5,  6,  7,  8 },
-    {9,  10, 11, 12},
-    {13, 14, 15, 16}
-};
-
-const int matrixB[MATRIX_SIZE][MATRIX_SIZE] = {
-    {17, 18, 19, 20},
-    {21, 22, 23, 24},
-    {25, 26, 27, 28},
-    {29, 30, 31, 32}
-};
+const int ROWS_PER_CHIPLET = MATRIX_SIZE / NUM_CHIPLETS;
 
 int main() {
-	const int data_size_per_chiplet = ROW_SIZE + MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE;
-	auto     *data                  = new unsigned char[data_size_per_chiplet];
+	const int chunk_size = ROWS_PER_CHIPLET * MATRIX_SIZE + MATRIX_SIZE * MATRIX_SIZE;
 
-	// Fill the buffer for the chiplet
-	std::memcpy(data, &matrixA[0][0], ROW_SIZE);
-	std::memcpy(data + ROW_SIZE, &matrixB[0][0], MATRIX_SIZE * MATRIX_SIZE * ELEMENT_SIZE);
+	int *chunk = new int[chunk_size];
+	int *rows  = new int[ROWS_PER_CHIPLET * MATRIX_SIZE];
 
-	//@BEGIN_CYCLE_MEASURE
-	int *A                  = reinterpret_cast<int *>(data);
-	int *B                  = reinterpret_cast<int *>(data + ROW_SIZE);
-	int  C_row[MATRIX_SIZE] = {0};
-
-	for (int j = 0; j < MATRIX_SIZE; j++) {
-		for (int k = 0; k < MATRIX_SIZE; k++) {
-			C_row[j] += A[k] * B[k * MATRIX_SIZE + j];
-		}
+	for (int i = 0; i < chunk_size; i++) {
+		chunk[i] = i + 1;
 	}
 
-	auto *result = new unsigned char[ROW_SIZE];
-	std::memcpy(result, C_row, ROW_SIZE);
+	const int *a = chunk;
+	const int *b = chunk + ROWS_PER_CHIPLET * MATRIX_SIZE;
+
+	//@BEGIN_CYCLE_MEASURE
+	for (int row = 0; row < ROWS_PER_CHIPLET; row++) {
+		for (int col = 0; col < MATRIX_SIZE; col++) {
+			int sum = 0;
+			for (int k = 0; k < MATRIX_SIZE; k++) {
+				sum += a[row * MATRIX_SIZE + k] * b[k * MATRIX_SIZE + col];
+			}
+			rows[row * MATRIX_SIZE + col] = sum;
+		}
+	}
 	//@END_CYCLE_MEASURE
 
-	delete[] data;
-	delete[] result;
+	delete[] chunk;
+	delete[] rows;
 
 	return 0;
 }

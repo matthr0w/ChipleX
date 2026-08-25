@@ -1,5 +1,5 @@
 chiplets:
-  - name: fpga
+  - name: io
     type: compute
     interconnects:
       - name: interconnect
@@ -18,6 +18,6 @@ chiplets:
         type: serial-link
 
 connections:
-  - endpoints: [fpga.interconnect, chiplet0.interconnect]
-  - endpoints: [fpga.interconnect, chiplet1.interconnect]
+  - endpoints: [io.interconnect, chiplet0.interconnect]
+  - endpoints: [io.interconnect, chiplet1.interconnect]
   - endpoints: [chiplet0.interconnect, chiplet1.interconnect]

@@ -1,0 +1,14 @@
+workloads:
+  blur:
+    compute.core0:
+      cycles_count: 322104
+      input_hash: c4bf1c83e22431b68313bd1144653c01247cd375
+    compute.core1:
+      cycles_count: 322104
+      input_hash: c4bf1c83e22431b68313bd1144653c01247cd375
+    compute.core2:
+      cycles_count: 322104
+      input_hash: c4bf1c83e22431b68313bd1144653c01247cd375
+    compute.core3:
+      cycles_count: 322104
+      input_hash: c4bf1c83e22431b68313bd1144653c01247cd375

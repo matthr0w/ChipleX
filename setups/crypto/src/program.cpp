@@ -1,5 +1,7 @@
 #include "program.h"
 
+#include "logging.h"
+
 #include "modules/Core.h"
 
 ModuleCodeMap *get_program_code() {
@@ -7,6 +9,8 @@ ModuleCodeMap *get_program_code() {
 	    {{"chiplet0", "core0"},
 	     {CPUCode{.main =
 	                  [](Core &core) {
+		                  SC_LOG_INFO(&core, "Run this setup with debug logging enabled to see the crypto extension output!");
+
 		                  size_t   num_bytes = 256;
 		                  uint8_t *data      = new uint8_t[num_bytes];
 
@@ -27,16 +31,6 @@ ModuleCodeMap *get_program_code() {
 
 		                  h = core.read(reqr);
 		                  h->wait();
-
-		                  std::cout << "Data Buffer" << std::endl;
-		                  for (size_t i = 0; i < num_bytes; ++i) {
-			                  std::cout << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(data[i]);
-			                  if ((i + 1) % 16 == 0) {
-				                  std::cout << "\n";
-			                  } else {
-				                  std::cout << " ";
-			                  }
-		                  }
 
 		                  delete[] data;
 
