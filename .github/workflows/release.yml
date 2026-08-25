@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SYSTEMC_VERSION: "3.0.1"
+
+jobs:
+  build-linux-x86_64:
+    name: Build (linux-x86_64)
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - name: Install build dependencies
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential cmake git ca-certificates \
+            python3 python3-venv python3-pip python3-dev libpython3.10 \
+            libgl1 libegl1 libglib2.0-0 libdbus-1-3 \
+            libxkbcommon0 libxkbcommon-x11-0 \
+            libx11-6 libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+            libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-render0 \
+            libxcb-shape0 libxcb-shm0 libxcb-sync1 libxcb-xfixes0 \
+            libxcb-xinerama0 libxcb-xkb1 \
+            libfontconfig1 libfreetype6 libxrender1 libxi6
+
+      - uses: actions/checkout@v4
+
+      - name: Cache SystemC install
+        uses: actions/cache@v4
+        with:
+          path: .systemc-install
+          key: systemc-${{ env.SYSTEMC_VERSION }}-ubuntu-22.04-x86_64
+
+      - name: Build bundle
+        run: make bundle
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chiplex-linux-x86_64
+          path: dist/chiplex
+          retention-days: 30
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish release
+    needs: build-linux-x86_64
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: chiplex-linux-x86_64
+          path: dist
+
+      - name: Package the bundle
+        run: |
+          set -euo pipefail
+          # Artifact downloads do not carry file permissions, so restore the
+          # executable bit before archiving it.
+          chmod +x dist/chiplex
+          # A single chiplex at the archive root, named by target so further
+          # targets can be added later without colliding. tar is used because
+          # it records the executable bit, which a bare asset download loses.
+          tar -czf chiplex-linux-x86_64.tar.gz -C dist chiplex
+
+      - name: Create release and attach the bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Re-running the job for a tag whose release already exists replaces
+          # the asset instead of failing.
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            chiplex-linux-x86_64.tar.gz \
+          || gh release upload "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber \
+            chiplex-linux-x86_64.tar.gz

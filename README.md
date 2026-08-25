@@ -18,11 +18,11 @@ There are two ways to use it:
 
 ## Download (recommended)
 
-Download the latest `chiplex` from the project's **Releases** page (or the
-CI pipeline artifacts), then run it:
+Download `chiplex-linux-x86_64.tar.gz` from the project's **Releases** page,
+then unpack and run it:
 
 ```bash
-chmod +x chiplex
+tar xzf chiplex-linux-x86_64.tar.gz
 ./chiplex
 ```
 

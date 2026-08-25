@@ -40,7 +40,24 @@ offline builds.
 
 ## Build in CI
 
-[.gitlab-ci.yml](../.gitlab-ci.yml) defines a `release:linux-x86_64` job that
-runs `make bundle` (which builds and caches SystemC in `.systemc-install/`) and
-publishes `dist/chiplex` as a job artifact. It runs on tags and can be
-started manually from the GitLab UI.
+[.github/workflows/release.yml](../.github/workflows/release.yml) runs
+`make bundle` (which builds and caches SystemC in `.systemc-install/`) inside
+an `ubuntu:22.04` container, so the bundle links against glibc 2.35 and stays
+runnable on Ubuntu 22.04 and later. It is split into two jobs:
+
+- `build-linux-x86_64` builds the bundle and uploads `dist/chiplex` as a
+  workflow artifact.
+- `publish-release` runs only for tags. It creates the GitHub Release for the
+  tag with generated notes and attaches the bundle as
+  `chiplex-linux-x86_64.tar.gz`.
+
+Cutting a release is therefore a tag push:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+`workflow_dispatch` builds the bundle
+without creating a release. Add `--draft` to the `gh release create` call if
+releases should be reviewed before going public.
