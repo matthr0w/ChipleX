@@ -1,0 +1,22 @@
+name: riscv-o3
+description: Out-of-order RISC-V core (gem5 RiscvO3CPU) with private L1 caches.
+
+config: se_model.py
+cpu_type: RiscvO3CPU
+mem_mode: timing
+m5op_abi: riscv
+compiler: riscv64-unknown-elf-g++
+compiler_flags: ["-O2"]
+
+params:
+  l1i-size: 32kB
+  l1d-size: 32kB
+  l1i-assoc: 2
+  l1d-assoc: 2
+  l1i-latency: 2
+  l1d-latency: 2
+  l1i-mshrs: 4
+  l1d-mshrs: 4
+  cacheline: 64
+  dcache-write-allocate: 1
+  bus-latency: -1
