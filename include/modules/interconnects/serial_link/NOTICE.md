@@ -11,4 +11,4 @@ That project provides a SystemVerilog RTL implementation and is distributed
 under the Solderpad Hardware License, version 0.51 (SHL-0.51). No source from
 that project is copied into this repository; only the architecture and protocol
 concepts are reused. This SystemC model is covered by the ChipleX license (see
-LICENSE.md at the repository root).
+LICENSE at the repository root).

@@ -1,38 +1,10 @@
-# Licenses
+# Third-party components
 
-ChipleX itself is released under the MIT License, reproduced below. ChipleX
-incorporates third-party components in its source tree and, in the prebuilt
-release, bundles further third-party libraries. Each such component remains
-under its own license. The relevant licenses and copyright notices are
-reproduced or referenced in the sections that follow.
+Each component below remains under its own license.
 
-## ChipleX
+## In the source tree
 
-MIT License
-
-Copyright (c) 2026 Technical University of Munich
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
-# Third-party components in the source tree
-
-## ARM AXI4 TLM modeling (`include/ARM/`, `src/ARM/`)
+### ARM AXI4 TLM modeling (`include/ARM/`, `src/ARM/`)
 
 The AXI4 transaction-level modeling code is vendored from Arm and distributed
 under The Clear BSD License.
@@ -70,9 +42,9 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-# Third-party components linked or bundled by the build
+## Linked or bundled by the build
 
-## yaml-cpp
+### yaml-cpp
 
 Fetched at configure time and statically linked into the simulator. Distributed
 under the MIT License.
@@ -97,7 +69,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## SystemC (Accellera Systems Initiative)
+### SystemC (Accellera Systems Initiative)
 
 Built from the upstream release and bundled with the prebuilt application
 (`libsystemc.so`). Distributed under the Apache License, Version 2.0.
@@ -108,7 +80,7 @@ The full text of the Apache License, Version 2.0 is available at
 https://www.apache.org/licenses/LICENSE-2.0 and is included with the SystemC
 distribution.
 
-## Qt and PySide6
+### Qt and PySide6
 
 Bundled with the prebuilt application. The Qt libraries and the PySide6 Python
 bindings are used under the GNU Lesser General Public License, version 3
@@ -121,7 +93,7 @@ available at https://www.gnu.org/licenses/lgpl-3.0.html. As required by the
 LGPL, the bundled Qt libraries may be replaced by the end user; they are shipped
 as separate shared libraries within the release.
 
-## NumPy
+### NumPy
 
 Bundled with the prebuilt application. Distributed under the BSD 3-Clause
 License.
@@ -154,19 +126,19 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## pyqtgraph
+### pyqtgraph
 
 Bundled with the prebuilt application. Distributed under the MIT License.
 Copyright (c) pyqtgraph developers. Full text at
 https://github.com/pyqtgraph/pyqtgraph/blob/master/LICENSE.txt
 
-## PyYAML
+### PyYAML
 
 Bundled with the prebuilt application. Distributed under the MIT License.
 Copyright (c) 2017-2021 Ingy dot Net; Copyright (c) 2006-2016 Kirill Simonov.
 Full text at https://github.com/yaml/pyyaml/blob/main/LICENSE
 
-## PyInstaller (bootloader)
+### PyInstaller (bootloader)
 
 The prebuilt application is packaged with PyInstaller, whose bootloader is
 included in the resulting executable. PyInstaller is licensed under the GNU
@@ -174,9 +146,9 @@ General Public License, version 2 or later, with an exception that permits the
 resulting bundled application to be distributed under terms of the user's
 choosing. See https://github.com/pyinstaller/pyinstaller/blob/develop/COPYING.txt
 
-# Acknowledgements
+## Acknowledgements
 
-## Serial-link interconnect model
+### Serial-link interconnect model
 
 The serial-link interconnect (`include/modules/interconnects/serial_link/`,
 `src/modules/interconnects/serial_link/`) is an original SystemC implementation
@@ -186,7 +158,7 @@ the Solderpad Hardware License, version 0.51. No source from that project is
 copied into this repository; only the architecture and protocol concepts are
 reused. See the NOTICE.md in the serial-link directory for details.
 
-# External tools (used at runtime, not distributed with ChipleX)
+## External tools
 
 The cycle-estimation flow invokes the following tools if they are present on the
 system. They are not included in this repository or in the prebuilt release, and

@@ -141,6 +141,6 @@ After an intentional, reviewed behavior change, regenerate the golden files with
 
 ## License
 
-ChipleX is released under the MIT License. It also incorporates and bundles
-third-party components under their own licenses. See [LICENSE.md](LICENSE.md)
-for the full terms and notices.
+ChipleX is released under the MIT License; see [LICENSE](LICENSE). Vendored and
+bundled third-party components remain under their own licenses, listed in
+[THIRD-PARTY.md](THIRD-PARTY.md).
