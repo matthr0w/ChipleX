@@ -59,8 +59,8 @@ Two optional capabilities depend on tools installed on your machine:
 Install a C++17 compiler, CMake, and Git, for example:
 
 ```bash
-sudo apt install build-essential cmake git  # Debian/Ubuntu
-sudo dnf install gcc-c++ cmake git          # Fedora
+sudo apt install build-essential cmake git    # Debian/Ubuntu
+sudo dnf install gcc-c++ cmake git            # Fedora
 xcode-select --install && brew install cmake  # macOS
 ```
 
