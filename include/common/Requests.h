@@ -143,13 +143,7 @@ struct RequestHandle {
 
 	void wait() {
 		if (!completed) {
-			// Qualified with sc_core rather than escaping to the global
-			// scope. This struct's own wait() member hides the unqualified
-			// name, so a qualification is required; ::wait would bind to
-			// POSIX wait(int *) on any platform whose standard headers pull
-			// in <sys/wait.h>, because finding that declaration directly in
-			// the global namespace ends lookup before the using-directive
-			// above brings sc_core::wait into view.
+			// Not ::wait, which binds to POSIX wait(int *) under the macOS SDK.
 			sc_core::wait(done);
 		}
 	}

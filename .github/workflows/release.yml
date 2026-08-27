@@ -53,8 +53,7 @@ jobs:
 
   build-macos-arm64:
     name: Build (macos-arm64)
-    # Pinned rather than macos-latest: the runner label determines the SDK and
-    # the toolchain version, and a silent bump would change the artifact's ABI.
+    # Pinned rather than macos-latest so the SDK does not change silently.
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
@@ -72,9 +71,6 @@ jobs:
       - name: Build bundle
         run: make bundle
 
-      # The bundle is only relocatable if nothing in it still names the build
-      # machine. Fail loudly here rather than shipping an archive that runs on
-      # the runner and nowhere else.
       - name: Verify the bundle is relocatable and correctly built
         run: |
           set -euo pipefail
@@ -87,8 +83,6 @@ jobs:
             fi
             codesign --verify --strict "$macho"
           done
-          # A stray x86_64 build would still run here under Rosetta but would
-          # not be the artifact the release claims to publish.
           test "$(lipo -archs dist/framework/sim)" = "arm64"
           test "$(lipo -archs dist/chiplex)" = "arm64"
 
@@ -107,8 +101,6 @@ jobs:
     permissions:
       contents: write
     steps:
-      # Each build job uploads one artifact named for its target, so collecting
-      # them by pattern keeps this job agnostic to how many targets exist.
       - uses: actions/download-artifact@v4
         with:
           pattern: chiplex-*

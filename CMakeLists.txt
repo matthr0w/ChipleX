@@ -6,7 +6,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Export the simulator's symbols so dlopen'd setup plugins can resolve them.
-# ld64 spells this -export_dynamic and rejects the GNU -rdynamic spelling.
 if(APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-export_dynamic")
 else()
@@ -24,10 +23,9 @@ option(ENABLE_ASAN "Build with AddressSanitizer + UBSan (verification builds)" O
 option(RELOCATABLE "Bake a loader-relative rpath so binaries find a co-located SystemC (release bundles)" OFF)
 
 if(RELOCATABLE)
-  # sim loads the SystemC runtime from a co-located copy or the bundled
-  # SystemC install; plugins then resolve SystemC from the already-loaded
-  # library. A loader-relative rpath keeps this working wherever the bundle is
-  # unpacked. glibc spells the token $ORIGIN, dyld spells it @loader_path.
+  # sim loads the SystemC runtime from a co-located copy or the bundled SystemC
+  # install; plugins then resolve SystemC from the already-loaded library. A
+  # loader-relative rpath keeps this working wherever the bundle is unpacked.
   set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
   if(APPLE)
     set(CMAKE_INSTALL_RPATH "@loader_path;@loader_path/systemc/lib;@loader_path/systemc/lib64")
@@ -58,9 +56,7 @@ set(BUILD_SETUP "" CACHE STRING "Name of setup library to build (default: build 
 
 include(FetchContent)
 
-# SystemC: prefer SYSTEMC_PATH, then an installed CMake package. The runtime
-# library name is platform-dependent (libsystemc.so on Linux, libsystemc.dylib
-# on macOS) and the install lands in lib/ or lib64/, so probe both.
+# SystemC: prefer SYSTEMC_PATH, then an installed CMake package.
 set(SYSTEMC_PATH $ENV{SYSTEMC_PATH})
 set(SYSTEMC_INCLUDE_DIR "")
 set(SYSTEMC_LIB "")
@@ -105,10 +101,6 @@ else()
   FetchContent_Declare(
     yaml-cpp
     GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-    # 0.9.0 rather than 0.8.0: the latter declares cmake_minimum_required
-    # (VERSION 3.4), which CMake 4 rejects outright, so it cannot be configured
-    # by any toolchain new enough to ship that release. Upstream's tag naming
-    # gained the yaml-cpp- prefix in this release.
     GIT_TAG yaml-cpp-0.9.0
   )
   FetchContent_MakeAvailable(yaml-cpp)
@@ -175,20 +167,12 @@ foreach(SETUP_PATH ${SETUP_DIRS})
       set_target_properties(${LIB_NAME} PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${SETUP_PATH}"
         OUTPUT_NAME "setup"
-        # Keep the plugin named libsetup.so on every platform. The loader and
-        # the GUI address it by that exact name, and dlopen resolves it by path
-        # rather than by the platform's library naming convention, so there is
-        # no benefit to the native .dylib suffix here.
+        # The loader and the GUI address the plugin as libsetup.so everywhere.
         SUFFIX ".so"
       )
 
       if(APPLE)
-        # Plugins call into the simulator (Core::read, Core::dma, ...), whose
-        # definitions live in the sim executable rather than in any library the
-        # plugin links against. ld64's two-level namespace rejects those
-        # undefined symbols at link time; dynamic_lookup defers them to a
-        # flat-namespace lookup performed at dlopen time, which finds them in
-        # the host executable because sim is linked with -export_dynamic.
+        # Plugins resolve simulator symbols from the executable at dlopen time.
         set_target_properties(${LIB_NAME} PROPERTIES
           LINK_FLAGS "-Wl,-undefined,dynamic_lookup")
       endif()

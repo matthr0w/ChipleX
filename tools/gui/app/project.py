@@ -15,32 +15,21 @@ def is_frozen() -> bool:
     return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
 
-# The loader's shared-library search path. glibc reads LD_LIBRARY_PATH; dyld
-# reads DYLD_LIBRARY_PATH.
 LOADER_PATH_VAR = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
 
 
 def base_child_env() -> Dict[str, str]:
-    """A copy of this process's environment that is safe to spawn programs with.
+    """Environment for spawning external programs.
 
-    The PyInstaller bootloader prepends the bundle's extraction directory to the
-    loader search path so the frozen interpreter finds its own libraries, and
-    preserves any pre-existing value under <VAR>_ORIG. That directory contains
-    the C++ runtime of the machine the bundle was built on, which is older than
-    the runtime on any newer target. A child process that is a system binary -
-    cmake, the compiler, gem5 - would then load the bundle's runtime in
-    preference to its own and fail to resolve symbols it was linked against.
-    Undoing the injection before spawning is PyInstaller's documented recipe.
+    Undoes the loader search path the PyInstaller bootloader injects, so a child
+    that is a system binary does not load the bundle's C++ runtime in preference
+    to its own. Outside a bundle the variable is left alone.
     """
     env = dict(os.environ)
     original = env.pop(f"{LOADER_PATH_VAR}_ORIG", None)
     if original is not None:
         env[LOADER_PATH_VAR] = original
     elif is_frozen():
-        # No _ORIG means the caller had no search path of its own, so the only
-        # value present is the bundle's and it should not be inherited. Outside
-        # a bundle the variable belongs to the user - a source build points it
-        # at SystemC - and must be left alone.
         env.pop(LOADER_PATH_VAR, None)
     return env
 
@@ -174,10 +163,8 @@ class Project:
     def child_env(self) -> Dict[str, str]:
         """Environment for launching the simulator.
 
-        Starts from base_child_env(), so a bundled run does not leak the
-        bundle's own library directory to the child, then, when SYSTEMC_PATH is
-        set, puts the SystemC shared library directories on the loader's search
-        path so the sim can load the SystemC runtime. The copyright banner is
+        Puts the SystemC shared library directories on the loader's search path
+        so the sim can load the SystemC runtime. The copyright banner is
         suppressed to keep captured stdout clean.
         """
         env = base_child_env()

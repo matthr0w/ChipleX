@@ -4,9 +4,6 @@ BUILD_DIR_DEBUG := build-debug
 BUILD_DIR_ASAN := build-asan
 SIM_BINARY := ./sim
 
-# Host platform. Linux and macOS differ in the shared-library suffix, the
-# loader's search-path variable, and the parallelism query, so resolve all
-# three once here rather than at each use site.
 UNAME_S := $(shell uname -s)
 NPROC := $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
 
@@ -21,13 +18,6 @@ export SYSTEMC_PATH
 ifeq ($(UNAME_S),Darwin)
   SHLIB_EXT := dylib
   export DYLD_LIBRARY_PATH := $(SYSTEMC_PATH)/lib:$(SYSTEMC_PATH)/lib64$(if $(DYLD_LIBRARY_PATH),:$(DYLD_LIBRARY_PATH))
-  # Pin the ABI floor so the artifact does not silently inherit the build
-  # machine's OS version as its minimum. macOS 11 is the earliest release that
-  # runs on Apple Silicon, so it costs nothing. As a side effect it keeps ld64
-  # on classic binding rather than the chained fixups used from macOS 12,
-  # which avoids the linker's dynamic_lookup-with-chained-fixups warning on the
-  # setup plugins. Exported so the SystemC, yaml-cpp, simulator and PyInstaller
-  # builds all agree on one value.
   export MACOSX_DEPLOYMENT_TARGET ?= 11.0
 else
   SHLIB_EXT := so
@@ -171,14 +161,7 @@ cp -r "$$SYSTEMC_PATH/include" "$$STAGE/systemc/include"
 for d in lib lib64; do if [ -d "$$SYSTEMC_PATH/$$d" ]; then cp -rP "$$SYSTEMC_PATH/$$d" "$$STAGE/systemc/$$d"; fi; done
 while IFS= read -r link; do tgt="$$(readlink -f "$$link")"; rm -f "$$link"; cp "$$tgt" "$$link"; done < <(find "$$STAGE/systemc" -type l)
 
-# macOS resolves each dependency through the install name baked into the
-# dylib rather than through a search path, so a bundle staged here would
-# still name the build machine's SystemC prefix. Rewrite every SystemC
-# reference to the @rpath form that the RELOCATABLE rpath resolves. sim and
-# the prebuilt plugins must be rewritten alike: dyld considers two images the
-# same library only when their install name strings match, so a plugin left
-# naming an absolute path would pull in a second copy of the SystemC runtime
-# instead of sharing the one sim already loaded.
+# Rewrite the SystemC install names to the @rpath form the bundle resolves.
 if [ "$(UNAME_S)" = "Darwin" ]; then
   for lib in "$$STAGE"/systemc/lib*/libsystemc*.dylib; do
     [ -f "$$lib" ] || continue
@@ -191,8 +174,6 @@ if [ "$(UNAME_S)" = "Darwin" ]; then
     for dep in $$deps; do
       install_name_tool -change "$$dep" "@rpath/$$(basename "$$dep")" "$$macho"
     done
-    # install_name_tool invalidates the code signature, and arm64 refuses to
-    # execute an unsigned Mach-O at all, so re-apply an ad-hoc signature.
     codesign --force --sign - "$$macho"
   done
 fi

@@ -72,9 +72,6 @@ def run_cycle_estimation(
         command = [sys.executable, str(main_py)]
         cwd = str(tool_dir)
 
-    # The estimator shells out to gem5, the workload compiler and llvm-mca,
-    # all system binaries on the target machine, so it must not inherit the
-    # bundle's library search path.
     env = base_child_env()
     env["CE_SETUPS_DIR"] = str(setups_dir or project.setups_dir)
     env["CE_CONFIGS_DIR"] = str(project.configs_dir)
