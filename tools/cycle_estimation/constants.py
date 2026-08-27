@@ -29,7 +29,11 @@ else:
     SCRIPT_ROOT = Path(__file__).parent.absolute()
 GEM5_DIR = SCRIPT_ROOT / "gem5"
 GEM5_MODELS_DIR = GEM5_DIR / "models"
-USER_MODELS_DIR = Path(os.environ["CE_USER_MODELS_DIR"]) if os.environ.get("CE_USER_MODELS_DIR") else None
+USER_MODELS_DIR = (
+    Path(os.environ["CE_USER_MODELS_DIR"])
+    if os.environ.get("CE_USER_MODELS_DIR")
+    else None
+)
 DEFAULT_MODEL = "riscv-minor"
 DEFAULT_CLK_CYCLE_NS = 1
 DEFAULT_ACCESS_LATENCY_CYCLES = 1

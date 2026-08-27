@@ -43,7 +43,8 @@ def add_chiplet(doc: Dict[str, Any], type_name: str) -> str:
 def remove_chiplet(doc: Dict[str, Any], name: str) -> None:
     doc["chiplets"] = [c for c in chiplets(doc) if c.get("name") != name]
     doc["connections"] = [
-        conn for conn in connections(doc)
+        conn
+        for conn in connections(doc)
         if not any(ep.split(".")[0] == name for ep in conn.get("endpoints", []))
     ]
 
@@ -60,7 +61,9 @@ def rename_chiplet(doc: Dict[str, Any], old: str, new: str) -> None:
         ]
 
 
-def add_interconnect(doc: Dict[str, Any], chiplet_name: str, ic_type: str) -> Optional[str]:
+def add_interconnect(
+    doc: Dict[str, Any], chiplet_name: str, ic_type: str
+) -> Optional[str]:
     chiplet = chiplet_by_name(doc, chiplet_name)
     if chiplet is None:
         return None
@@ -74,14 +77,18 @@ def remove_interconnect(doc: Dict[str, Any], chiplet_name: str, ic_name: str) ->
     chiplet = chiplet_by_name(doc, chiplet_name)
     if chiplet is None:
         return
-    chiplet["interconnects"] = [i for i in chiplet.get("interconnects", []) if i.get("name") != ic_name]
+    chiplet["interconnects"] = [
+        i for i in chiplet.get("interconnects", []) if i.get("name") != ic_name
+    ]
     endpoint = f"{chiplet_name}.{ic_name}"
     doc["connections"] = [
         conn for conn in connections(doc) if endpoint not in conn.get("endpoints", [])
     ]
 
 
-def rename_interconnect(doc: Dict[str, Any], chiplet_name: str, old: str, new: str) -> None:
+def rename_interconnect(
+    doc: Dict[str, Any], chiplet_name: str, old: str, new: str
+) -> None:
     chiplet = chiplet_by_name(doc, chiplet_name)
     if chiplet is None or old == new:
         return
@@ -90,10 +97,14 @@ def rename_interconnect(doc: Dict[str, Any], chiplet_name: str, old: str, new: s
             ic["name"] = new
     old_ep, new_ep = f"{chiplet_name}.{old}", f"{chiplet_name}.{new}"
     for conn in connections(doc):
-        conn["endpoints"] = [new_ep if ep == old_ep else ep for ep in conn.get("endpoints", [])]
+        conn["endpoints"] = [
+            new_ep if ep == old_ep else ep for ep in conn.get("endpoints", [])
+        ]
 
 
-def rename_accelerator(doc: Dict[str, Any], chiplet_name: str, old: str, new: str) -> None:
+def rename_accelerator(
+    doc: Dict[str, Any], chiplet_name: str, old: str, new: str
+) -> None:
     chiplet = chiplet_by_name(doc, chiplet_name)
     if chiplet is None or old == new:
         return
@@ -102,7 +113,9 @@ def rename_accelerator(doc: Dict[str, Any], chiplet_name: str, old: str, new: st
             accel["name"] = new
 
 
-def add_accelerator(doc: Dict[str, Any], chiplet_name: str, accel_type: str) -> Optional[str]:
+def add_accelerator(
+    doc: Dict[str, Any], chiplet_name: str, accel_type: str
+) -> Optional[str]:
     chiplet = chiplet_by_name(doc, chiplet_name)
     if chiplet is None:
         return None
@@ -116,7 +129,9 @@ def remove_accelerator(doc: Dict[str, Any], chiplet_name: str, accel_name: str) 
     chiplet = chiplet_by_name(doc, chiplet_name)
     if chiplet is None:
         return
-    chiplet["accelerators"] = [a for a in chiplet.get("accelerators", []) if a.get("name") != accel_name]
+    chiplet["accelerators"] = [
+        a for a in chiplet.get("accelerators", []) if a.get("name") != accel_name
+    ]
     if not chiplet["accelerators"]:
         chiplet.pop("accelerators", None)
 

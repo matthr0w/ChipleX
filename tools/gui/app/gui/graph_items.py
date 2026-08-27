@@ -5,11 +5,14 @@ from __future__ import annotations
 from typing import Any, Dict, List, Tuple
 
 from PySide6.QtCore import QPointF, Qt
-from PySide6.QtGui import (QBrush, QColor, QFont, QPainterPath,
-                           QPainterPathStroker, QPen)
-from PySide6.QtWidgets import (QGraphicsEllipseItem, QGraphicsItem,
-                               QGraphicsLineItem, QGraphicsRectItem,
-                               QGraphicsSimpleTextItem)
+from PySide6.QtGui import QBrush, QColor, QFont, QPainterPath, QPainterPathStroker, QPen
+from PySide6.QtWidgets import (
+    QGraphicsEllipseItem,
+    QGraphicsItem,
+    QGraphicsLineItem,
+    QGraphicsRectItem,
+    QGraphicsSimpleTextItem,
+)
 
 NODE_WIDTH = 180.0
 HEADER_HEIGHT = 40.0
@@ -25,8 +28,12 @@ _PORT_BRUSH = QColor(230, 200, 90)
 
 
 class PortItem(QGraphicsEllipseItem):
-    def __init__(self, chiplet_name: str, ic_name: str, ic_type: str, parent: "ChipletNode"):
-        super().__init__(-PORT_RADIUS, -PORT_RADIUS, 2 * PORT_RADIUS, 2 * PORT_RADIUS, parent)
+    def __init__(
+        self, chiplet_name: str, ic_name: str, ic_type: str, parent: "ChipletNode"
+    ):
+        super().__init__(
+            -PORT_RADIUS, -PORT_RADIUS, 2 * PORT_RADIUS, 2 * PORT_RADIUS, parent
+        )
         self.chiplet_name = chiplet_name
         self.ic_name = ic_name
         self.ic_type = ic_type
@@ -95,7 +102,9 @@ class ChipletNode(QGraphicsRectItem):
 
         y = HEADER_HEIGHT
         for accel in accels:
-            label = QGraphicsSimpleTextItem(f"accel: {accel.get('name')} [{accel.get('type')}]", self)
+            label = QGraphicsSimpleTextItem(
+                f"accel: {accel.get('name')} [{accel.get('type')}]", self
+            )
             label.setBrush(QBrush(QColor(230, 230, 230)))
             label.setPos(10, y)
             y += LINE_HEIGHT
@@ -122,8 +131,10 @@ class ChipletNode(QGraphicsRectItem):
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange:
             # Snap the node's top-left corner to the background grid.
-            return QPointF(round(value.x() / GRID_SIZE) * GRID_SIZE,
-                           round(value.y() / GRID_SIZE) * GRID_SIZE)
+            return QPointF(
+                round(value.x() / GRID_SIZE) * GRID_SIZE,
+                round(value.y() / GRID_SIZE) * GRID_SIZE,
+            )
         if change == QGraphicsItem.ItemPositionHasChanged and self.scene() is not None:
             self.scene().update_edges()
         return super().itemChange(change, value)
@@ -150,7 +161,11 @@ class ConnectionEdge(QGraphicsLineItem):
         return self.shape().boundingRect()
 
     def paint(self, painter, option, widget=None):
-        pen = QPen(QColor(90, 170, 250), 3) if self.isSelected() else QPen(QColor(170, 170, 170), 2)
+        pen = (
+            QPen(QColor(90, 170, 250), 3)
+            if self.isSelected()
+            else QPen(QColor(170, 170, 170), 2)
+        )
         self.setPen(pen)
         super().paint(painter, option, widget)
 

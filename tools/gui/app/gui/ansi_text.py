@@ -4,17 +4,28 @@ from __future__ import annotations
 
 import re
 
-from PySide6.QtGui import (QColor, QFont, QFontDatabase, QTextCharFormat,
-                           QTextCursor)
+from PySide6.QtGui import QColor, QFont, QFontDatabase, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import QPlainTextEdit
 
 _SGR = re.compile("\x1b\\[([0-9;]*)m")
 _DEFAULT_FG = "#dcdfe4"
 _COLORS = {
-    30: "#5c6370", 31: "#e06c75", 32: "#98c379", 33: "#e5c07b",
-    34: "#61afef", 35: "#c678dd", 36: "#56b6c2", 37: "#dcdfe4",
-    90: "#7f848e", 91: "#ff7b86", 92: "#b5e08f", 93: "#f0d08b",
-    94: "#7cc5ff", 95: "#d79bee", 96: "#6fd0dc", 97: "#ffffff",
+    30: "#5c6370",
+    31: "#e06c75",
+    32: "#98c379",
+    33: "#e5c07b",
+    34: "#61afef",
+    35: "#c678dd",
+    36: "#56b6c2",
+    37: "#dcdfe4",
+    90: "#7f848e",
+    91: "#ff7b86",
+    92: "#b5e08f",
+    93: "#f0d08b",
+    94: "#7cc5ff",
+    95: "#d79bee",
+    96: "#6fd0dc",
+    97: "#ffffff",
 }
 
 
@@ -49,7 +60,7 @@ class AnsiTextEdit(QPlainTextEdit):
         pos = 0
         for match in _SGR.finditer(text):
             if match.start() > pos:
-                cursor.insertText(text[pos:match.start()], self._fmt)
+                cursor.insertText(text[pos : match.start()], self._fmt)
             self._apply_codes(match.group(1))
             pos = match.end()
         if pos < len(text):

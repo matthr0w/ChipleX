@@ -61,14 +61,18 @@ def run_cycle_estimation(
     if is_frozen():
         exe = project.root / "tools" / "cycle-estimation"
         if not exe.is_file():
-            return CycleResult(EstimationStatus.SKIPPED, f"Cycle estimation tool not found: {exe}")
+            return CycleResult(
+                EstimationStatus.SKIPPED, f"Cycle estimation tool not found: {exe}"
+            )
         command = [str(exe)]
         cwd = str(exe.parent)
     else:
         tool_dir = project.root / "tools" / "cycle_estimation"
         main_py = tool_dir / "main.py"
         if not main_py.is_file():
-            return CycleResult(EstimationStatus.SKIPPED, f"Cycle estimation tool not found: {main_py}")
+            return CycleResult(
+                EstimationStatus.SKIPPED, f"Cycle estimation tool not found: {main_py}"
+            )
         command = [sys.executable, str(main_py)]
         cwd = str(tool_dir)
 
@@ -82,8 +86,12 @@ def run_cycle_estimation(
 
     try:
         proc = subprocess.run(
-            command, cwd=cwd, env=env,
-            capture_output=True, text=True, timeout=timeout_s,
+            command,
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         return CycleResult(EstimationStatus.FAILED, str(exc))

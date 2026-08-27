@@ -5,9 +5,16 @@ from __future__ import annotations
 from typing import Any, List, Tuple
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QStyle,
-                               QTreeWidget, QTreeWidgetItem, QVBoxLayout,
-                               QWidget)
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QStyle,
+    QTreeWidget,
+    QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..system_model import Instance, ParamRef, SystemModel
 from .theme import GEM5_MARK_STYLE
@@ -22,7 +29,9 @@ class InstanceParamTree(QWidget):
 
         self._tree = QTreeWidget()
         self._tree.setColumnCount(4)
-        self._tree.setHeaderLabels(["Instance / Parameter", "Default", "Override", "Unit"])
+        self._tree.setHeaderLabels(
+            ["Instance / Parameter", "Default", "Override", "Unit"]
+        )
         self._tree.setAlternatingRowColors(True)
         self._tree.setUniformRowHeights(True)
 
@@ -71,7 +80,9 @@ class InstanceParamTree(QWidget):
         key = ref.special or ref.dotted_key or ref.label
         # The unit cell also carries the gem5 mark, so leave it blank here and
         # fill it with a widget below when the parameter is gem5-relevant.
-        leaf = QTreeWidgetItem([key, str(ref.default), "", "" if ref.gem5 else (ref.unit or "")])
+        leaf = QTreeWidgetItem(
+            [key, str(ref.default), "", "" if ref.gem5 else (ref.unit or "")]
+        )
         leaf.setData(0, _REF_ROLE, ref.id)
         parent.addChild(leaf)
 

@@ -9,9 +9,17 @@ from __future__ import annotations
 import shutil
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QAbstractItemView, QHBoxLayout, QInputDialog,
-                               QLabel, QListWidget, QMessageBox, QPushButton,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QListWidget,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .. import setup_writer
 from ..project import Project, missing_build_tools
@@ -85,11 +93,13 @@ class SetupsTab(QWidget):
         banners = []
         build_missing = missing_build_tools()
         if build_missing:
-            banners.append(_warning_banner(
-                "Setups cannot be built or run without:",
-                build_missing,
-                "You can still create and edit setups; install these to build and run them.",
-            ))
+            banners.append(
+                _warning_banner(
+                    "Setups cannot be built or run without:",
+                    build_missing,
+                    "You can still create and edit setups; install these to build and run them.",
+                )
+            )
         return banners
 
     def refresh(self) -> None:
@@ -111,10 +121,14 @@ class SetupsTab(QWidget):
         if not ok or not name:
             return
         if not _valid_name(name):
-            QMessageBox.warning(self, "New Setup", "Use only letters, digits, or underscores.")
+            QMessageBox.warning(
+                self, "New Setup", "Use only letters, digits, or underscores."
+            )
             return
         if (self.project.setups_dir / name).exists():
-            QMessageBox.warning(self, "New Setup", f"A setup named '{name}' already exists.")
+            QMessageBox.warning(
+                self, "New Setup", f"A setup named '{name}' already exists."
+            )
             return
         dialog = SetupEditorDialog(self.project, name, is_new=True, parent=self)
         if dialog.exec() and dialog.saved_name:
@@ -136,15 +150,21 @@ class SetupsTab(QWidget):
         name = self._selected()
         if not name:
             return
-        new_name, ok = QInputDialog.getText(self, "Duplicate Setup", "Setup name:", text=f"{name}_copy")
+        new_name, ok = QInputDialog.getText(
+            self, "Duplicate Setup", "Setup name:", text=f"{name}_copy"
+        )
         new_name = new_name.strip()
         if not ok or not new_name:
             return
         if not _valid_name(new_name):
-            QMessageBox.warning(self, "Duplicate", "Use only letters, digits, or underscores.")
+            QMessageBox.warning(
+                self, "Duplicate", "Use only letters, digits, or underscores."
+            )
             return
         if (self.project.setups_dir / new_name).exists():
-            QMessageBox.warning(self, "Duplicate", f"A setup named '{new_name}' already exists.")
+            QMessageBox.warning(
+                self, "Duplicate", f"A setup named '{new_name}' already exists."
+            )
             return
         shutil.copytree(self.project.setup_dir(name), self.project.setup_dir(new_name))
         self.refresh()
@@ -155,7 +175,8 @@ class SetupsTab(QWidget):
         if not name:
             return
         confirm = QMessageBox.question(
-            self, "Remove setup",
+            self,
+            "Remove setup",
             f"Remove setup '{name}' from the workspace?",
         )
         if confirm == QMessageBox.Yes:

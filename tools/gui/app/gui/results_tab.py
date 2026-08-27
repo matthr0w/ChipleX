@@ -8,15 +8,30 @@ from typing import List
 
 import pyqtgraph as pg
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFileDialog,
-                               QHBoxLayout, QLabel, QLineEdit, QPushButton,
-                               QSplitter, QTableWidget, QTableWidgetItem,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .. import stats
 from ..runner import RunResult
 
-_HEADLINE_HINTS = ("simulation_time", "transaction_count", "hit_rate", "utilization.percentage")
+_HEADLINE_HINTS = (
+    "simulation_time",
+    "transaction_count",
+    "hit_rate",
+    "utilization.percentage",
+)
 
 
 class ResultsTab(QWidget):
@@ -103,7 +118,9 @@ class ResultsTab(QWidget):
         heights = [float(r.metrics.get(metric, 0.0)) for r in self._results]
         xs = list(range(len(labels)))
 
-        bar = pg.BarGraphItem(x=xs, height=heights, width=0.6, brush=pg.mkBrush(80, 130, 200))
+        bar = pg.BarGraphItem(
+            x=xs, height=heights, width=0.6, brush=pg.mkBrush(80, 130, 200)
+        )
         self._plot.addItem(bar)
         self._plot.setTitle(metric)
         # Label the x-axis by run number (labels are shown in the table's # column);
@@ -123,7 +140,9 @@ class ResultsTab(QWidget):
     def _export_csv(self) -> None:
         if not self._results:
             return
-        path, _ = QFileDialog.getSaveFileName(self, "Export results", "dse_results.csv", "CSV (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export results", "dse_results.csv", "CSV (*.csv)"
+        )
         if not path:
             return
         with Path(path).open("w", newline="") as handle:

@@ -49,7 +49,7 @@ class CycleEstimator:
                 id=setup_dir.stem,
                 path=setup_dir,
                 system_file=setup_dir / SETUP_SYSTEM_FILE,
-                workloads_db=setup_dir / SETUP_WORKLOADS_DB
+                workloads_db=setup_dir / SETUP_WORKLOADS_DB,
             )
 
             for cpp_file in sorted(workloads_dir.glob("*.cpp")):
@@ -87,8 +87,11 @@ class CycleEstimator:
                     # clock, or memory latency) or no valid count is stored.
                     stored_hash = stored.get("input_hash")
                     stored_cycles = stored.get("cycles_count")
-                    if (not stored_hash or stored_hash != execution.input_hash
-                            or not isinstance(stored_cycles, int)):
+                    if (
+                        not stored_hash
+                        or stored_hash != execution.input_hash
+                        or not isinstance(stored_cycles, int)
+                    ):
                         pending.append((workload, execution))
 
             if pending:
@@ -103,7 +106,7 @@ class CycleEstimator:
 
         # Copy workload .cpp file
         shutil.copy2(workload.source_path, workload.dest_path)
-        
+
         # Copy headers and sources (except program.h/program.cpp)
         include_dir = setup.path / "include"
         src_dir = setup.path / "src"
@@ -114,7 +117,10 @@ class CycleEstimator:
                 shutil.copy2(hdr, BUILD_DIR / hdr.name)
         if src_dir.exists():
             for src in src_dir.glob("*.*"):
-                if src.suffix in {".c", ".cpp", ".cc", ".C"} and src.name != "program.cpp":
+                if (
+                    src.suffix in {".c", ".cpp", ".cc", ".C"}
+                    and src.name != "program.cpp"
+                ):
                     shutil.copy2(src, BUILD_DIR / src.name)
 
         # Create measure macros header
@@ -126,7 +132,9 @@ class CycleEstimator:
 
         # Check if main function exists
         if not re.search(r"\bint\s+main\s*\(", code):
-            log_error(f"{workload.source_path}: does not contain 'main()' definition. Workloads must define 'main()'.")
+            log_error(
+                f"{workload.source_path}: does not contain 'main()' definition. Workloads must define 'main()'."
+            )
 
         # Check annotations syntax
         section_id = 0
@@ -142,42 +150,67 @@ class CycleEstimator:
             # Cycle begin
             if BEGIN_CYCLE_ANNOT in line:
                 if cycle_open:
-                    log_error(f"{workload.source_path}: {BEGIN_CYCLE_ANNOT} on line {i} before previous CYCLE block closed.")
+                    log_error(
+                        f"{workload.source_path}: {BEGIN_CYCLE_ANNOT} on line {i} before previous CYCLE block closed."
+                    )
                 cycle_open = True
                 speedup_in_cycle = False
                 section_id += 1
                 current_section_id = section_id
-                line = line.replace(BEGIN_CYCLE_ANNOT, f"BEGIN_CYCLE_MEASURE(SECTION{current_section_id})")
+                line = line.replace(
+                    BEGIN_CYCLE_ANNOT,
+                    f"BEGIN_CYCLE_MEASURE(SECTION{current_section_id})",
+                )
 
             # Cycle end
             elif END_CYCLE_ANNOT in line:
                 if not cycle_open:
-                    log_error(f"{workload.source_path}: {END_CYCLE_ANNOT} on line {i} without matching {BEGIN_CYCLE_ANNOT}.")
+                    log_error(
+                        f"{workload.source_path}: {END_CYCLE_ANNOT} on line {i} without matching {BEGIN_CYCLE_ANNOT}."
+                    )
                 if speedup_open:
-                    log_error(f"{workload.source_path}: CYCLE block closed on line {i} but SPEEDUP block still open.")
+                    log_error(
+                        f"{workload.source_path}: CYCLE block closed on line {i} but SPEEDUP block still open."
+                    )
                 cycle_open = False
-                line = line.replace(END_CYCLE_ANNOT, f"END_CYCLE_MEASURE(SECTION{current_section_id})")
+                line = line.replace(
+                    END_CYCLE_ANNOT, f"END_CYCLE_MEASURE(SECTION{current_section_id})"
+                )
                 current_section_id = 0
 
             # Speedup begin
             elif BEGIN_SPEEDUP_ANNOT in line:
                 if not cycle_open:
-                    log_error(f"{workload.source_path}: {BEGIN_SPEEDUP_ANNOT} on line {i} outside of CYCLE block.")
+                    log_error(
+                        f"{workload.source_path}: {BEGIN_SPEEDUP_ANNOT} on line {i} outside of CYCLE block."
+                    )
                 if speedup_open:
-                    log_error(f"{workload.source_path}: Nested {BEGIN_SPEEDUP_ANNOT} on line {i}.")
+                    log_error(
+                        f"{workload.source_path}: Nested {BEGIN_SPEEDUP_ANNOT} on line {i}."
+                    )
                 if speedup_in_cycle:
-                    log_error(f"{workload.source_path}: Multiple SPEEDUP blocks in one CYCLE block on line {i}.")
+                    log_error(
+                        f"{workload.source_path}: Multiple SPEEDUP blocks in one CYCLE block on line {i}."
+                    )
                 speedup_open = True
                 has_speedup = True
-                line = line.replace(BEGIN_SPEEDUP_ANNOT, f"BEGIN_SPEEDUP_MEASURE(SECTION{current_section_id})")
+                line = line.replace(
+                    BEGIN_SPEEDUP_ANNOT,
+                    f"BEGIN_SPEEDUP_MEASURE(SECTION{current_section_id})",
+                )
 
             # Speedup end
             elif END_SPEEDUP_ANNOT in line:
                 if not speedup_open:
-                    log_error(f"{workload.source_path}: {END_SPEEDUP_ANNOT} on line {i} without matching {BEGIN_SPEEDUP_ANNOT}.")
+                    log_error(
+                        f"{workload.source_path}: {END_SPEEDUP_ANNOT} on line {i} without matching {BEGIN_SPEEDUP_ANNOT}."
+                    )
                 speedup_open = False
                 speedup_in_cycle = True
-                line = line.replace(END_SPEEDUP_ANNOT, f"END_SPEEDUP_MEASURE(SECTION{current_section_id})")
+                line = line.replace(
+                    END_SPEEDUP_ANNOT,
+                    f"END_SPEEDUP_MEASURE(SECTION{current_section_id})",
+                )
 
             output_code.append(line)
 
@@ -185,7 +218,9 @@ class CycleEstimator:
         if cycle_open:
             log_error(f"{workload.source_path}: CYCLE block not closed at end of file.")
         if speedup_open:
-            log_error(f"{workload.source_path}: SPEEDUP block not closed at end of file.")
+            log_error(
+                f"{workload.source_path}: SPEEDUP block not closed at end of file."
+            )
 
         # Record how many cycle regions the workload defines (used to map gem5
         # stat dumps to sections) and whether it uses a speedup region.
@@ -233,36 +268,83 @@ class CycleEstimator:
 
         # Assemble the m5 pseudo-op shim so the region markers link.
         command = [compiler, "-c", str(m5op_src), f"-I{gem5_include}", "-o", "m5op.o"]
-        proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        proc = subprocess.run(
+            command,
+            cwd=str(BUILD_DIR),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
         if proc.returncode != 0:
             log_error(f"m5op shim assembly failed:\n{proc.stderr}")
 
         # Assemble for LLVM-MCA (only needed when a speedup region is present).
         if workload.has_speedup:
             command = [compiler, "-S"] + src_files + include_flags + flags
-            proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            proc = subprocess.run(
+                command,
+                cwd=str(BUILD_DIR),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
             if proc.returncode != 0:
                 log_error(f"Assembly compilation failed:\n{proc.stderr}")
 
         # Compile + link the workload for gem5.
-        command = [compiler] + src_files + ["m5op.o"] + include_flags + ["-o", workload.file_id] + flags
-        proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        command = (
+            [compiler]
+            + src_files
+            + ["m5op.o"]
+            + include_flags
+            + ["-o", workload.file_id]
+            + flags
+        )
+        proc = subprocess.run(
+            command,
+            cwd=str(BUILD_DIR),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
         if proc.returncode != 0:
             log_error(f"Binary compilation failed:\n{proc.stderr}")
 
-    def compute_estimation(self, setup: Setup, workload: Workload, execution: Execution):
+    def compute_estimation(
+        self, setup: Setup, workload: Workload, execution: Execution
+    ):
         model = load_model(execution.model)
 
         # Run gem5 to get per-region cycle counts. --clock (core period),
         # --mem-latency and --bus-width (the crossbar width, from the AXI width)
         # come from the executor's resolved SystemC chiplet config.
         outdir = BUILD_DIR / "m5out"
-        command = ([GEM5_BINARY, "--outdir", str(outdir), str(model_config(model)),
-                    "--cmd", str(workload.binary_path)]
-                   + model_cli(model, execution.params)
-                   + ["--clock", execution.clock, "--mem-latency", execution.mem_latency,
-                      "--bus-width", str(execution.bus_width)])
-        proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        command = (
+            [
+                GEM5_BINARY,
+                "--outdir",
+                str(outdir),
+                str(model_config(model)),
+                "--cmd",
+                str(workload.binary_path),
+            ]
+            + model_cli(model, execution.params)
+            + [
+                "--clock",
+                execution.clock,
+                "--mem-latency",
+                execution.mem_latency,
+                "--bus-width",
+                str(execution.bus_width),
+            ]
+        )
+        proc = subprocess.run(
+            command,
+            cwd=str(BUILD_DIR),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
         output = (proc.stdout or "") + "\n" + (proc.stderr or "")
         debug_output = BUILD_DIR / "debug_gem5.txt"
         debug_output.write_text(output, encoding="utf-8")
@@ -270,7 +352,9 @@ class CycleEstimator:
             log_error(f"gem5 simulation failed. See {debug_output}.\n{proc.stderr}")
 
         # Map the per-region stat dumps to SECTION1..N cycle counts.
-        cycle_sections = parse_gem5_cycles(outdir / "stats.txt", workload.num_cycle_sections)
+        cycle_sections = parse_gem5_cycles(
+            outdir / "stats.txt", workload.num_cycle_sections
+        )
         if not cycle_sections:
             log_error(f"No cycle sections parsed from gem5 stats. See {debug_output}.")
 
@@ -278,22 +362,34 @@ class CycleEstimator:
         speedup_sections = {}
         if workload.has_speedup:
             if shutil.which(LLVM_ANALYZER) is None:
-                log_warn(f"'{LLVM_ANALYZER}' not found; skipping accelerator speedup (factor 1.0).")
+                log_warn(
+                    f"'{LLVM_ANALYZER}' not found; skipping accelerator speedup (factor 1.0)."
+                )
             else:
                 speedup_sections = self.compute_speedup(setup, workload, execution)
 
         # Compute total cycles
         total_cycles = 0
         for section_name, cycles in cycle_sections.items():
-            speedup_factor = speedup_sections.get(section_name, 1.0) # default: no speedup
+            speedup_factor = speedup_sections.get(
+                section_name, 1.0
+            )  # default: no speedup
             total_cycles += cycles / speedup_factor
 
         execution.estimation_result = int(total_cycles)
 
-    def compute_speedup(self, setup: Setup, workload: Workload, execution: Execution) -> Dict[str, float]:
+    def compute_speedup(
+        self, setup: Setup, workload: Workload, execution: Execution
+    ) -> Dict[str, float]:
         # Run llvm-mca on the assembler file
         command = [LLVM_ANALYZER] + LLVM_ANALYZER_FLAGS + [str(workload.asm_path)]
-        proc = subprocess.run(command, cwd=str(BUILD_DIR), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        proc = subprocess.run(
+            command,
+            cwd=str(BUILD_DIR),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
         output = (proc.stdout or "") + "\n" + (proc.stderr or "")
         if proc.returncode != 0:
             log_error(f"LLVM-MCA simulation failed:\n{proc.stderr}")
@@ -305,8 +401,11 @@ class CycleEstimator:
         speedup_sections = {}
 
         # Split into code regions
-        section_pattern = re.compile(r'\[\d+\] Code Region - (\S+)', re.MULTILINE)
-        resource_pattern = re.compile(r'Resource pressure per iteration:\s*\n(?:\[.*?\]\s*\n)([0-9\.\s\-]+)', re.MULTILINE)
+        section_pattern = re.compile(r"\[\d+\] Code Region - (\S+)", re.MULTILINE)
+        resource_pattern = re.compile(
+            r"Resource pressure per iteration:\s*\n(?:\[.*?\]\s*\n)([0-9\.\s\-]+)",
+            re.MULTILINE,
+        )
 
         for section_match in section_pattern.finditer(output):
             section_name = section_match.group(1)
@@ -319,10 +418,14 @@ class CycleEstimator:
             # Parse resource pressure
             resource_match = resource_pattern.search(section_text)
             if not resource_match:
-                log_error(f"No resource pressure info found for {section_name} in LLVM-MCA output.")
+                log_error(
+                    f"No resource pressure info found for {section_name} in LLVM-MCA output."
+                )
 
             values_line = resource_match.group(1).strip()
-            resource_values = [float(v) if v != "-" else 0.0 for v in values_line.split()]
+            resource_values = [
+                float(v) if v != "-" else 0.0 for v in values_line.split()
+            ]
 
             try:
                 p0 = resource_values[0]
@@ -333,7 +436,9 @@ class CycleEstimator:
                 p5 = resource_values[5]
                 p6 = resource_values[6]
             except IndexError:
-                log_error(f"Resource pressure line malformed for {section_name}: {values_line}")
+                log_error(
+                    f"Resource pressure line malformed for {section_name}: {values_line}"
+                )
 
             # Compute speedup factor for this exact executor's accelerator.
             params = get_accel_params(setup, execution.chiplet, execution.module)
@@ -381,8 +486,10 @@ class CycleEstimator:
                 if execution.input_hash in computed:
                     execution.estimation_result = computed[execution.input_hash]
                 else:
-                    log_info(f"Updating cycle estimation for '{workload.source_path}' "
-                             f"on {execution.executor}...")
+                    log_info(
+                        f"Updating cycle estimation for '{workload.source_path}' "
+                        f"on {execution.executor}..."
+                    )
                     self.prepare_build_directory(setup, workload)
                     self.prepare_workload(workload)
                     self.compile_workload(workload, execution)
@@ -390,18 +497,24 @@ class CycleEstimator:
                     computed[execution.input_hash] = execution.estimation_result
                 self.update_database(setup, workload, execution)
 
+
 def main():
     # gem5 is the one hard requirement; the cross-compiler is validated per
     # workload (from its model), and llvm-mca only when a speedup region exists.
     if shutil.which(GEM5_BINARY) is None and not Path(GEM5_BINARY).exists():
-        log_warn(f"gem5 binary '{GEM5_BINARY}' not found (set GEM5_BIN). Skipping cycle estimation.")
+        log_warn(
+            f"gem5 binary '{GEM5_BINARY}' not found (set GEM5_BIN). Skipping cycle estimation."
+        )
         sys.exit(EXIT_SKIPPED)
     if not resolve_gem5_home() or not resolve_gem5_home().exists():
-        log_warn("gem5 source tree not found (set GEM5_HOME). Skipping cycle estimation.")
+        log_warn(
+            "gem5 source tree not found (set GEM5_HOME). Skipping cycle estimation."
+        )
         sys.exit(EXIT_SKIPPED)
 
     cycle_estimator = CycleEstimator()
     cycle_estimator.run()
+
 
 if __name__ == "__main__":
     main()

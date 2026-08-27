@@ -11,11 +11,16 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from PySide6.QtWidgets import (QComboBox, QFormLayout, QLabel, QLineEdit,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFormLayout,
+    QLabel,
+    QLineEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
-from ..gem5_models import (DEFAULT_MODEL, list_models, model_description,
-                           model_params)
+from ..gem5_models import DEFAULT_MODEL, list_models, model_description, model_params
 from .theme import GEM5_MARK_STYLE
 
 

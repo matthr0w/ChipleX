@@ -21,7 +21,12 @@ class GraphScene(QGraphicsScene):
 
     CONNECT_TOLERANCE = 34.0
 
-    def __init__(self, doc: Dict[str, Any], layout: Optional[Dict[str, List[float]]] = None, parent=None):
+    def __init__(
+        self,
+        doc: Dict[str, Any],
+        layout: Optional[Dict[str, List[float]]] = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.doc = doc
         self.layout: Dict[str, List[float]] = dict(layout or {})
@@ -126,7 +131,9 @@ class GraphScene(QGraphicsScene):
                 if target.chiplet_name == source.chiplet_name:
                     self.connection_rejected.emit("Cannot connect a chiplet to itself.")
                 else:
-                    ok, msg = setup_doc.add_connection(self.doc, source.endpoint, target.endpoint)
+                    ok, msg = setup_doc.add_connection(
+                        self.doc, source.endpoint, target.endpoint
+                    )
                     if ok:
                         self.rebuild()
                         self.topology_changed.emit()
@@ -136,7 +143,9 @@ class GraphScene(QGraphicsScene):
             return
         super().mouseReleaseEvent(event)
 
-    def _port_at(self, scene_pos: QPointF, exclude: Optional[PortItem] = None) -> Optional[PortItem]:
+    def _port_at(
+        self, scene_pos: QPointF, exclude: Optional[PortItem] = None
+    ) -> Optional[PortItem]:
         """Return the nearest port within tolerance, so connecting is forgiving."""
         best: Optional[PortItem] = None
         best_dist = self.CONNECT_TOLERANCE

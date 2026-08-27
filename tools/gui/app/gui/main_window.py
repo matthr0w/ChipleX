@@ -7,9 +7,18 @@ import tempfile
 from pathlib import Path
 from typing import List
 
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-                               QProgressBar, QPushButton, QSpinBox, QTabWidget,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QProgressBar,
+    QPushButton,
+    QSpinBox,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..cycle_estimation import EstimationStatus
 from ..project import Project
@@ -129,7 +138,9 @@ class MainWindow(QMainWindow):
         self._progress.setValue(0)
         self._run_btn.setEnabled(False)
         self._cancel_btn.setEnabled(True)
-        self._status.setText(f"Running {self._total} run(s) on {self._cores.value()} core(s)...")
+        self._status.setText(
+            f"Running {self._total} run(s) on {self._cores.value()} core(s)..."
+        )
 
         self._controller.start(
             self._project,
@@ -156,7 +167,11 @@ class MainWindow(QMainWindow):
         self._done += 1
         self._progress.setValue(self._done)
         if result.ok:
-            status = "WARNING" if result.estimation_status != EstimationStatus.SUCCESS else "PASS"
+            status = (
+                "WARNING"
+                if result.estimation_status != EstimationStatus.SUCCESS
+                else "PASS"
+            )
         elif result.cancelled:
             status = "CANCELLED"
         else:

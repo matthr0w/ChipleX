@@ -20,15 +20,18 @@ def sha1_file(path: Path) -> str:
             hash.update(chunk)
     return hash.hexdigest()
 
+
 def load_yaml(path: Path) -> dict:
     if not path.exists():
         return {}
     with path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
+
 def write_yaml(path: Path, data: dict):
     with path.open("w", encoding="utf-8") as f:
         yaml.safe_dump(data, f, sort_keys=False)
+
 
 def resolve_gem5_home() -> Path:
     """Locate the gem5 source tree (for the m5op header + per-ABI shim).
@@ -44,6 +47,7 @@ def resolve_gem5_home() -> Path:
             return parent
     return Path("")
 
+
 def model_search_dirs() -> List[Path]:
     """Directories searched for CPU-model manifests, most specific first.
 
@@ -55,6 +59,7 @@ def model_search_dirs() -> List[Path]:
         dirs.append(USER_MODELS_DIR)
     dirs.append(GEM5_MODELS_DIR)
     return dirs
+
 
 def load_model(name: str) -> dict:
     """Load a CPU-model manifest by name (e.g. 'riscv-minor')."""
@@ -69,6 +74,7 @@ def load_model(name: str) -> dict:
             return model
     searched = ", ".join(str(d) for d in model_search_dirs())
     log_error(f"Unknown CPU model '{name}': no manifest '{filename}' in {searched}.")
+
 
 def model_config(model: dict) -> Path:
     """Resolve the gem5 config script named by the model.
@@ -92,6 +98,7 @@ def model_config(model: dict) -> Path:
             return candidate
     return GEM5_DIR / path
 
+
 def model_cli(model: dict, params: Dict[str, Any]) -> List[str]:
     """Build the config-script flags from the model's cpu, mem mode, and params.
 
@@ -105,6 +112,7 @@ def model_cli(model: dict, params: Dict[str, Any]) -> List[str]:
     for key, value in (params or {}).items():
         cli += [f"--{key}", str(value)]
     return cli
+
 
 def merge_nodes(target: dict, override: dict, path: str = ""):
     """Deep-merge `override` into `target` in place, mirroring SetupLoader::merge_nodes.
@@ -125,6 +133,7 @@ def merge_nodes(target: dict, override: dict, path: str = ""):
         else:
             target[key] = value
 
+
 def resolve_chiplet(setup: Setup, chiplet_name: str):
     """Return (merged_config, gem5_block) for a chiplet in the setup's system.yaml.
 
@@ -133,7 +142,9 @@ def resolve_chiplet(setup: Setup, chiplet_name: str):
     The `gem5:` block is read verbatim; the SystemC loader ignores it.
     """
     system = load_yaml(setup.system_file)
-    entry = next((c for c in system.get("chiplets", []) if c.get("name") == chiplet_name), None)
+    entry = next(
+        (c for c in system.get("chiplets", []) if c.get("name") == chiplet_name), None
+    )
     if entry is None:
         return {}, {}
     base = load_yaml(CHIPLET_CONFIGS / f"{entry.get('type')}.yaml")
@@ -143,6 +154,7 @@ def resolve_chiplet(setup: Setup, chiplet_name: str):
         else:
             log_warn(f"Unknown parameter: {section}. Ignoring.")
     return base, (entry.get("gem5") or {})
+
 
 def load_executors(workload: Workload):
     """Return the (chiplet, module) executors declared for a workload.
@@ -155,12 +167,16 @@ def load_executors(workload: Workload):
     """
     sidecar = workload.source_path.with_suffix(".yaml")
     if not sidecar.is_file():
-        log_error(f"{workload.source_path}: missing executor declaration '{sidecar.name}'. "
-                  f"Create it next to the workload with an 'executors:' list of "
-                  f"'chiplet.module' entries naming the modules that run this region.")
+        log_error(
+            f"{workload.source_path}: missing executor declaration '{sidecar.name}'. "
+            f"Create it next to the workload with an 'executors:' list of "
+            f"'chiplet.module' entries naming the modules that run this region."
+        )
     entries = (load_yaml(sidecar) or {}).get("executors")
     if not isinstance(entries, list) or not entries:
-        log_error(f"{sidecar}: 'executors:' must be a non-empty list of 'chiplet.module' entries.")
+        log_error(
+            f"{sidecar}: 'executors:' must be a non-empty list of 'chiplet.module' entries."
+        )
 
     executors = []
     seen = set()
@@ -168,14 +184,19 @@ def load_executors(workload: Workload):
         chiplet, sep, module = str(entry).partition(".")
         chiplet, module = chiplet.strip(), module.strip()
         if not sep or not chiplet or not module:
-            log_error(f"{sidecar}: invalid executor '{entry}'; expected 'chiplet.module'.")
+            log_error(
+                f"{sidecar}: invalid executor '{entry}'; expected 'chiplet.module'."
+            )
         pair = (chiplet, module)
         if pair not in seen:
             seen.add(pair)
             executors.append(pair)
     return executors
 
-def execution_hash(source_hash: str, model: dict, execution: Execution, accel_params: dict) -> str:
+
+def execution_hash(
+    source_hash: str, model: dict, execution: Execution, accel_params: dict
+) -> str:
     """Hash the full set of estimation inputs to drive re-estimation.
 
     Covers the workload source plus everything that can change the result: CPU
@@ -197,6 +218,7 @@ def execution_hash(source_hash: str, model: dict, execution: Execution, accel_pa
     hash.update(str(sorted((accel_params or {}).items())).encode())
     return hash.hexdigest()
 
+
 def resolve_workload(setup: Setup, workload: Workload):
     """Build one Execution per (chiplet, module) that runs this workload region.
 
@@ -214,7 +236,9 @@ def resolve_workload(setup: Setup, workload: Workload):
             if key in params:
                 params[key] = value
             else:
-                log_warn(f"Unknown gem5 param '{key}' for model '{model_name}'. Ignoring.")
+                log_warn(
+                    f"Unknown gem5 param '{key}' for model '{model_name}'. Ignoring."
+                )
 
         cores = config.get("cores") or {}
         memory = config.get("memory") or {}
@@ -239,8 +263,11 @@ def resolve_workload(setup: Setup, workload: Workload):
         # executor's result, so it enters the hash. Resolve it quietly: a core
         # executor legitimately has no accelerator.
         accel_params = get_accel_params(setup, chiplet, module, quiet=True)
-        execution.input_hash = execution_hash(workload.source_hash, model, execution, accel_params)
+        execution.input_hash = execution_hash(
+            workload.source_hash, model, execution, accel_params
+        )
         workload.executions.append(execution)
+
 
 def parse_gem5_cycles(stats_path: Path, num_sections: int) -> Dict[str, int]:
     """Map the first `num_sections` gem5 stat dumps to SECTION1..N cycle counts.
@@ -260,7 +287,9 @@ def parse_gem5_cycles(stats_path: Path, num_sections: int) -> Dict[str, int]:
     return {f"SECTION{i + 1}": cycles[i] for i in range(min(num_sections, len(cycles)))}
 
 
-def get_accel_params(setup: Setup, chiplet_name: str, module_name: str, quiet: bool = False):
+def get_accel_params(
+    setup: Setup, chiplet_name: str, module_name: str, quiet: bool = False
+):
     """Resolve accelerator resource params for one executor (chiplet.module).
 
     Looks up the accelerator instance in system.yaml, loads its type's config
@@ -283,7 +312,9 @@ def get_accel_params(setup: Setup, chiplet_name: str, module_name: str, quiet: b
     }
 
     if not setup.system_file.exists():
-        log_error(f"Required system description file for setup '{setup.id}' not found: {setup.system_file}")
+        log_error(
+            f"Required system description file for setup '{setup.id}' not found: {setup.system_file}"
+        )
     system_data = load_yaml(setup.system_file)
 
     # Find the accelerator instance for this exact executor.
@@ -298,20 +329,26 @@ def get_accel_params(setup: Setup, chiplet_name: str, module_name: str, quiet: b
         break
     if accel_entry is None:
         if not quiet:
-            log_warn(f"No accelerator '{chiplet_name}.{module_name}' found in system description.")
+            log_warn(
+                f"No accelerator '{chiplet_name}.{module_name}' found in system description."
+            )
         return dict(defaults)
 
     accel_type = accel_entry.get("type")
     if not accel_type:
         if not quiet:
-            log_warn(f"Accelerator '{chiplet_name}.{module_name}' has no type in system description.")
+            log_warn(
+                f"Accelerator '{chiplet_name}.{module_name}' has no type in system description."
+            )
         return dict(defaults)
 
     # Load the accelerator config and apply the instance's system.yaml override
     # (flat merge, matching the SystemC loader for a flat accelerator config).
     accel_config = ACCELERATOR_CONFIGS / f"{accel_type}.yaml"
     if not accel_config.exists():
-        log_error(f"Required config file for accelerator type '{accel_type}' not found: {accel_config}.")
+        log_error(
+            f"Required config file for accelerator type '{accel_type}' not found: {accel_config}."
+        )
     accel_data = load_yaml(accel_config)
     merge_nodes(accel_data, accel_entry.get("config") or {})
 
@@ -337,7 +374,9 @@ def get_accel_params(setup: Setup, chiplet_name: str, module_name: str, quiet: b
         and num_imul == 1
         and num_mem == 1
     ):
-        log_warn(f"Accelerator '{accel_type}' has no speedup factor and all unit counts = 1. This likely indicates a poorly configured accelerator.")
+        log_warn(
+            f"Accelerator '{accel_type}' has no speedup factor and all unit counts = 1. This likely indicates a poorly configured accelerator."
+        )
 
     return {
         "accel_type": accel_type,
@@ -348,5 +387,5 @@ def get_accel_params(setup: Setup, chiplet_name: str, module_name: str, quiet: b
         "num_fpdivsqrt": num_fpdivsqrt,
         "num_idiv": num_idiv,
         "num_imul": num_imul,
-        "num_mem": num_mem
+        "num_mem": num_mem,
     }

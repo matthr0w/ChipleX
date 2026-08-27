@@ -9,7 +9,9 @@ import os
 from pathlib import Path
 
 repo_root = Path(os.environ.get("REPO_ROOT", Path.cwd())).resolve()
-stage = Path(os.environ.get("RELEASE_STAGE", repo_root / "dist" / "framework")).resolve()
+stage = Path(
+    os.environ.get("RELEASE_STAGE", repo_root / "dist" / "framework")
+).resolve()
 gui_dir = repo_root / "tools" / "gui"
 
 a = Analysis(
