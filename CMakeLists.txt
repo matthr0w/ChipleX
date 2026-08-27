@@ -105,7 +105,11 @@ else()
   FetchContent_Declare(
     yaml-cpp
     GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-    GIT_TAG 0.8.0
+    # 0.9.0 rather than 0.8.0: the latter declares cmake_minimum_required
+    # (VERSION 3.4), which CMake 4 rejects outright, so it cannot be configured
+    # by any toolchain new enough to ship that release. Upstream's tag naming
+    # gained the yaml-cpp- prefix in this release.
+    GIT_TAG yaml-cpp-0.9.0
   )
   FetchContent_MakeAvailable(yaml-cpp)
 endif()
