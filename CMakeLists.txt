@@ -6,7 +6,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Export the simulator's symbols so dlopen'd setup plugins can resolve them.
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+# ld64 spells this -export_dynamic and rejects the GNU -rdynamic spelling.
+if(APPLE)
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-export_dynamic")
+else()
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+endif()
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE "Release" CACHE STRING
@@ -16,14 +21,19 @@ endif()
 
 option(ENABLE_LTO "Enable link-time optimization (Release only)" OFF)
 option(ENABLE_ASAN "Build with AddressSanitizer + UBSan (verification builds)" OFF)
-option(RELOCATABLE "Bake an $ORIGIN rpath so binaries find a co-located libsystemc.so (release bundles)" OFF)
+option(RELOCATABLE "Bake a loader-relative rpath so binaries find a co-located SystemC (release bundles)" OFF)
 
 if(RELOCATABLE)
-  # sim loads libsystemc.so from a co-located copy or the bundled SystemC
-  # install; plugins then resolve SystemC from the already-loaded library.
-  # $ORIGIN keeps this working wherever the bundle is unpacked.
+  # sim loads the SystemC runtime from a co-located copy or the bundled
+  # SystemC install; plugins then resolve SystemC from the already-loaded
+  # library. A loader-relative rpath keeps this working wherever the bundle is
+  # unpacked. glibc spells the token $ORIGIN, dyld spells it @loader_path.
   set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
-  set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/systemc/lib;$ORIGIN/systemc/lib64")
+  if(APPLE)
+    set(CMAKE_INSTALL_RPATH "@loader_path;@loader_path/systemc/lib;@loader_path/systemc/lib64")
+  else()
+    set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/systemc/lib;$ORIGIN/systemc/lib64")
+  endif()
 endif()
 
 if(ENABLE_ASAN)
@@ -48,16 +58,25 @@ set(BUILD_SETUP "" CACHE STRING "Name of setup library to build (default: build 
 
 include(FetchContent)
 
-# SystemC: prefer SYSTEMC_PATH, then an installed CMake package.
+# SystemC: prefer SYSTEMC_PATH, then an installed CMake package. The runtime
+# library name is platform-dependent (libsystemc.so on Linux, libsystemc.dylib
+# on macOS) and the install lands in lib/ or lib64/, so probe both.
 set(SYSTEMC_PATH $ENV{SYSTEMC_PATH})
 set(SYSTEMC_INCLUDE_DIR "")
-if(EXISTS "${SYSTEMC_PATH}/lib/libsystemc.so")
-  set(SYSTEMC_LIB "${SYSTEMC_PATH}/lib/libsystemc.so")
-  set(SYSTEMC_INCLUDE_DIR "${SYSTEMC_PATH}/include")
-elseif(EXISTS "${SYSTEMC_PATH}/lib64/libsystemc.so")
-  set(SYSTEMC_LIB "${SYSTEMC_PATH}/lib64/libsystemc.so")
-  set(SYSTEMC_INCLUDE_DIR "${SYSTEMC_PATH}/include")
-else()
+set(SYSTEMC_LIB "")
+
+if(SYSTEMC_PATH)
+  foreach(SYSTEMC_LIBDIR lib lib64)
+    set(SYSTEMC_CANDIDATE
+        "${SYSTEMC_PATH}/${SYSTEMC_LIBDIR}/libsystemc${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    if(NOT SYSTEMC_LIB AND EXISTS "${SYSTEMC_CANDIDATE}")
+      set(SYSTEMC_LIB "${SYSTEMC_CANDIDATE}")
+      set(SYSTEMC_INCLUDE_DIR "${SYSTEMC_PATH}/include")
+    endif()
+  endforeach()
+endif()
+
+if(NOT SYSTEMC_LIB)
   find_package(SystemCLanguage QUIET)
   if(SystemCLanguage_FOUND)
     set(SYSTEMC_LIB SystemC::systemc)
@@ -65,8 +84,9 @@ else()
   else()
     message(FATAL_ERROR
       "SystemC not found. Set the SYSTEMC_PATH environment variable to a SystemC "
-      "install (with lib/libsystemc.so or lib64/libsystemc.so), or make a SystemC "
-      "CMake package discoverable via CMAKE_PREFIX_PATH.")
+      "install (with lib/libsystemc${CMAKE_SHARED_LIBRARY_SUFFIX} or "
+      "lib64/libsystemc${CMAKE_SHARED_LIBRARY_SUFFIX}), or make a SystemC CMake "
+      "package discoverable via CMAKE_PREFIX_PATH.")
   endif()
 endif()
 
@@ -151,7 +171,23 @@ foreach(SETUP_PATH ${SETUP_DIRS})
       set_target_properties(${LIB_NAME} PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${SETUP_PATH}"
         OUTPUT_NAME "setup"
+        # Keep the plugin named libsetup.so on every platform. The loader and
+        # the GUI address it by that exact name, and dlopen resolves it by path
+        # rather than by the platform's library naming convention, so there is
+        # no benefit to the native .dylib suffix here.
+        SUFFIX ".so"
       )
+
+      if(APPLE)
+        # Plugins call into the simulator (Core::read, Core::dma, ...), whose
+        # definitions live in the sim executable rather than in any library the
+        # plugin links against. ld64's two-level namespace rejects those
+        # undefined symbols at link time; dynamic_lookup defers them to a
+        # flat-namespace lookup performed at dlopen time, which finds them in
+        # the host executable because sim is linked with -export_dynamic.
+        set_target_properties(${LIB_NAME} PROPERTIES
+          LINK_FLAGS "-Wl,-undefined,dynamic_lookup")
+      endif()
 
       if(ENABLE_LTO)
         set_target_properties(${LIB_NAME} PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)

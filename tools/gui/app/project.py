@@ -145,9 +145,10 @@ class Project:
         """Environment for launching the simulator.
 
         Inherits the current environment and, when SYSTEMC_PATH is set, ensures
-        the SystemC shared library directories are on LD_LIBRARY_PATH so the sim
-        can load libsystemc.so. The copyright banner is suppressed to keep
-        captured stdout clean.
+        the SystemC shared library directories are on the loader's search path
+        so the sim can load the SystemC runtime. The variable is named
+        LD_LIBRARY_PATH under glibc and DYLD_LIBRARY_PATH under dyld. The
+        copyright banner is suppressed to keep captured stdout clean.
         """
         env = dict(os.environ)
         env.setdefault("SYSTEMC_DISABLE_COPYRIGHT_MESSAGE", "1")
@@ -162,9 +163,12 @@ class Project:
                 if lib_dir.is_dir():
                     extra.append(str(lib_dir))
         if extra:
-            existing = env.get("LD_LIBRARY_PATH", "")
+            loader_path_var = (
+                "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+            )
+            existing = env.get(loader_path_var, "")
             parts = extra + ([existing] if existing else [])
-            env["LD_LIBRARY_PATH"] = os.pathsep.join(parts)
+            env[loader_path_var] = os.pathsep.join(parts)
         return env
 
     def preflight(self) -> List[str]:
