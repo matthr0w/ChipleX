@@ -1,16 +1,19 @@
 # Building a Release Bundle
 
-The release is a single Linux executable (`chiplex`) that bundles the
-GUI, a relocatable `sim`, the SystemC runtime, and the headers and dependencies
-needed to compile setups on the target machine. It runs with no SystemC install
-on the user's system; compiling new or edited setups additionally requires a C++
+The release is a single executable (`chiplex`) that bundles the GUI, a
+relocatable `sim`, the SystemC runtime, and the headers and dependencies needed
+to compile setups on the target machine. It runs with no SystemC install on the
+user's system; compiling new or edited setups additionally requires a C++
 compiler and cmake on that machine.
+
+One bundle is published per target: Linux x86_64 and macOS on Apple Silicon.
 
 ## What the bundle contains
 
 The build stages a `framework/` tree that PyInstaller embeds:
 
-- `sim` - relocatable simulator (rpath `$ORIGIN`; finds SystemC in the bundle).
+- `sim` - relocatable simulator (rpath `$ORIGIN` on Linux, `@loader_path` on
+  macOS; finds SystemC in the bundle).
 - `systemc/` - SystemC install (runtime library + headers for setup builds).
 - `setups/` - the original setups, with their plugins pre-built so they run out
   of the box.
@@ -41,15 +44,18 @@ offline builds.
 ## Build in CI
 
 [.github/workflows/release.yml](../.github/workflows/release.yml) runs
-`make bundle` (which builds and caches SystemC in `.systemc-install/`) inside
-an `ubuntu:22.04` container, so the bundle links against glibc 2.35 and stays
-runnable on Ubuntu 22.04 and later. It is split into two jobs:
+`make bundle` (which builds and caches SystemC in `.systemc-install/`) once per
+target. It is split into three jobs:
 
-- `build-linux-x86_64` builds the bundle and uploads `dist/chiplex` as a
-  workflow artifact.
-- `publish-release` runs only for tags. It creates the GitHub Release for the
-  tag with generated notes and attaches the bundle as
-  `chiplex-linux-x86_64.tar.gz`.
+- `build-linux-x86_64` builds inside an `ubuntu:22.04` container, so the bundle
+  links against glibc 2.35 and stays runnable on Ubuntu 22.04 and later.
+- `build-macos-arm64` builds on the pinned `macos-14` runner. It additionally
+  verifies that no staged Mach-O still references the build workspace and that
+  every binary is arm64, because a bundle whose install names were not rewritten
+  would run on the runner and nowhere else.
+- `publish-release` runs only for tags. It collects every `chiplex-*` artifact,
+  archives each as `<artifact-name>.tar.gz`, creates the GitHub Release for the
+  tag with generated notes, and attaches them all.
 
 Cutting a release is therefore a tag push:
 
@@ -61,3 +67,29 @@ git push origin v1.0.0
 `workflow_dispatch` builds the bundle
 without creating a release. Add `--draft` to the `gh release create` call if
 releases should be reviewed before going public.
+## macOS specifics
+
+Three differences from the Linux bundle are worth knowing when changing the
+build:
+
+- **Plugin symbol resolution.** Setup plugins call into `sim` itself, so they
+  carry undefined symbols that only the executable defines. Linux resolves this
+  with `-rdynamic` plus lazy binding. ld64's two-level namespace rejects it at
+  link time, so plugins are linked with `-undefined dynamic_lookup` and `sim`
+  with `-export_dynamic`; the symbols are then bound by a flat-namespace lookup
+  at `dlopen` time.
+- **Install names.** dyld resolves a dependency through the install name baked
+  into the dylib, not through a search path, so `make bundle` rewrites every
+  SystemC reference in `sim` and in the prebuilt plugins to `@rpath/...` and
+  re-signs each binary afterwards. `install_name_tool` invalidates a signature,
+  and arm64 refuses to execute an unsigned Mach-O.
+- **Gatekeeper.** The bundle is ad-hoc signed, which is enough to execute
+  locally but not to satisfy Gatekeeper. Users who download the archive through
+  a browser must clear the quarantine flag once
+  (`xattr -dr com.apple.quarantine ./chiplex`). Removing that step means
+  notarizing the bundle, which requires a paid Apple Developer account and
+  signing credentials stored as repository secrets.
+
+The plugin filename stays `libsetup.so` on macOS rather than becoming
+`libsetup.dylib`: `dlopen` resolves it by path, and keeping one name means the
+loader and the GUI need no platform-specific lookup.
