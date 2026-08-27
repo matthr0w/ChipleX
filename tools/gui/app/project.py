@@ -15,6 +15,36 @@ def is_frozen() -> bool:
     return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
 
+# The loader's shared-library search path. glibc reads LD_LIBRARY_PATH; dyld
+# reads DYLD_LIBRARY_PATH.
+LOADER_PATH_VAR = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+
+
+def base_child_env() -> Dict[str, str]:
+    """A copy of this process's environment that is safe to spawn programs with.
+
+    The PyInstaller bootloader prepends the bundle's extraction directory to the
+    loader search path so the frozen interpreter finds its own libraries, and
+    preserves any pre-existing value under <VAR>_ORIG. That directory contains
+    the C++ runtime of the machine the bundle was built on, which is older than
+    the runtime on any newer target. A child process that is a system binary -
+    cmake, the compiler, gem5 - would then load the bundle's runtime in
+    preference to its own and fail to resolve symbols it was linked against.
+    Undoing the injection before spawning is PyInstaller's documented recipe.
+    """
+    env = dict(os.environ)
+    original = env.pop(f"{LOADER_PATH_VAR}_ORIG", None)
+    if original is not None:
+        env[LOADER_PATH_VAR] = original
+    elif is_frozen():
+        # No _ORIG means the caller had no search path of its own, so the only
+        # value present is the bundle's and it should not be inherited. Outside
+        # a bundle the variable belongs to the user - a source build points it
+        # at SystemC - and must be left alone.
+        env.pop(LOADER_PATH_VAR, None)
+    return env
+
+
 # Tools required to compile a setup plugin. The cycle-estimation toolchain
 # (gem5, RISC-V toolchain, llvm-mca) is validated by the estimator itself, which
 # reports what is missing in its output, so it is not probed here.
@@ -144,13 +174,13 @@ class Project:
     def child_env(self) -> Dict[str, str]:
         """Environment for launching the simulator.
 
-        Inherits the current environment and, when SYSTEMC_PATH is set, ensures
-        the SystemC shared library directories are on the loader's search path
-        so the sim can load the SystemC runtime. The variable is named
-        LD_LIBRARY_PATH under glibc and DYLD_LIBRARY_PATH under dyld. The
-        copyright banner is suppressed to keep captured stdout clean.
+        Starts from base_child_env(), so a bundled run does not leak the
+        bundle's own library directory to the child, then, when SYSTEMC_PATH is
+        set, puts the SystemC shared library directories on the loader's search
+        path so the sim can load the SystemC runtime. The copyright banner is
+        suppressed to keep captured stdout clean.
         """
-        env = dict(os.environ)
+        env = base_child_env()
         env.setdefault("SYSTEMC_DISABLE_COPYRIGHT_MESSAGE", "1")
 
         if self.systemc_path is not None:
@@ -163,12 +193,9 @@ class Project:
                 if lib_dir.is_dir():
                     extra.append(str(lib_dir))
         if extra:
-            loader_path_var = (
-                "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
-            )
-            existing = env.get(loader_path_var, "")
+            existing = env.get(LOADER_PATH_VAR, "")
             parts = extra + ([existing] if existing else [])
-            env[loader_path_var] = os.pathsep.join(parts)
+            env[LOADER_PATH_VAR] = os.pathsep.join(parts)
         return env
 
     def preflight(self) -> List[str]:

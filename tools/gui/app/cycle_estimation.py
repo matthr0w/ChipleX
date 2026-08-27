@@ -11,7 +11,6 @@ output, which the caller surfaces.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -19,7 +18,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from .project import Project, is_frozen
+from .project import Project, base_child_env, is_frozen
 
 
 class EstimationStatus(Enum):
@@ -73,7 +72,10 @@ def run_cycle_estimation(
         command = [sys.executable, str(main_py)]
         cwd = str(tool_dir)
 
-    env = dict(os.environ)
+    # The estimator shells out to gem5, the workload compiler and llvm-mca,
+    # all system binaries on the target machine, so it must not inherit the
+    # bundle's library search path.
+    env = base_child_env()
     env["CE_SETUPS_DIR"] = str(setups_dir or project.setups_dir)
     env["CE_CONFIGS_DIR"] = str(project.configs_dir)
     env["CE_BUILD_DIR"] = str(build_dir or (project.build_dir / "cycle_estimation"))

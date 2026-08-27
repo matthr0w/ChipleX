@@ -67,6 +67,22 @@ git push origin v1.0.0
 `workflow_dispatch` builds the bundle
 without creating a release. Add `--draft` to the `gh release create` call if
 releases should be reviewed before going public.
+## Spawning external programs from the bundle
+
+The PyInstaller bootloader puts the bundle's extraction directory on the
+loader's search path so the frozen GUI finds its own libraries. That directory
+holds the C++ runtime of the machine the bundle was built on. Any child process
+that is a system binary on the target - `cmake`, the compiler, gem5 - must
+therefore not inherit it, or it loads that older runtime in preference to its
+own and fails to resolve symbols it was linked against.
+
+Every spawn site goes through `base_child_env()` in
+[tools/gui/app/project.py](../tools/gui/app/project.py), which restores the
+caller's original search path (or removes the variable when there was none)
+before the child is launched. Building the environment with `dict(os.environ)`
+directly reintroduces the fault, which only shows up on a target whose
+toolchain is newer than the build container's.
+
 ## macOS specifics
 
 Three differences from the Linux bundle are worth knowing when changing the
