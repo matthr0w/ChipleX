@@ -7,11 +7,24 @@ from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPainter
-from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
-                               QFormLayout, QGraphicsView, QGroupBox,
-                               QHBoxLayout, QLabel, QLineEdit, QListWidget,
-                               QMessageBox, QPushButton, QScrollArea,
-                               QSplitter, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QGraphicsView,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QListWidget,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
 
 from .. import setup_doc
 from ..project import Project
@@ -58,7 +71,13 @@ class GraphView(QGraphicsView):
 
 
 class GraphEditor(QWidget):
-    def __init__(self, project: Project, doc: Dict[str, Any], layout: Optional[Dict] = None, parent=None):
+    def __init__(
+        self,
+        project: Project,
+        doc: Dict[str, Any],
+        layout: Optional[Dict] = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self.project = project
         self.doc = doc
@@ -205,8 +224,17 @@ class GraphEditor(QWidget):
 class SubConfigDialog(QDialog):
     """Edit the name and configuration of an accelerator or interconnect sub-instance."""
 
-    def __init__(self, project: Project, kind: str, type_name: str, name: str, config: Dict[str, Any],
-                 existing_names, title: str, parent=None):
+    def __init__(
+        self,
+        project: Project,
+        kind: str,
+        type_name: str,
+        name: str,
+        config: Dict[str, Any],
+        existing_names,
+        title: str,
+        parent=None,
+    ):
         super().__init__(parent)
         self.setWindowTitle(title)
         self.resize(420, 480)
@@ -238,7 +266,9 @@ class SubConfigDialog(QDialog):
             QMessageBox.warning(self, "Edit", "The name must not be empty.")
             return
         if name in self._existing:
-            QMessageBox.warning(self, "Edit", f"'{name}' already exists on this chiplet.")
+            QMessageBox.warning(
+                self, "Edit", f"'{name}' already exists on this chiplet."
+            )
             return
         self.accept()
 
@@ -270,7 +300,9 @@ class ChipletPanel(QWidget):
         header.addRow("Name", self._name)
         header.addRow("Type", self._type)
 
-        params = type_params(editor.project.configs_dir, "chiplets", chiplet.get("type", ""))
+        params = type_params(
+            editor.project.configs_dir, "chiplets", chiplet.get("type", "")
+        )
         self._config = ConfigForm(params)
         self._config.set_config(chiplet.get("config", {}))
         config_box = QGroupBox("Configuration")
@@ -278,9 +310,16 @@ class ChipletPanel(QWidget):
         cbl.addWidget(self._config)
 
         # The gem5 model only applies to chiplets that run code, i.e. have cores.
-        base_cores = (type_default(editor.project.configs_dir, "chiplets", chiplet.get("type", "")).get("cores") or {})
+        base_cores = (
+            type_default(
+                editor.project.configs_dir, "chiplets", chiplet.get("type", "")
+            ).get("cores")
+            or {}
+        )
         override_num = ((chiplet.get("config") or {}).get("cores") or {}).get("num")
-        num_cores = override_num if override_num is not None else base_cores.get("num", 0)
+        num_cores = (
+            override_num if override_num is not None else base_cores.get("num", 0)
+        )
 
         self._gem5 = None
         gem5_box = None
@@ -291,14 +330,26 @@ class ChipletPanel(QWidget):
             gbl.addWidget(self._gem5)
 
         accel_box = self._build_list_box(
-            "Accelerators", editor._accel_types,
-            [f"{a.get('name')} [{a.get('type')}]" for a in chiplet.get("accelerators", []) or []],
-            self._add_accel, self._remove_accel, self._edit_accel,
+            "Accelerators",
+            editor._accel_types,
+            [
+                f"{a.get('name')} [{a.get('type')}]"
+                for a in chiplet.get("accelerators", []) or []
+            ],
+            self._add_accel,
+            self._remove_accel,
+            self._edit_accel,
         )
         ic_box = self._build_list_box(
-            "Interconnects", editor._ic_types,
-            [f"{i.get('name')} [{i.get('type')}]" for i in chiplet.get("interconnects", []) or []],
-            self._add_ic, self._remove_ic, self._edit_ic,
+            "Interconnects",
+            editor._ic_types,
+            [
+                f"{i.get('name')} [{i.get('type')}]"
+                for i in chiplet.get("interconnects", []) or []
+            ],
+            self._add_ic,
+            self._remove_ic,
+            self._edit_ic,
         )
 
         layout = QVBoxLayout(self)
@@ -310,7 +361,9 @@ class ChipletPanel(QWidget):
         layout.addWidget(ic_box)
         layout.addStretch(1)
 
-    def _build_list_box(self, title, types, items, on_add, on_remove, on_edit) -> QGroupBox:
+    def _build_list_box(
+        self, title, types, items, on_add, on_remove, on_edit
+    ) -> QGroupBox:
         box = QGroupBox(title)
         layout = QVBoxLayout(box)
         listw = QListWidget()
@@ -403,13 +456,21 @@ class ChipletPanel(QWidget):
             return
         chiplet = setup_doc.chiplet_by_name(self.doc, self.name) or {}
         key = "accelerators" if kind == "accelerators" else "interconnects"
-        entry = next((e for e in chiplet.get(key, []) or [] if e.get("name") == name), None)
+        entry = next(
+            (e for e in chiplet.get(key, []) or [] if e.get("name") == name), None
+        )
         if entry is None:
             return
         existing = {e.get("name") for e in chiplet.get(key, []) or []} - {name}
         dialog = SubConfigDialog(
-            self.editor.project, kind, entry.get("type", ""), name,
-            entry.get("config", {}), existing, f"Edit {name}", self,
+            self.editor.project,
+            kind,
+            entry.get("type", ""),
+            name,
+            entry.get("config", {}),
+            existing,
+            f"Edit {name}",
+            self,
         )
         if not dialog.exec():
             return

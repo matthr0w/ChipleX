@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from PySide6.QtWidgets import (QFormLayout, QHBoxLayout, QLabel, QLineEdit,
-                               QWidget)
+from PySide6.QtWidgets import QFormLayout, QHBoxLayout, QLabel, QLineEdit, QWidget
 
 from ..system_model import _get_dotted, _set_dotted
 from ..type_catalog import TypeParam
@@ -53,7 +52,9 @@ class ConfigForm(QWidget):
     def set_config(self, config: Dict[str, Any]) -> None:
         for param in self._params:
             current = _get_dotted(config or {}, param.dotted_key, None)
-            self._editors[param.dotted_key].setText("" if current is None else str(current))
+            self._editors[param.dotted_key].setText(
+                "" if current is None else str(current)
+            )
 
     def config(self) -> Dict[str, Any]:
         result: Dict[str, Any] = {}

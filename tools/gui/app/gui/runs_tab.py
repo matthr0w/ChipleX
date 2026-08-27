@@ -7,17 +7,37 @@ from typing import List
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFontMetrics
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFileDialog,
-                               QHBoxLayout, QHeaderView, QLabel, QPushButton,
-                               QSizePolicy, QSplitter, QTableWidget,
-                               QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QComboBox,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QPushButton,
+    QSizePolicy,
+    QSplitter,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..project import Project
 from ..runspec import RunSpec
 from .ansi_text import AnsiTextEdit
 from .run_editor import RunEditorDialog
 
-_COLUMNS = ["Enabled", "Label", "Setup", "Time (ns)", "BER", "Seed", "Overrides", "Status"]
+_COLUMNS = [
+    "Enabled",
+    "Label",
+    "Setup",
+    "Time (ns)",
+    "BER",
+    "Seed",
+    "Overrides",
+    "Status",
+]
 _LOG_LEVELS = ["SILENT", "ERROR", "WARN", "INFO", "DEBUG", "DELAY"]
 
 
@@ -75,7 +95,9 @@ class RunsTab(QWidget):
         self._choose_log_btn.setToolTip("Write the selected run's output to a file")
         self._choose_log_btn.clicked.connect(self._choose_log_file)
         self._remove_log_btn = QPushButton("Unset")
-        self._remove_log_btn.setToolTip("Stop writing the selected run's output to a file")
+        self._remove_log_btn.setToolTip(
+            "Stop writing the selected run's output to a file"
+        )
         self._remove_log_btn.clicked.connect(self._remove_log_file)
 
         log_header = QHBoxLayout()
@@ -225,7 +247,9 @@ class RunsTab(QWidget):
     def _edit_row(self, row: int) -> None:
         if not (0 <= row < len(self._specs)):
             return
-        dialog = RunEditorDialog(self._project, self._setups, spec=self._specs[row], parent=self)
+        dialog = RunEditorDialog(
+            self._project, self._setups, spec=self._specs[row], parent=self
+        )
         if dialog.exec():
             new_spec = dialog.result_spec()
             # The editor does not cover the log file, so keep the row's choice.
@@ -260,7 +284,9 @@ class RunsTab(QWidget):
         self.selection_changed.emit()
 
     def _selected_rows(self) -> List[int]:
-        return sorted({idx.row() for idx in self._table.selectionModel().selectedRows()})
+        return sorted(
+            {idx.row() for idx in self._table.selectionModel().selectedRows()}
+        )
 
     def _unique_label(self, label: str, ignore_index: int | None = None) -> str:
         existing = {
@@ -283,9 +309,15 @@ class RunsTab(QWidget):
 
             self._table.setItem(row, 1, _ro(spec.label))
             self._table.setItem(row, 2, _ro(spec.setup))
-            self._table.setItem(row, 3, _ro("end" if not spec.time_ns else f"{spec.time_ns:g}"))
-            self._table.setItem(row, 4, _ro("default" if spec.ber is None else f"{spec.ber:g}"))
-            self._table.setItem(row, 5, _ro("default" if spec.seed is None else str(spec.seed)))
+            self._table.setItem(
+                row, 3, _ro("end" if not spec.time_ns else f"{spec.time_ns:g}")
+            )
+            self._table.setItem(
+                row, 4, _ro("default" if spec.ber is None else f"{spec.ber:g}")
+            )
+            self._table.setItem(
+                row, 5, _ro("default" if spec.seed is None else str(spec.seed))
+            )
             self._table.setItem(row, 6, _ro(spec.overrides_summary()))
             self._table.setItem(row, 7, _ro(""))
         self._table.resizeColumnToContents(0)
@@ -313,7 +345,9 @@ class _ElidedLabel(QLabel):
 
     def _apply_elision(self) -> None:
         metrics = QFontMetrics(self.font())
-        self.setText(metrics.elidedText(self._full_text, Qt.ElideLeft, max(0, self.width())))
+        self.setText(
+            metrics.elidedText(self._full_text, Qt.ElideLeft, max(0, self.width()))
+        )
 
 
 def _ro(text: str) -> QTableWidgetItem:

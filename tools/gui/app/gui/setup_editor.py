@@ -9,8 +9,13 @@ from typing import Dict, Optional
 import yaml
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QHBoxLayout,
-                               QMessageBox, QVBoxLayout)
+from PySide6.QtWidgets import (
+    QDialog,
+    QDialogButtonBox,
+    QHBoxLayout,
+    QMessageBox,
+    QVBoxLayout,
+)
 
 from .. import setup_writer
 from ..project import Project
@@ -20,7 +25,9 @@ _LAYOUT_FILE = ".layout.json"
 
 
 class SetupEditorDialog(QDialog):
-    def __init__(self, project: Project, setup_name: str, is_new: bool = False, parent=None):
+    def __init__(
+        self, project: Project, setup_name: str, is_new: bool = False, parent=None
+    ):
         super().__init__(parent)
         self.project = project
         self.name = setup_name
@@ -36,7 +43,10 @@ class SetupEditorDialog(QDialog):
             layout: Dict = {}
         else:
             setup_dir = project.setup_dir(setup_name)
-            doc = yaml.safe_load((setup_dir / "system.yaml").read_text()) or setup_writer.new_system_doc()
+            doc = (
+                yaml.safe_load((setup_dir / "system.yaml").read_text())
+                or setup_writer.new_system_doc()
+            )
             layout = _load_layout(setup_dir)
 
         self._editor = GraphEditor(project, doc, layout)

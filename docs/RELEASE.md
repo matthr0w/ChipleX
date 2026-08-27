@@ -1,16 +1,17 @@
 # Building a Release Bundle
 
-The release is a single Linux executable (`chiplex`) that bundles the
-GUI, a relocatable `sim`, the SystemC runtime, and the headers and dependencies
-needed to compile setups on the target machine. It runs with no SystemC install
-on the user's system; compiling new or edited setups additionally requires a C++
+The release is a single executable (`chiplex`) that bundles the GUI, a
+relocatable `sim`, the SystemC runtime, and the headers and dependencies needed
+to compile setups on the target machine. It runs with no SystemC install on the
+user's system; compiling new or edited setups additionally requires a C++
 compiler and cmake on that machine.
 
 ## What the bundle contains
 
 The build stages a `framework/` tree that PyInstaller embeds:
 
-- `sim` - relocatable simulator (rpath `$ORIGIN`; finds SystemC in the bundle).
+- `sim` - relocatable simulator (rpath `$ORIGIN` on Linux, `@loader_path` on
+  macOS; finds SystemC in the bundle).
 - `systemc/` - SystemC install (runtime library + headers for setup builds).
 - `setups/` - the original setups, with their plugins pre-built so they run out
   of the box.
@@ -41,15 +42,18 @@ offline builds.
 ## Build in CI
 
 [.github/workflows/release.yml](../.github/workflows/release.yml) runs
-`make bundle` (which builds and caches SystemC in `.systemc-install/`) inside
-an `ubuntu:22.04` container, so the bundle links against glibc 2.35 and stays
-runnable on Ubuntu 22.04 and later. It is split into two jobs:
+`make bundle` (which builds and caches SystemC in `.systemc-install/`) once per
+target. It is split into three jobs:
 
-- `build-linux-x86_64` builds the bundle and uploads `dist/chiplex` as a
-  workflow artifact.
-- `publish-release` runs only for tags. It creates the GitHub Release for the
-  tag with generated notes and attaches the bundle as
-  `chiplex-linux-x86_64.tar.gz`.
+- `build-linux-x86_64` builds inside an `ubuntu:22.04` container, so the bundle
+  links against glibc 2.35 and stays runnable on Ubuntu 22.04 and later.
+- `build-macos-arm64` builds on the pinned `macos-14` runner. It additionally
+  verifies that no staged Mach-O still references the build workspace and that
+  every binary is arm64, because a bundle whose install names were not rewritten
+  would run on the runner and nowhere else.
+- `publish-release` runs only for tags. It collects every `chiplex-*` artifact,
+  archives each as `<artifact-name>.tar.gz`, creates the GitHub Release for the
+  tag with generated notes, and attaches them all.
 
 Cutting a release is therefore a tag push:
 

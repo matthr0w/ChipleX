@@ -5,9 +5,16 @@ from __future__ import annotations
 from typing import List
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox,
-                               QDoubleSpinBox, QFormLayout, QGroupBox,
-                               QLineEdit, QVBoxLayout)
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGroupBox,
+    QLineEdit,
+    QVBoxLayout,
+)
 
 from ..project import Project
 from ..runspec import RunSpec
@@ -16,7 +23,13 @@ from .instance_tree import InstanceParamTree
 
 
 class RunEditorDialog(QDialog):
-    def __init__(self, project: Project, setups: List[str], spec: RunSpec | None = None, parent=None):
+    def __init__(
+        self,
+        project: Project,
+        setups: List[str],
+        spec: RunSpec | None = None,
+        parent=None,
+    ):
         super().__init__(parent)
         self._project = project
         self.setWindowTitle("Edit Run" if spec else "New Run")

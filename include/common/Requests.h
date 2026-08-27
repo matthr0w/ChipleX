@@ -143,7 +143,8 @@ struct RequestHandle {
 
 	void wait() {
 		if (!completed) {
-			::wait(done);
+			// Not ::wait, which binds to POSIX wait(int *) under the macOS SDK.
+			sc_core::wait(done);
 		}
 	}
 };

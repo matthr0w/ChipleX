@@ -4,6 +4,9 @@ BUILD_DIR_DEBUG := build-debug
 BUILD_DIR_ASAN := build-asan
 SIM_BINARY := ./sim
 
+UNAME_S := $(shell uname -s)
+NPROC := $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || echo 4)
+
 # SystemC: build a local install by default (into .systemc-install); set
 # SYSTEMC_PATH to use an existing install instead. Builds depend on `systemc`,
 # and the runtime library path is exported so the built sim runs directly.
@@ -11,7 +14,15 @@ SYSTEMC_VERSION ?= 3.0.1
 SYSTEMC_PREFIX ?= $(CURDIR)/.systemc-install
 SYSTEMC_PATH ?= $(SYSTEMC_PREFIX)
 export SYSTEMC_PATH
-export LD_LIBRARY_PATH := $(SYSTEMC_PATH)/lib:$(SYSTEMC_PATH)/lib64$(if $(LD_LIBRARY_PATH),:$(LD_LIBRARY_PATH))
+
+ifeq ($(UNAME_S),Darwin)
+  SHLIB_EXT := dylib
+  export DYLD_LIBRARY_PATH := $(SYSTEMC_PATH)/lib:$(SYSTEMC_PATH)/lib64$(if $(DYLD_LIBRARY_PATH),:$(DYLD_LIBRARY_PATH))
+  export MACOSX_DEPLOYMENT_TARGET ?= 11.0
+else
+  SHLIB_EXT := so
+  export LD_LIBRARY_PATH := $(SYSTEMC_PATH)/lib:$(SYSTEMC_PATH)/lib64$(if $(LD_LIBRARY_PATH),:$(LD_LIBRARY_PATH))
+endif
 
 # Per-tool Python environments
 CE_VENV := tools/cycle_estimation/.venv
@@ -100,17 +111,17 @@ test-update: build
 # managed install, build it on first use; when the user points it elsewhere,
 # require it to already exist.
 systemc:
-	@if [ -f "$(SYSTEMC_PATH)/lib/libsystemc.so" ] || [ -f "$(SYSTEMC_PATH)/lib64/libsystemc.so" ]; then \
+	@if [ -f "$(SYSTEMC_PATH)/lib/libsystemc.$(SHLIB_EXT)" ] || [ -f "$(SYSTEMC_PATH)/lib64/libsystemc.$(SHLIB_EXT)" ]; then \
 		:; \
 	elif [ "$(SYSTEMC_PATH)" != "$(SYSTEMC_PREFIX)" ]; then \
-		$(LOG_ERROR) "No libsystemc.so under SYSTEMC_PATH=$(SYSTEMC_PATH). Point it at a SystemC install or unset it to build a local one."; \
+		$(LOG_ERROR) "No libsystemc.$(SHLIB_EXT) under SYSTEMC_PATH=$(SYSTEMC_PATH). Point it at a SystemC install or unset it to build a local one."; \
 		exit 1; \
 	else \
 		$(LOG_INFO) "Building SystemC $(SYSTEMC_VERSION) (one-time, into $(SYSTEMC_PREFIX))..."; \
 		tmp=$$(mktemp -d); \
 		git clone --depth 1 --branch $(SYSTEMC_VERSION) https://github.com/accellera-official/systemc.git $$tmp/systemc; \
 		cmake -S $$tmp/systemc -B $$tmp/build -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 -DCMAKE_INSTALL_PREFIX="$(SYSTEMC_PREFIX)"; \
-		cmake --build $$tmp/build -j$$(nproc); \
+		cmake --build $$tmp/build -j$(NPROC); \
 		cmake --install $$tmp/build; \
 		rm -rf $$tmp; \
 		$(LOG_INFO) "SystemC $(SYSTEMC_VERSION) installed to $(SYSTEMC_PREFIX)"; \
@@ -120,7 +131,7 @@ systemc:
 # Requires SYSTEMC_PATH; set YAML_CPP_DIR to build yaml-cpp offline.
 define BUNDLE_RECIPE
 set -euo pipefail
-: "$${SYSTEMC_PATH:?Set SYSTEMC_PATH to a SystemC install (include/ and lib/libsystemc.so)}"
+: "$${SYSTEMC_PATH:?Set SYSTEMC_PATH to a SystemC install (include/ and lib/libsystemc.$(SHLIB_EXT))}"
 
 ROOT="$(CURDIR)"
 STAGE="$$ROOT/$(STAGE_DIR)"
@@ -140,15 +151,32 @@ cp -r "$$ROOT/configs" "$$STAGE/configs"
 cp "$$ROOT/CMakeLists.txt" "$$STAGE/CMakeLists.txt"
 if [ -n "$${YAML_CPP_DIR:-}" ]; then YCPP="-DYAML_CPP_DIR=$$YAML_CPP_DIR"; else YCPP="-DYAML_CPP_DIR="; fi
 cmake -S "$$ROOT" -B "$$BUILD" -DCMAKE_BUILD_TYPE=Release -DRELOCATABLE=ON -DSETUPS_DIR="$$STAGE/setups" "$$YCPP"
-cmake --build "$$BUILD" -j"$$(nproc)"
+cmake --build "$$BUILD" -j"$(NPROC)"
 install -m 0755 "$$BUILD/sim" "$$STAGE/sim"
 
-# Stage the SystemC install, dereferencing the versioned .so symlinks so the
-# bundle carries real files rather than dangling links.
+# Stage the SystemC install, dereferencing the versioned library symlinks so
+# the bundle carries real files rather than dangling links.
 mkdir -p "$$STAGE/systemc"
 cp -r "$$SYSTEMC_PATH/include" "$$STAGE/systemc/include"
 for d in lib lib64; do if [ -d "$$SYSTEMC_PATH/$$d" ]; then cp -rP "$$SYSTEMC_PATH/$$d" "$$STAGE/systemc/$$d"; fi; done
 while IFS= read -r link; do tgt="$$(readlink -f "$$link")"; rm -f "$$link"; cp "$$tgt" "$$link"; done < <(find "$$STAGE/systemc" -type l)
+
+# Rewrite the SystemC install names to the @rpath form the bundle resolves.
+if [ "$(UNAME_S)" = "Darwin" ]; then
+  for lib in "$$STAGE"/systemc/lib*/libsystemc*.dylib; do
+    [ -f "$$lib" ] || continue
+    install_name_tool -id "@rpath/$$(basename "$$lib")" "$$lib"
+    codesign --force --sign - "$$lib"
+  done
+  for macho in "$$STAGE/sim" "$$STAGE"/setups/*/libsetup.so; do
+    [ -f "$$macho" ] || continue
+    deps=$$(otool -L "$$macho" | awk 'NR > 1 { print $$1 }' | grep libsystemc || true)
+    for dep in $$deps; do
+      install_name_tool -change "$$dep" "@rpath/$$(basename "$$dep")" "$$macho"
+    done
+    codesign --force --sign - "$$macho"
+  done
+fi
 
 # Stage vendored yaml-cpp (an override tree, else the CMake fetch output).
 mkdir -p "$$STAGE/deps/yaml-cpp/lib" "$$STAGE/deps/yaml-cpp/include"

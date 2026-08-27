@@ -36,16 +36,19 @@ def dump_system(doc: Dict[str, Any]) -> str:
         endpoints = conn.get("endpoints")
         if isinstance(endpoints, list):
             conn["endpoints"] = _FlowSeq(endpoints)
-    return yaml.dump(doc, Dumper=_SystemDumper, default_flow_style=False, sort_keys=False)
+    return yaml.dump(
+        doc, Dumper=_SystemDumper, default_flow_style=False, sort_keys=False
+    )
 
-PROGRAM_HEADER = '''#pragma once
+
+PROGRAM_HEADER = """#pragma once
 
 #include "setup/Types.h"
 
 extern "C" ModuleCodeMap *get_program_code();
-'''
+"""
 
-PROGRAM_TEMPLATE = '''#include "program.h"
+PROGRAM_TEMPLATE = """#include "program.h"
 
 #include "modules/Core.h"
 #include "modules/HWAccel.h"
@@ -55,7 +58,7 @@ ModuleCodeMap *get_program_code() {
 \t};
 \treturn &code;
 }
-'''
+"""
 
 
 def new_system_doc() -> Dict[str, Any]:

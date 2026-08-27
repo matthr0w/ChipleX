@@ -15,6 +15,25 @@ def is_frozen() -> bool:
     return getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS")
 
 
+LOADER_PATH_VAR = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+
+
+def base_child_env() -> Dict[str, str]:
+    """Environment for spawning external programs.
+
+    Undoes the loader search path the PyInstaller bootloader injects, so a child
+    that is a system binary does not load the bundle's C++ runtime in preference
+    to its own. Outside a bundle the variable is left alone.
+    """
+    env = dict(os.environ)
+    original = env.pop(f"{LOADER_PATH_VAR}_ORIG", None)
+    if original is not None:
+        env[LOADER_PATH_VAR] = original
+    elif is_frozen():
+        env.pop(LOADER_PATH_VAR, None)
+    return env
+
+
 # Tools required to compile a setup plugin. The cycle-estimation toolchain
 # (gem5, RISC-V toolchain, llvm-mca) is validated by the estimator itself, which
 # reports what is missing in its output, so it is not probed here.
@@ -144,12 +163,11 @@ class Project:
     def child_env(self) -> Dict[str, str]:
         """Environment for launching the simulator.
 
-        Inherits the current environment and, when SYSTEMC_PATH is set, ensures
-        the SystemC shared library directories are on LD_LIBRARY_PATH so the sim
-        can load libsystemc.so. The copyright banner is suppressed to keep
-        captured stdout clean.
+        Puts the SystemC shared library directories on the loader's search path
+        so the sim can load the SystemC runtime. The copyright banner is
+        suppressed to keep captured stdout clean.
         """
-        env = dict(os.environ)
+        env = base_child_env()
         env.setdefault("SYSTEMC_DISABLE_COPYRIGHT_MESSAGE", "1")
 
         if self.systemc_path is not None:
@@ -162,9 +180,9 @@ class Project:
                 if lib_dir.is_dir():
                     extra.append(str(lib_dir))
         if extra:
-            existing = env.get("LD_LIBRARY_PATH", "")
+            existing = env.get(LOADER_PATH_VAR, "")
             parts = extra + ([existing] if existing else [])
-            env["LD_LIBRARY_PATH"] = os.pathsep.join(parts)
+            env[LOADER_PATH_VAR] = os.pathsep.join(parts)
         return env
 
     def preflight(self) -> List[str]:

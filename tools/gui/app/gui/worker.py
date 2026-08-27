@@ -34,7 +34,9 @@ class BatchWorker(QObject):
         super().__init__()
         self._project = project
         self._specs = specs
-        self._runner = Runner(project, workdir, max_workers, timeout_s=timeout_s, log_level=log_level)
+        self._runner = Runner(
+            project, workdir, max_workers, timeout_s=timeout_s, log_level=log_level
+        )
 
     def cancel(self) -> None:
         self._runner.cancel()
@@ -77,7 +79,9 @@ class BatchController(QObject):
         if self.is_running():
             return
         self._thread = QThread()
-        self._worker = BatchWorker(project, specs, workdir, max_workers, timeout_s, log_level)
+        self._worker = BatchWorker(
+            project, specs, workdir, max_workers, timeout_s, log_level
+        )
         self._worker.moveToThread(self._thread)
 
         self._worker.run_started.connect(self.run_started)

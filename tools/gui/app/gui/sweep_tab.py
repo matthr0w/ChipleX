@@ -5,9 +5,19 @@ from __future__ import annotations
 from typing import Any, List
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QComboBox, QFormLayout, QGroupBox, QHBoxLayout,
-                               QLabel, QLineEdit, QMessageBox, QPushButton,
-                               QScrollArea, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..project import Project
 from ..schema import cli_parameters
@@ -26,7 +36,9 @@ class _AxisRow(QWidget):
         self._param.currentIndexChanged.connect(self._on_param_changed)
 
         self._values = QLineEdit()
-        self._values.setPlaceholderText("values to sweep, e.g. 128, 256, 512   or   start:stop:step")
+        self._values.setPlaceholderText(
+            "values to sweep, e.g. 128, 256, 512   or   start:stop:step"
+        )
         self._values.textChanged.connect(self.changed)
 
         self._unit = QLabel("")
@@ -60,8 +72,14 @@ class _AxisRow(QWidget):
         for p in parameters:
             self._param.addItem(p.label, p)
         if previous is not None:
-            match = next((i for i in range(self._param.count())
-                          if self._param.itemData(i).id == previous.id), -1)
+            match = next(
+                (
+                    i
+                    for i in range(self._param.count())
+                    if self._param.itemData(i).id == previous.id
+                ),
+                -1,
+            )
             if match >= 0:
                 self._param.setCurrentIndex(match)
         self._param.blockSignals(False)
@@ -70,7 +88,9 @@ class _AxisRow(QWidget):
         # changed (a fresh row, or the previous parameter is gone); preserve a
         # user's typed values when the same parameter is retained.
         current = self.parameter()
-        same = previous is not None and current is not None and current.id == previous.id
+        same = (
+            previous is not None and current is not None and current.id == previous.id
+        )
         if current is not None and not same:
             self._values.setText(str(current.default))
         self._refresh_unit()

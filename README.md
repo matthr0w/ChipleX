@@ -4,9 +4,10 @@ ChipleX is a high-level simulation environment for chiplet-based systems using S
 
 There are two ways to use it:
 
-- **[Download the prebuilt application](#download-recommended)** - a single Linux
-  executable with the GUI, the simulator, and SystemC bundled in. No SystemC
-  installation required. Recommended for most users.
+- **[Download the prebuilt application](#download-recommended)** - a single
+  executable with the GUI, the simulator, and SystemC bundled in, for Linux
+  x86_64 and macOS on Apple Silicon. No SystemC installation required.
+  Recommended for most users.
 - **[Build from source](#build-from-source)** - for development; requires a local
   SystemC installation.
 
@@ -18,16 +19,30 @@ There are two ways to use it:
 
 ## Download (recommended)
 
-Download `chiplex-linux-x86_64.tar.gz` from the project's **Releases** page,
-then unpack and run it:
+Download the archive for your platform from the project's **Releases** page:
+
+| Platform | Archive |
+| --- | --- |
+| Linux x86_64 (glibc 2.35+, e.g. Ubuntu 22.04 and later) | `chiplex-linux-x86_64.tar.gz` |
+| macOS on Apple Silicon (macOS 12 and later) | `chiplex-macos-arm64.tar.gz` |
+
+Then unpack and run it:
 
 ```bash
-tar xzf chiplex-linux-x86_64.tar.gz
+tar xzf chiplex-<platform>.tar.gz
 ./chiplex
 ```
 
-The bundle is a self-contained Linux x86_64 executable. It runs the included
-setups out of the box. On first launch it seeds an editable workspace under
+On macOS, a browser-downloaded archive is marked as quarantined, and macOS
+refuses to launch the unpacked executable because it is not notarized. Clear the
+quarantine flag once, after unpacking:
+
+```bash
+xattr -dr com.apple.quarantine ./chiplex
+```
+
+The bundle is a self-contained executable. It runs the included setups out of
+the box. On first launch it seeds an editable workspace under
 `~/.local/share/chiplex/`.
 
 Two optional capabilities depend on tools installed on your machine:
@@ -44,8 +59,9 @@ Two optional capabilities depend on tools installed on your machine:
 Install a C++17 compiler, CMake, and Git, for example:
 
 ```bash
-sudo apt install build-essential cmake git  # Debian/Ubuntu
-sudo dnf install gcc-c++ cmake git          # Fedora
+sudo apt install build-essential cmake git    # Debian/Ubuntu
+sudo dnf install gcc-c++ cmake git            # Fedora
+xcode-select --install && brew install cmake  # macOS
 ```
 
 ### SystemC
@@ -54,7 +70,7 @@ SystemC is handled automatically: on the first build, the Makefile fetches and
 builds a local SystemC 3.0.x into `.systemc-install/` and uses it thereafter.
 To use an existing SystemC instead, set
 `SYSTEMC_PATH` to its install prefix (containing `include/` and
-`lib/libsystemc.so`).
+`lib/libsystemc.so`, or `lib/libsystemc.dylib` on macOS).
 
 ## Cycle-estimation tools
 

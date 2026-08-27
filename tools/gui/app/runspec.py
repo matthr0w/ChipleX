@@ -29,7 +29,9 @@ class RunSpec:
     overrides: List[Tuple[ParamRef, Any]] = field(default_factory=list)
     log_path: Path | None = None  # None discards the run output after the batch
 
-    def argv(self, sim_binary: Path, stats_out: Path, log_level: str = "SILENT") -> List[str]:
+    def argv(
+        self, sim_binary: Path, stats_out: Path, log_level: str = "SILENT"
+    ) -> List[str]:
         args = [
             str(sim_binary),
             f"--setup={self.setup}",
@@ -45,8 +47,10 @@ class RunSpec:
         return args
 
     def overrides_summary(self) -> str:
-        parts = [f"{ref.label.split('.')[-1] if ref.special is None else ref.special}={value}"
-                 for ref, value in self.overrides]
+        parts = [
+            f"{ref.label.split('.')[-1] if ref.special is None else ref.special}={value}"
+            for ref, value in self.overrides
+        ]
         return ", ".join(parts)
 
     def build_sandbox(self, project: Project, sandbox_dir: Path) -> Path:
@@ -57,7 +61,9 @@ class RunSpec:
         # regardless of the sandbox location or a relative setups/configs dir.
         configs_link = sandbox_dir / "configs"
         if not configs_link.exists():
-            configs_link.symlink_to(project.configs_dir.resolve(), target_is_directory=True)
+            configs_link.symlink_to(
+                project.configs_dir.resolve(), target_is_directory=True
+            )
 
         setup_src = project.setup_dir(self.setup)
         setup_dst = sandbox_dir / "setups" / self.setup

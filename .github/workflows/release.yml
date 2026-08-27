@@ -51,9 +51,51 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  build-macos-arm64:
+    name: Build (macos-arm64)
+    # Pinned rather than macos-latest so the SDK does not change silently.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache SystemC install
+        uses: actions/cache@v4
+        with:
+          path: .systemc-install
+          key: systemc-${{ env.SYSTEMC_VERSION }}-macos-14-arm64
+
+      - name: Build bundle
+        run: make bundle
+
+      - name: Verify the bundle is relocatable and correctly built
+        run: |
+          set -euo pipefail
+          for macho in dist/framework/sim dist/framework/setups/*/libsetup.so; do
+            echo "== $macho"
+            otool -L "$macho"
+            if otool -L "$macho" | tail -n +2 | grep -q "$PWD"; then
+              echo "ERROR: $macho references the build workspace" >&2
+              exit 1
+            fi
+            codesign --verify --strict "$macho"
+          done
+          test "$(lipo -archs dist/framework/sim)" = "arm64"
+          test "$(lipo -archs dist/chiplex)" = "arm64"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: chiplex-macos-arm64
+          path: dist/chiplex
+          retention-days: 30
+          if-no-files-found: error
+
   publish-release:
     name: Publish release
-    needs: build-linux-x86_64
+    needs: [build-linux-x86_64, build-macos-arm64]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
@@ -61,33 +103,37 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: chiplex-linux-x86_64
-          path: dist
+          pattern: chiplex-*
+          path: artifacts
 
-      - name: Package the bundle
+      - name: Package the bundles
         run: |
           set -euo pipefail
-          # Artifact downloads do not carry file permissions, so restore the
-          # executable bit before archiving it.
-          chmod +x dist/chiplex
-          # A single chiplex at the archive root, named by target so further
-          # targets can be added later without colliding. tar is used because
-          # it records the executable bit, which a bare asset download loses.
-          tar -czf chiplex-linux-x86_64.tar.gz -C dist chiplex
+          for dir in artifacts/*/; do
+            target="$(basename "$dir")"
+            # Artifact downloads do not carry file permissions, so restore the
+            # executable bit before archiving it.
+            chmod +x "$dir/chiplex"
+            # A single chiplex at the archive root, named by target so targets
+            # do not collide. tar is used because it records the executable
+            # bit, which a bare asset download loses.
+            tar -czf "$target.tar.gz" -C "$dir" chiplex
+          done
+          ls -l ./*.tar.gz
 
-      - name: Create release and attach the bundle
+      - name: Create release and attach the bundles
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # Re-running the job for a tag whose release already exists replaces
-          # the asset instead of failing.
+          # the assets instead of failing.
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
-            chiplex-linux-x86_64.tar.gz \
+            ./*.tar.gz \
           || gh release upload "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --clobber \
-            chiplex-linux-x86_64.tar.gz
+            ./*.tar.gz

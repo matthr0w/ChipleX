@@ -19,6 +19,7 @@ class Execution:
     def executor(self) -> str:
         return f"{self.chiplet}.{self.module}"
 
+
 @dataclass
 class Workload:
     id: str
@@ -32,6 +33,7 @@ class Workload:
     has_speedup: bool = False
     # One execution per (chiplet, module) that runs this region.
     executions: List[Execution] = field(default_factory=list)
+
 
 @dataclass
 class Setup:

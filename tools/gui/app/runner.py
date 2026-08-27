@@ -87,7 +87,9 @@ class Runner:
         for setup in dict.fromkeys(spec.setup for spec in specs):
             if self._cancel.is_set():
                 break
-            self._builds[setup] = build_setup_if_needed(self.project, setup, self.timeout_s)
+            self._builds[setup] = build_setup_if_needed(
+                self.project, setup, self.timeout_s
+            )
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
             future_to_spec = {}
@@ -105,8 +107,12 @@ class Runner:
         results.sort(key=lambda r: order.get(id(r.spec), 0))
         return results
 
-    def _run_one(self, spec: RunSpec, on_start: Optional[Callable],
-                 on_output: Optional[Callable] = None) -> RunResult:
+    def _run_one(
+        self,
+        spec: RunSpec,
+        on_start: Optional[Callable],
+        on_output: Optional[Callable] = None,
+    ) -> RunResult:
         result = RunResult(spec=spec)
         if self._cancel.is_set():
             result.cancelled = True
@@ -127,8 +133,12 @@ class Runner:
         log_file = None
         try:
             log_file = _open_log(spec.log_path)
-            self._emit(spec, on_output, log_file,
-                       f"Run '{spec.label}' of setup '{spec.setup}' started {_timestamp()}")
+            self._emit(
+                spec,
+                on_output,
+                log_file,
+                f"Run '{spec.label}' of setup '{spec.setup}' started {_timestamp()}",
+            )
             spec.build_sandbox(self.project, sandbox)
 
             # Plugin build: compiled once per setup in run_batch; replay its log
@@ -146,8 +156,10 @@ class Runner:
             # counts match the exact system.yaml (with overrides) the sim loads.
             self._emit(spec, on_output, log_file, "Cycle Estimation")
             estimation = run_cycle_estimation(
-                self.project, spec.setup,
-                setups_dir=sandbox / "setups", build_dir=sandbox / "ce_build",
+                self.project,
+                spec.setup,
+                setups_dir=sandbox / "setups",
+                build_dir=sandbox / "ce_build",
             )
             result.estimation_status = estimation.status
             self._emit_raw(spec, on_output, log_file, estimation.log)
@@ -171,14 +183,26 @@ class Runner:
             result.stdout_tail = output[-_TAIL_CHARS:]
             result.cancelled = self._cancel.is_set()
             result.duration_s = time.monotonic() - started
-            outcome = ("cancelled" if result.cancelled
-                       else f"exited with code {result.returncode}")
-            self._emit(spec, on_output, log_file,
-                       f"Run '{spec.label}' of setup '{spec.setup}' {outcome} after {result.duration_s:.1f} s")
+            outcome = (
+                "cancelled"
+                if result.cancelled
+                else f"exited with code {result.returncode}"
+            )
+            self._emit(
+                spec,
+                on_output,
+                log_file,
+                f"Run '{spec.label}' of setup '{spec.setup}' {outcome} after {result.duration_s:.1f} s",
+            )
         except Exception as exc:  # noqa: BLE001 - surface any launch failure to the UI
             result.error = str(exc)
             result.duration_s = time.monotonic() - started
-            self._emit(spec, on_output, log_file, f"Run '{spec.label}' of setup '{spec.setup}' failed: {exc}")
+            self._emit(
+                spec,
+                on_output,
+                log_file,
+                f"Run '{spec.label}' of setup '{spec.setup}' failed: {exc}",
+            )
             return result
         finally:
             if log_file is not None:
@@ -235,8 +259,13 @@ class Runner:
         finally:
             tmp.unlink(missing_ok=True)
 
-    def _stream(self, proc: subprocess.Popen, spec: RunSpec, on_output: Optional[Callable],
-                log_file: Optional[TextIO] = None) -> str:
+    def _stream(
+        self,
+        proc: subprocess.Popen,
+        spec: RunSpec,
+        on_output: Optional[Callable],
+        log_file: Optional[TextIO] = None,
+    ) -> str:
         """Read merged stdout/stderr live, forwarding each line to on_output.
 
         A reader thread iterates the pipe so lines surface as the simulator
@@ -267,16 +296,26 @@ class Runner:
         proc.wait()
         return "".join(chunks)
 
-    def _emit(self, spec: RunSpec, on_output: Optional[Callable],
-              log_file: Optional[TextIO], text: str) -> None:
+    def _emit(
+        self,
+        spec: RunSpec,
+        on_output: Optional[Callable],
+        log_file: Optional[TextIO],
+        text: str,
+    ) -> None:
         """Send a framework-generated marker line to the live output and the log."""
         line = f"\n=== {text} ===\n"
         _write_log(log_file, line)
         if on_output is not None:
             on_output(spec, line)
 
-    def _emit_raw(self, spec: RunSpec, on_output: Optional[Callable],
-                  log_file: Optional[TextIO], text: str) -> None:
+    def _emit_raw(
+        self,
+        spec: RunSpec,
+        on_output: Optional[Callable],
+        log_file: Optional[TextIO],
+        text: str,
+    ) -> None:
         """Send captured multi-line tool output verbatim to the live output and log."""
         if not text:
             return

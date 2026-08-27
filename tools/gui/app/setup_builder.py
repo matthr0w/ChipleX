@@ -39,7 +39,9 @@ def _source_hash(project: Project, name: str) -> str:
     return digest.hexdigest()
 
 
-def build_setup_if_needed(project: Project, name: str, timeout_s: int = 900) -> BuildResult:
+def build_setup_if_needed(
+    project: Project, name: str, timeout_s: int = 900
+) -> BuildResult:
     """Build the setup plugin only when its sources changed since the last build.
 
     The compiled libsetup.so depends only on the program sources, so a run
@@ -49,7 +51,11 @@ def build_setup_if_needed(project: Project, name: str, timeout_s: int = 900) -> 
     lib = project.setups_dir / name / "libsetup.so"
     hash_file = project.build_dir / f"{name}.buildhash"
     current = _source_hash(project, name)
-    if lib.is_file() and hash_file.is_file() and hash_file.read_text().strip() == current:
+    if (
+        lib.is_file()
+        and hash_file.is_file()
+        and hash_file.read_text().strip() == current
+    ):
         return BuildResult(True, f"Setup '{name}' is up-to-date. Skipping compilation.")
 
     result = build_setup(project, name, timeout_s)
@@ -66,8 +72,10 @@ def build_setup(project: Project, name: str, timeout_s: int = 900) -> BuildResul
 
     configure = [
         "cmake",
-        "-S", str(project.root),
-        "-B", str(build_dir),
+        "-S",
+        str(project.root),
+        "-B",
+        str(build_dir),
         "-DCMAKE_BUILD_TYPE=Release",
         f"-DBUILD_SETUP={name}",
         f"-DSETUPS_DIR={project.setups_dir}",
@@ -80,8 +88,12 @@ def build_setup(project: Project, name: str, timeout_s: int = 900) -> BuildResul
     for command in (configure, build):
         try:
             proc = subprocess.run(
-                command, cwd=project.root, env=env, capture_output=True,
-                text=True, timeout=timeout_s,
+                command,
+                cwd=project.root,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
             )
         except (subprocess.TimeoutExpired, OSError) as exc:
             return BuildResult(False, "\n".join(log_parts) + f"\n{exc}")

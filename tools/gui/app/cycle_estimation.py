@@ -11,7 +11,6 @@ output, which the caller surfaces.
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -19,7 +18,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-from .project import Project, is_frozen
+from .project import Project, base_child_env, is_frozen
 
 
 class EstimationStatus(Enum):
@@ -62,18 +61,22 @@ def run_cycle_estimation(
     if is_frozen():
         exe = project.root / "tools" / "cycle-estimation"
         if not exe.is_file():
-            return CycleResult(EstimationStatus.SKIPPED, f"Cycle estimation tool not found: {exe}")
+            return CycleResult(
+                EstimationStatus.SKIPPED, f"Cycle estimation tool not found: {exe}"
+            )
         command = [str(exe)]
         cwd = str(exe.parent)
     else:
         tool_dir = project.root / "tools" / "cycle_estimation"
         main_py = tool_dir / "main.py"
         if not main_py.is_file():
-            return CycleResult(EstimationStatus.SKIPPED, f"Cycle estimation tool not found: {main_py}")
+            return CycleResult(
+                EstimationStatus.SKIPPED, f"Cycle estimation tool not found: {main_py}"
+            )
         command = [sys.executable, str(main_py)]
         cwd = str(tool_dir)
 
-    env = dict(os.environ)
+    env = base_child_env()
     env["CE_SETUPS_DIR"] = str(setups_dir or project.setups_dir)
     env["CE_CONFIGS_DIR"] = str(project.configs_dir)
     env["CE_BUILD_DIR"] = str(build_dir or (project.build_dir / "cycle_estimation"))
@@ -83,8 +86,12 @@ def run_cycle_estimation(
 
     try:
         proc = subprocess.run(
-            command, cwd=cwd, env=env,
-            capture_output=True, text=True, timeout=timeout_s,
+            command,
+            cwd=cwd,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=timeout_s,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         return CycleResult(EstimationStatus.FAILED, str(exc))
