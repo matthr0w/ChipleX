@@ -2,6 +2,8 @@
 
 ChipleX is a high-level simulation environment for chiplet-based systems using SystemC.
 
+![ChipleX GUI Setup Editor](docs/images/GUI.png)
+
 There are two ways to use it:
 
 - **[Download the prebuilt application](#download-recommended)** - a single
