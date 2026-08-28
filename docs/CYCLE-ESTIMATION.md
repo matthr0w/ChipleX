@@ -3,7 +3,7 @@
 Program code models *communication* explicitly with the AXI/DMA APIs (see
 [PROGRAM-CODE.md](PROGRAM-CODE.md)). *Computation* is modeled by advancing
 simulation time for a named workload through `wait_cycles("<workload>")`. The
-cycle counts that call consumes are produced by the cycle-estimation tool: it
+cycle counts that call consumes are produced by the cycle estimator: it
 compiles each workload, runs it under a gem5 CPU model, and records the measured
 per-region cycles in the setup's `workloads.yaml`.
 
@@ -11,14 +11,14 @@ Estimation runs automatically - the CLI runs it before every `make run`, and the
 GUI before every simulation run - but it only invokes gem5 when a workload
 actually needs re-measuring. A workload is skipped when its cached count is
 still valid (nothing that affects the result has changed since it was recorded;
-see [The cycle-estimation workflow](#the-cycle-estimation-workflow)), so a run
+see [The cycle estimation workflow](#the-cycle-estimation-workflow)), so a run
 whose counts are up to date starts the simulation immediately. It is also
 skipped, silently and for every workload, when its tools are missing, leaving
 the existing cycle counts in place. It runs in the bundled application too (the
 estimator ships as a standalone executable), so a bundle install estimates
 cycles whenever gem5 and the workload compiler are on `PATH`. The tools and how
 they are discovered are listed in the
-[Cycle-estimation tools](../README.md#cycle-estimation-tools) section of the
+[Cycle estimation tools](../README.md#cycle-estimation-tools) section of the
 README.
 
 ## The memory-latency boundary
@@ -43,7 +43,7 @@ from simultaneous compute on multiple cores is not modeled (only contention on
 the explicit AXI/DMA traffic is); this is an acceptable trade-off and is
 common-mode across design points.
 
-## The cycle-estimation workflow
+## The cycle estimation workflow
 
 1. Write a small, self-contained C++ program in
    `setups/<name>/workloads/<workload>.cpp` with an `int main()`. It should

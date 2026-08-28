@@ -217,7 +217,7 @@ core.wait_cycles("matmul");  // or accel.wait_cycles("matmul")
 This suspends the caller for the number of clock cycles associated with the
 workload `matmul`, scaled by the core's clock period (so a chiplet with a
 non-default `cores.clk_cycle` advances time accordingly). Cycle counts live in
-the setup's `workloads.yaml` and are produced by the cycle-estimation tool.
+the setup's `workloads.yaml` and are produced by the cycle estimator.
 
 To wait a fixed number of cycles without an estimation entry, pass a count
 directly:

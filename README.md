@@ -51,7 +51,7 @@ Two optional capabilities depend on tools installed on your machine:
 
 - **Building new or edited setups** requires a C++ compiler and `cmake`.
 - **Cycle estimation** requires gem5 and a workload compiler, with LLVM adding
-  accelerator speedup (see [Cycle-estimation tools](#cycle-estimation-tools)).
+  accelerator speedup (see [Cycle estimation tools](#cycle-estimation-tools)).
   Without them, setups run with their existing workload cycle counts.
 
 ## Build from source
@@ -74,7 +74,7 @@ To use an existing SystemC instead, set
 `SYSTEMC_PATH` to its install prefix (containing `include/` and
 `lib/libsystemc.so`, or `lib/libsystemc.dylib` on macOS).
 
-## Cycle-estimation tools
+## Cycle estimation tools
 
 Cycle estimation predicts each setup's per-workload compute time so simulated
 time advances realistically; see
@@ -123,13 +123,13 @@ make [release|debug|asan]
 
 The first build also compiles SystemC; later builds reuse it.
 
-### Execute Simulation GUI
+### Execute simulation GUI
 
 ```bash
 make gui
 ```
 
-### Execute Simulation CLI
+### Execute simulation CLI
 
 ```bash
 make run ARGS="--help"

@@ -160,7 +160,7 @@ reused. See the NOTICE.md in the serial-link directory for details.
 
 ## External tools
 
-The cycle-estimation flow invokes the following tools if they are present on the
+The cycle estimation flow invokes the following tools if they are present on the
 system. They are not included in this repository or in the prebuilt release, and
 remain under their own licenses:
 
