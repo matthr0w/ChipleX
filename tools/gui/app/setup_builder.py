@@ -8,10 +8,30 @@ SYSTEMC_PATH in the environment, as the rest of the build does.
 from __future__ import annotations
 
 import hashlib
+import shutil
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 
 from .project import Project
+
+
+def _discard_foreign_cache(project: Project) -> None:
+    """Drop a CMake cache generated from a different source tree.
+
+    A bundle extracts to a new directory on every launch while the build
+    directory persists, so the cached source path is stale from the second
+    launch onwards and CMake refuses to configure against it.
+    """
+    cache = project.build_dir / "CMakeCache.txt"
+    if not cache.is_file():
+        return
+    for line in cache.read_text(errors="replace").splitlines():
+        if line.startswith("CMAKE_HOME_DIRECTORY:"):
+            if Path(line.split("=", 1)[1].strip()) != project.root:
+                cache.unlink()
+                shutil.rmtree(project.build_dir / "CMakeFiles", ignore_errors=True)
+            return
 
 
 @dataclass
@@ -68,6 +88,7 @@ def build_setup_if_needed(
 def build_setup(project: Project, name: str, timeout_s: int = 900) -> BuildResult:
     build_dir = project.build_dir
     build_dir.mkdir(parents=True, exist_ok=True)
+    _discard_foreign_cache(project)
     env = project.child_env()
 
     configure = [
